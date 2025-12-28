@@ -1591,17 +1591,6 @@ fn loadVolumeFiles(
 			allocator.free(full);
 			continue;
 		}
-		if (envFlagSet("PAR2_DEBUG_RECOVER")) {
-			var buf: [256]u8 = undefined;
-			const msg = std.fmt.bufPrint(&buf, "debug: load volume {s}\n", .{full}) catch {
-				allocator.free(full);
-				continue;
-			};
-			std.fs.File.stderr().writeAll(msg) catch {
-				allocator.free(full);
-				continue;
-			};
-		}
 		try loadPar2File(allocator, ctx, recs, packed_recs, file_slices, rfsc_packets, full, expected_id);
 		allocator.free(full);
 	}
