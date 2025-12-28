@@ -1406,7 +1406,10 @@ fn loadVolumeFiles(
 ) !void {
 	const dir_path = std.fs.path.dirname(par2_path) orelse ".";
 	const base_name = std.fs.path.basename(par2_path);
-	const base = if (std.mem.endsWith(u8, base_name, ".par2")) base_name[0 .. base_name.len - 5] else base_name;
+	var base = if (std.mem.endsWith(u8, base_name, ".par2")) base_name[0 .. base_name.len - 5] else base_name;
+	if (std.mem.indexOf(u8, base, ".vol")) |idx| {
+		base = base[0..idx];
+	}
 	var dir = try std.fs.cwd().openDir(dir_path, .{ .iterate = true });
 	defer dir.close();
 	var it = dir.iterate();
@@ -1415,6 +1418,7 @@ fn loadVolumeFiles(
 		if (!std.mem.startsWith(u8, entry.name, base)) continue;
 		if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
 		if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
+		if (std.mem.eql(u8, entry.name, base_name)) continue;
 		const full_path = try std.fs.path.join(allocator, &.{ dir_path, entry.name });
 		try loadPar2File(allocator, ctx, recs, packed_recs, file_slices, rfsc_packets, full_path, expected_id);
 	}

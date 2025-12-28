@@ -8,6 +8,9 @@ err=""
 rc=0
 
 root_dir="$(pwd)"
+prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
+seed="${PAR2_TEST_SEED:-1}"
+seq=1
 
 if command -v mktmp >/dev/null 2>&1; then
 	tmpdir="$(mktmp --tmpdir)"
@@ -22,29 +25,52 @@ cleanup() {
 }
 trap cleanup EXIT
 
-seed="$(random 0 4294967295)"
 printf '%s\n' "$seed" > "$tmpdir/seed.txt"
-
-capture dd if=/dev/urandom of="$tmpdir/data.bin" bs=1 count=65536 status=none
-if [ "$rc" -ne 0 ]; then
-	echo "dd failed: $err" >&2
-	exit 1
-fi
-
-capture par2 create -s4096 -c16 "$tmpdir/data.par2" "$tmpdir/data.bin"
-if [ "$rc" -ne 0 ]; then
-	echo "par2 create failed: $err" >&2
-	exit 1
-fi
-
-cp "$tmpdir/data.bin" "$tmpdir/orig.bin"
-rm "$tmpdir/data.bin"
 
 capture zig build
 if [ "$rc" -ne 0 ]; then
 	echo "zig build failed: $err" >&2
 	exit 1
 fi
+
+if [ ! -x "$prng_gen" ]; then
+	echo "prng-gen not found at $prng_gen" >&2
+	exit 1
+fi
+
+gen_data() {
+	local path="$1"
+	local size="$2"
+	capture "$prng_gen" "$path" "$size" "$seed" "$seq"
+	if [ "$rc" -ne 0 ]; then
+		echo "prng-gen failed: $err" >&2
+		exit 1
+	fi
+	seq=$((seq + 1))
+}
+
+corrupt_bytes() {
+	local path="$1"
+	local size="$2"
+	local offset="$3"
+	local tmp="$tmpdir/corrupt.bin"
+	gen_data "$tmp" "$size"
+	capture dd if="$tmp" of="$path" bs=1 count="$size" seek="$offset" conv=notrunc status=none
+	if [ "$rc" -ne 0 ]; then
+		echo "dd corrupt failed: $err" >&2
+		exit 1
+	fi
+}
+
+gen_data "$tmpdir/data.bin" 65536
+
+capture par2 create -s4096 -c16 "$tmpdir/data.par2" "$tmpdir/data.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 create failed: $err" >&2
+	exit 1
+fi
+cp "$tmpdir/data.bin" "$tmpdir/orig.bin"
+rm "$tmpdir/data.bin"
 
 capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/out\" data.par2"
 if [ "$rc" -ne 0 ]; then
@@ -67,27 +93,15 @@ if [ "$rc" -ne 0 ]; then
 fi
 
 # Partial corruption case (less than protection)
-capture dd if=/dev/urandom of="$tmpdir/data2.bin" bs=1 count=65536 status=none
-if [ "$rc" -ne 0 ]; then
-	echo "dd failed: $err" >&2
-	exit 1
-fi
+gen_data "$tmpdir/data2.bin" 65536
 capture par2 create -s4096 -r20 "$tmpdir/data2.par2" "$tmpdir/data2.bin"
 if [ "$rc" -ne 0 ]; then
 	echo "par2 create failed: $err" >&2
 	exit 1
 fi
 cp "$tmpdir/data2.bin" "$tmpdir/orig2.bin"
-capture dd if=/dev/urandom of="$tmpdir/data2.bin" bs=1 count=4096 seek=4096 conv=notrunc status=none
-if [ "$rc" -ne 0 ]; then
-	echo "dd corrupt failed: $err" >&2
-	exit 1
-fi
-capture dd if=/dev/urandom of="$tmpdir/data2.bin" bs=1 count=4096 seek=16384 conv=notrunc status=none
-if [ "$rc" -ne 0 ]; then
-	echo "dd corrupt failed: $err" >&2
-	exit 1
-fi
+corrupt_bytes "$tmpdir/data2.bin" 4096 4096
+corrupt_bytes "$tmpdir/data2.bin" 4096 16384
 capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/out2\" data2.par2 data2.bin"
 if [ "$rc" -ne 0 ]; then
 	echo "par2-cli recover failed: $err" >&2
@@ -107,11 +121,7 @@ if [ "$rc" -ne 0 ]; then
 fi
 
 # Create via our CLI and verify with par2 (and repair)
-capture dd if=/dev/urandom of="$tmpdir/data3.bin" bs=1 count=32768 status=none
-if [ "$rc" -ne 0 ]; then
-	echo "dd failed: $err" >&2
-	exit 1
-fi
+gen_data "$tmpdir/data3.bin" 32768
 cp "$tmpdir/data3.bin" "$tmpdir/orig3.bin"
 capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create --block-size 4096 --redundancy-percent 10 data3.par2 data3.bin"
 if [ "$rc" -ne 0 ]; then
@@ -123,11 +133,7 @@ if [ "$rc" -ne 0 ]; then
 	echo "par2 verify failed: $err" >&2
 	exit 1
 fi
-capture dd if=/dev/urandom of="$tmpdir/data3.bin" bs=1 count=4096 seek=4096 conv=notrunc status=none
-if [ "$rc" -ne 0 ]; then
-	echo "dd corrupt failed: $err" >&2
-	exit 1
-fi
+corrupt_bytes "$tmpdir/data3.bin" 4096 4096
 capture -- /bin/bash -c "cd \"$tmpdir\" && par2 repair -q data3.par2 data3.bin"
 if [ "$rc" -ne 0 ]; then
 	echo "par2 repair failed: $err" >&2
@@ -141,11 +147,7 @@ if [ "$orig3_hash" != "$recovered3_hash" ]; then
 fi
 
 # Create with optional packets and verify with par2
-capture dd if=/dev/urandom of="$tmpdir/data4.bin" bs=1 count=16384 status=none
-if [ "$rc" -ne 0 ]; then
-	echo "dd failed: $err" >&2
-	exit 1
-fi
+gen_data "$tmpdir/data4.bin" 16384
 cp "$tmpdir/data4.bin" "$tmpdir/orig4.bin"
 capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create --block-size 4096 --redundancy-percent 10 --include-input-slices --emit-packed data4.par2 data4.bin"
 if [ "$rc" -ne 0 ]; then
@@ -157,11 +159,7 @@ if [ "$rc" -ne 0 ]; then
 	echo "par2 verify failed for optional packets" >&2
 	exit 1
 fi
-capture dd if=/dev/urandom of="$tmpdir/data4.bin" bs=1 count=4096 seek=4096 conv=notrunc status=none
-if [ "$rc" -ne 0 ]; then
-	echo "dd corrupt failed: $err" >&2
-	exit 1
-fi
+corrupt_bytes "$tmpdir/data4.bin" 4096 4096
 capture -- /bin/bash -c "cd \"$tmpdir\" && par2 repair -q data4.par2 data4.bin"
 if [ "$rc" -ne 0 ]; then
 	echo "par2 repair failed for optional packets" >&2
@@ -171,6 +169,73 @@ orig4_hash="$(openssl dgst -sha256 "$tmpdir/orig4.bin" | awk '{print $NF}')"
 recovered4_hash="$(openssl dgst -sha256 "$tmpdir/data4.bin" | awk '{print $NF}')"
 if [ "$orig4_hash" != "$recovered4_hash" ]; then
 	echo "hash mismatch for optional packets case" >&2
+	exit 1
+fi
+
+# Multi-file create via par2, recover via our CLI
+gen_data "$tmpdir/multi-a.bin" 32768
+gen_data "$tmpdir/multi-b.bin" 20000
+cp "$tmpdir/multi-a.bin" "$tmpdir/multi-a.orig"
+cp "$tmpdir/multi-b.bin" "$tmpdir/multi-b.orig"
+capture par2 create -s4096 -c8 "$tmpdir/multi.par2" "$tmpdir/multi-a.bin" "$tmpdir/multi-b.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 create failed for multi-file" >&2
+	exit 1
+fi
+rm "$tmpdir/multi-b.bin"
+corrupt_bytes "$tmpdir/multi-a.bin" 4096 8192
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/multi-out\" multi.par2 multi-a.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli recover failed for multi-file" >&2
+	exit 1
+fi
+multi_a_hash="$(openssl dgst -sha256 "$tmpdir/multi-a.orig" | awk '{print $NF}')"
+multi_a_out_hash="$(openssl dgst -sha256 "$tmpdir/multi-out/multi-a.bin" | awk '{print $NF}')"
+multi_b_hash="$(openssl dgst -sha256 "$tmpdir/multi-b.orig" | awk '{print $NF}')"
+multi_b_out_hash="$(openssl dgst -sha256 "$tmpdir/multi-out/multi-b.bin" | awk '{print $NF}')"
+if [ "$multi_a_hash" != "$multi_a_out_hash" ] || [ "$multi_b_hash" != "$multi_b_out_hash" ]; then
+	echo "hash mismatch for multi-file recovery" >&2
+	exit 1
+fi
+
+# Volume-only recovery (missing main)
+gen_data "$tmpdir/volonly.bin" 65536
+cp "$tmpdir/volonly.bin" "$tmpdir/volonly.orig"
+capture par2 create -s4096 -c16 "$tmpdir/volonly.par2" "$tmpdir/volonly.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 create failed for volume-only" >&2
+	exit 1
+fi
+rm "$tmpdir/volonly.par2"
+rm "$tmpdir/volonly.bin"
+vol_file="$(find "$tmpdir" -maxdepth 1 -name 'volonly.vol*.par2' -print | head -n1 || true)"
+if [ -z "$vol_file" ]; then
+	echo "missing volume file for volume-only case" >&2
+	exit 1
+fi
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/volonly-out\" \"$vol_file\""
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli recover failed for volume-only case" >&2
+	exit 1
+fi
+vol_hash="$(openssl dgst -sha256 "$tmpdir/volonly.orig" | awk '{print $NF}')"
+vol_out_hash="$(openssl dgst -sha256 "$tmpdir/volonly-out/volonly.bin" | awk '{print $NF}')"
+if [ "$vol_hash" != "$vol_out_hash" ]; then
+	echo "hash mismatch for volume-only recovery" >&2
+	exit 1
+fi
+
+# Create via our CLI without RFSC, verify with par2
+gen_data "$tmpdir/norfsc.bin" 32768
+cp "$tmpdir/norfsc.bin" "$tmpdir/norfsc.orig"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create --block-size 4096 --redundancy-percent 10 --no-rfsc norfsc.par2 norfsc.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli create failed for no-rfsc" >&2
+	exit 1
+fi
+capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify norfsc.par2 norfsc.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 verify failed for no-rfsc" >&2
 	exit 1
 fi
 
