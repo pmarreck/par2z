@@ -49,6 +49,31 @@ gen_data() {
 	seq=$((seq + 1))
 }
 
+list_volumes() {
+	local dir="$1"
+	local base="$2"
+	find "$dir" -maxdepth 1 -type f -name "$base.vol*.par2" -print | sed 's#.*/##' | sort
+}
+
+compare_volumes() {
+	local label="$1"
+	local dir_a="$2"
+	local dir_b="$3"
+	local base="$4"
+	local a
+	local b
+	a="$(list_volumes "$dir_a" "$base")"
+	b="$(list_volumes "$dir_b" "$base")"
+	if [ "$a" != "$b" ]; then
+		echo "volume layout mismatch: $label" >&2
+		echo "par2 volumes:" >&2
+		printf '%s\n' "$a" >&2
+		echo "our volumes:" >&2
+		printf '%s\n' "$b" >&2
+		exit 1
+	fi
+}
+
 corrupt_bytes() {
 	local path="$1"
 	local size="$2"
@@ -238,5 +263,87 @@ if [ "$rc" -ne 0 ]; then
 	echo "par2 verify failed for no-rfsc" >&2
 	exit 1
 fi
+
+# Basepath + recurse compatibility
+mkdir -p "$tmpdir/base/sub"
+gen_data "$tmpdir/base/sub/base.bin" 2048
+gen_data "$tmpdir/outside.bin" 1024
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create -s512 -c4 -R -B base base.par2 base outside.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli create failed for basepath/recurse" >&2
+	exit 1
+fi
+capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify -B base base.par2"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 verify failed for basepath/recurse output" >&2
+	exit 1
+fi
+
+# Recovery volume layout flags vs par2cmdline
+vol_dir_par2="$tmpdir/vol-par2"
+vol_dir_ours="$tmpdir/vol-ours"
+mkdir -p "$vol_dir_par2" "$vol_dir_ours"
+gen_data "$tmpdir/vol-data.bin" 16
+cp "$tmpdir/vol-data.bin" "$vol_dir_par2/vol-data.bin"
+cp "$tmpdir/vol-data.bin" "$vol_dir_ours/vol-data.bin"
+
+run_par2_create() {
+	local dir="$1"
+	shift
+	capture -- /bin/bash -c "cd \"$dir\" && par2 create -s4 -c20 $* test.par2 vol-data.bin"
+	if [ "$rc" -ne 0 ]; then
+		echo "par2 create failed for volume layout ($*)" >&2
+		exit 1
+	fi
+}
+
+run_ours_create() {
+	local dir="$1"
+	shift
+	capture -- /bin/bash -c "cd \"$dir\" && \"$root_dir/zig-out/bin/par2-cli\" create -s4 -c20 $* test.par2 vol-data.bin"
+	if [ "$rc" -ne 0 ]; then
+		echo "par2-cli create failed for volume layout ($*)" >&2
+		exit 1
+	fi
+}
+
+run_par2_create "$vol_dir_par2"
+run_ours_create "$vol_dir_ours"
+compare_volumes "default" "$vol_dir_par2" "$vol_dir_ours" test
+
+rm -f "$vol_dir_par2"/test.par2 "$vol_dir_ours"/test.par2
+find "$vol_dir_par2" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+find "$vol_dir_ours" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+run_par2_create "$vol_dir_par2" "-u"
+run_ours_create "$vol_dir_ours" "-u"
+compare_volumes "uniform" "$vol_dir_par2" "$vol_dir_ours" test
+
+rm -f "$vol_dir_par2"/test.par2 "$vol_dir_ours"/test.par2
+find "$vol_dir_par2" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+find "$vol_dir_ours" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+run_par2_create "$vol_dir_par2" "-l"
+run_ours_create "$vol_dir_ours" "-l"
+compare_volumes "limit" "$vol_dir_par2" "$vol_dir_ours" test
+
+rm -f "$vol_dir_par2"/test.par2 "$vol_dir_ours"/test.par2
+find "$vol_dir_par2" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+find "$vol_dir_ours" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+run_par2_create "$vol_dir_par2" "-n3"
+run_ours_create "$vol_dir_ours" "-n3"
+compare_volumes "count3" "$vol_dir_par2" "$vol_dir_ours" test
+
+rm -f "$vol_dir_par2"/test.par2 "$vol_dir_ours"/test.par2
+find "$vol_dir_par2" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+find "$vol_dir_ours" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+run_par2_create "$vol_dir_par2" "-f5"
+run_ours_create "$vol_dir_ours" "-f5"
+compare_volumes "first5" "$vol_dir_par2" "$vol_dir_ours" test
+
+rm -f "$vol_dir_par2"/test.par2 "$vol_dir_ours"/test.par2
+find "$vol_dir_par2" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+find "$vol_dir_ours" -maxdepth 1 -type f -name 'test.vol*.par2' -delete
+run_par2_create "$vol_dir_par2" "-u -n3"
+run_ours_create "$vol_dir_ours" "-u -n3"
+compare_volumes "uniform-count3" "$vol_dir_par2" "$vol_dir_ours" test
 
 echo "integration ok"

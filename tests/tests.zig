@@ -1845,6 +1845,236 @@ test "cli recover uses packed recvslic when recvslic missing" {
 	try std.testing.expectEqualStrings("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", recovered);
 }
 
+test "cli recover verifies full file hash after recovery" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const build = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ "zig", "build" },
+	});
+	switch (build.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	const cli_path = try std.fs.cwd().realpathAlloc(arena.allocator(), "zig-out/bin/par2-cli");
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+	const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+	try tmp.dir.writeFile(.{ .sub_path = "h.bin", .data = "0123456789abcdef0123456789abcdef" });
+	const create = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{
+			cli_path,
+			"create",
+			"--block-size",
+			"8",
+			"--recovery-blocks",
+			"2",
+			"h.par2",
+			"h.bin",
+		},
+		.cwd = tmp_path,
+	});
+	switch (create.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	try tmp.dir.writeFile(.{ .sub_path = "h.bin", .data = "X123456789abcdef0123456789abcdef" });
+	const recover = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ cli_path, "recover", "-o", "out", "h.par2", "h.bin" },
+		.cwd = tmp_path,
+	});
+	switch (recover.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	const out_path = try std.fs.path.join(arena.allocator(), &.{ tmp_path, "out", "h.bin" });
+	const recovered = try std.fs.cwd().readFileAlloc(arena.allocator(), out_path, 1 << 20);
+	try std.testing.expectEqualStrings("0123456789abcdef0123456789abcdef", recovered);
+}
+
+test "cli verify falls back to full-file hash when IFSC missing" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const build = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ "zig", "build" },
+	});
+	switch (build.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	const cli_path = try std.fs.cwd().realpathAlloc(arena.allocator(), "zig-out/bin/par2-cli");
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+	const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+	try tmp.dir.writeFile(.{ .sub_path = "v.bin", .data = "verify-hash-data-12345" });
+	const create = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{
+			cli_path,
+			"create",
+			"--block-size",
+			"8",
+			"--recovery-blocks",
+			"1",
+			"v.par2",
+			"v.bin",
+		},
+		.cwd = tmp_path,
+	});
+	switch (create.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	try stripPacketTypeInDir(arena.allocator(), tmp_path, ifscType());
+	const verify = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ cli_path, "verify", "v.par2", "v.bin" },
+		.cwd = tmp_path,
+	});
+	switch (verify.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+}
+
+test "cli verify detects corruption when IFSC missing" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const build = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ "zig", "build" },
+	});
+	switch (build.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	const cli_path = try std.fs.cwd().realpathAlloc(arena.allocator(), "zig-out/bin/par2-cli");
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+	const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+	try tmp.dir.writeFile(.{ .sub_path = "c.bin", .data = "verify-hash-data-ABCDE" });
+	const create = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{
+			cli_path,
+			"create",
+			"--block-size",
+			"8",
+			"--recovery-blocks",
+			"1",
+			"c.par2",
+			"c.bin",
+		},
+		.cwd = tmp_path,
+	});
+	switch (create.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	try stripPacketTypeInDir(arena.allocator(), tmp_path, ifscType());
+	try tmp.dir.writeFile(.{ .sub_path = "c.bin", .data = "Xerify-hash-data-ABCDE" });
+	const verify = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ cli_path, "verify", "c.par2", "c.bin" },
+		.cwd = tmp_path,
+	});
+	switch (verify.term) {
+		.Exited => |code| try std.testing.expect(code != 0),
+		else => return error.UnexpectedTerm,
+	}
+}
+
+test "cli create enforces memory cap" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const build = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ "zig", "build" },
+	});
+	switch (build.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	const cli_path = try std.fs.cwd().realpathAlloc(arena.allocator(), "zig-out/bin/par2-cli");
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+	const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+	const big = try arena.allocator().alloc(u8, 1024 * 1024);
+	@memset(big, 'A');
+	try tmp.dir.writeFile(.{ .sub_path = "big.bin", .data = big });
+	const run = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{
+			cli_path,
+			"create",
+			"-m",
+			"1",
+			"--block-size",
+			"2097152",
+			"--recovery-blocks",
+			"1",
+			"big.par2",
+			"big.bin",
+		},
+		.cwd = tmp_path,
+	});
+	switch (run.term) {
+		.Exited => |code| try std.testing.expect(code != 0),
+		else => return error.UnexpectedTerm,
+	}
+}
+
+test "cli recover enforces memory cap" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const build = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ "zig", "build" },
+	});
+	switch (build.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	const cli_path = try std.fs.cwd().realpathAlloc(arena.allocator(), "zig-out/bin/par2-cli");
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+	const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+	const big = try arena.allocator().alloc(u8, 2 * 1024 * 1024);
+	@memset(big, 'B');
+	try tmp.dir.writeFile(.{ .sub_path = "big.bin", .data = big });
+	const create = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{
+			cli_path,
+			"create",
+			"--block-size",
+			"4096",
+			"--recovery-blocks",
+			"4",
+			"big.par2",
+			"big.bin",
+		},
+		.cwd = tmp_path,
+	});
+	switch (create.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	try tmp.dir.deleteFile("big.bin");
+	const recover = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ cli_path, "recover", "-m", "1", "-o", "out", "big.par2" },
+		.cwd = tmp_path,
+	});
+	switch (recover.term) {
+		.Exited => |code| try std.testing.expect(code != 0),
+		else => return error.UnexpectedTerm,
+	}
+}
+
 test "cli recover rejects recovery slices that fail rfsc" {
 	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
 	defer arena.deinit();

@@ -19,7 +19,11 @@ pub fn main() !void {
 
 	const cmd = args[1];
 	if (std.mem.eql(u8, cmd, "verify")) {
-		try cmdVerify(allocator, args[2], args[3..]);
+		const parsed = parseVerifyArgs(args[2..]) catch {
+			try usage();
+			return;
+		};
+		try cmdVerify(allocator, parsed.par2_path, parsed.data_paths, parsed.basepath, parsed.verbosity);
 		return;
 	}
 	if (std.mem.eql(u8, cmd, "recover")) {
@@ -27,7 +31,18 @@ pub fn main() !void {
 			try usage();
 			return;
 		};
-		try cmdRecover(allocator, scratch, parsed.par2_path, parsed.data_paths, parsed.stdout_only, parsed.out_dir, parsed.allow_unsafe_paths);
+		try cmdRecover(
+			allocator,
+			scratch,
+			parsed.par2_path,
+			parsed.data_paths,
+			parsed.stdout_only,
+			parsed.out_dir,
+			parsed.allow_unsafe_paths,
+			parsed.basepath,
+			parsed.verbosity,
+			parsed.memory_mb,
+		);
 		return;
 	}
 	if (std.mem.eql(u8, cmd, "create")) {
@@ -47,7 +62,13 @@ fn usage() !void {
 	);
 }
 
-fn cmdVerify(allocator: std.mem.Allocator, par2_path: []const u8, data_paths: []const []const u8) !void {
+fn cmdVerify(
+	allocator: std.mem.Allocator,
+	par2_path: []const u8,
+	data_paths: []const []const u8,
+	basepath: ?[]const u8,
+	verbosity: i32,
+) !void {
 	const par2_bytes = try std.fs.cwd().readFileAlloc(allocator, par2_path, 1 << 24);
 	var ctx = core.api.initContext(allocator);
 	var offset: usize = 0;
@@ -67,21 +88,50 @@ fn cmdVerify(allocator: std.mem.Allocator, par2_path: []const u8, data_paths: []
 	var data_files = try allocator.alloc([]const u8, rs_set.recovery_files.len);
 	var present = try allocator.alloc(bool, rs_set.recovery_files.len);
 	@memset(present, false);
-	var i: usize = 0;
-	while (i < data_paths.len) : (i += 1) {
-		const path = data_paths[i];
-		const base = std.fs.path.basename(path);
-		const idx = try findRecoveryIndexByName(rs_set, path, base);
-		if (present[idx]) return error.InvalidInput;
-		data_files[idx] = try std.fs.cwd().readFileAlloc(allocator, path, 1 << 24);
-		present[idx] = true;
+	if (data_paths.len == 0) {
+		var i: usize = 0;
+		while (i < rs_set.recovery_files.len) : (i += 1) {
+			const entry = rs_set.recovery_files[i];
+			if (entry.desc == null) continue;
+			const name = entry.desc.?.file_name;
+			const candidate = if (basepath) |bp|
+				try std.fs.path.join(allocator, &.{ bp, name })
+			else
+				name;
+			data_files[i] = std.fs.cwd().readFileAlloc(allocator, candidate, 1 << 24) catch {
+				continue;
+			};
+			present[i] = true;
+		}
+	} else {
+		var i: usize = 0;
+		while (i < data_paths.len) : (i += 1) {
+			const path = data_paths[i];
+			const base = std.fs.path.basename(path);
+			const rel = if (basepath) |bp| try relativePathForInput(allocator, bp, path) else null;
+			const idx = try findRecoveryIndexByName(rs_set, path, base, rel);
+			if (present[idx]) return error.InvalidInput;
+			data_files[idx] = try std.fs.cwd().readFileAlloc(allocator, path, 1 << 24);
+			present[idx] = true;
+		}
 	}
 	for (present) |p| {
 		if (!p) return error.InvalidInput;
 	}
+	var i: usize = 0;
+	while (i < rs_set.recovery_files.len) : (i += 1) {
+		const entry = rs_set.recovery_files[i];
+		if (entry.desc == null) return error.InvalidInput;
+		if (entry.ifsc != null) continue;
+		var computed: [16]u8 = undefined;
+		try core.md5.md5Digest(data_files[i], &computed);
+		if (!std.mem.eql(u8, &computed, &entry.desc.?.file_hash)) return error.InvalidInput;
+	}
 	const store = core.storage.MemoryStore{ .files = data_files };
 	try core.api.verifyStore(allocator, &ctx, store);
-	try std.fs.File.stdout().writeAll("OK\n");
+	if (verbosity >= 0) {
+		try std.fs.File.stdout().writeAll("OK\n");
+	}
 }
 
 const CreateArgs = struct {
@@ -89,6 +139,10 @@ const CreateArgs = struct {
 	block_count: ?u64,
 	redundancy_percent: ?u64,
 	recovery_blocks: ?u64,
+	first_recovery_block: ?u64,
+	uniform_recovery: bool,
+	limit_recovery: bool,
+	recovery_file_count: ?u64,
 	par2_path: []const u8,
 	data_paths: []const []const u8,
 	mute_defaults: bool,
@@ -97,6 +151,10 @@ const CreateArgs = struct {
 	emit_packed: bool,
 	emit_rfsc: bool,
 	include_volume_meta: bool,
+	basepath: ?[]const u8,
+	verbosity: i32,
+	memory_mb: ?u64,
+	recurse: bool,
 };
 
 const FileMeta = struct {
@@ -107,23 +165,74 @@ const FileMeta = struct {
 	file_hash_16k: [16]u8,
 };
 
+const CreateInput = struct {
+	path: []const u8,
+	name: []const u8,
+	length: u64,
+};
+
 fn parseCreateArgs(args: []const []const u8) !CreateArgs {
 	var block_size: ?u64 = null;
 	var block_count: ?u64 = null;
 	var redundancy_percent: ?u64 = null;
 	var recovery_blocks: ?u64 = null;
+	var first_recovery_block: ?u64 = null;
+	var uniform_recovery = false;
+	var limit_recovery = false;
+	var recovery_file_count: ?u64 = null;
 	var mute_defaults = false;
 	var comment: ?[]const u8 = null;
 	var include_input_slices = false;
 	var emit_packed = false;
 	var emit_rfsc = true;
 	var include_volume_meta = true;
+	var basepath: ?[]const u8 = null;
+	var verbosity: i32 = 0;
+	var memory_mb: ?u64 = null;
+	var recurse = false;
 	var i: usize = 0;
 	while (i < args.len) {
 		const a = args[i];
 		if (std.mem.eql(u8, a, "--")) {
 			i += 1;
 			break;
+		}
+		if (std.mem.eql(u8, a, "-v")) {
+			verbosity += 1;
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-q")) {
+			verbosity -= 1;
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-R")) {
+			recurse = true;
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-m")) {
+			if (i + 1 >= args.len) return error.InvalidInput;
+			memory_mb = try std.fmt.parseInt(u64, args[i + 1], 10);
+			i += 2;
+			continue;
+		}
+		if (std.mem.startsWith(u8, a, "-m") and a.len > 2) {
+			memory_mb = try std.fmt.parseInt(u64, a[2..], 10);
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-B") or std.mem.eql(u8, a, "--basepath")) {
+			if (i + 1 >= args.len) return error.InvalidInput;
+			basepath = args[i + 1];
+			i += 2;
+			continue;
+		}
+		if (std.mem.startsWith(u8, a, "-B") and a.len > 2) {
+			basepath = a[2..];
+			i += 1;
+			continue;
 		}
 		if (std.mem.eql(u8, a, "--mute-defaults")) {
 			mute_defaults = true;
@@ -226,23 +335,37 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
 		}
 		if (std.mem.eql(u8, a, "-f")) {
 			if (i + 1 >= args.len) return error.InvalidInput;
+			first_recovery_block = try std.fmt.parseInt(u64, args[i + 1], 10);
 			i += 2;
 			continue;
 		}
 		if (std.mem.startsWith(u8, a, "-f") and a.len > 2) {
+			first_recovery_block = try std.fmt.parseInt(u64, a[2..], 10);
 			i += 1;
 			continue;
 		}
-		if (std.mem.eql(u8, a, "-u") or std.mem.eql(u8, a, "-l") or std.mem.eql(u8, a, "-R")) {
+		if (std.mem.eql(u8, a, "-u")) {
+			uniform_recovery = true;
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-l")) {
+			limit_recovery = true;
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-R")) {
 			i += 1;
 			continue;
 		}
 		if (std.mem.eql(u8, a, "-n")) {
 			if (i + 1 >= args.len) return error.InvalidInput;
+			recovery_file_count = try std.fmt.parseInt(u64, args[i + 1], 10);
 			i += 2;
 			continue;
 		}
 		if (std.mem.startsWith(u8, a, "-n") and a.len > 2) {
+			recovery_file_count = try std.fmt.parseInt(u64, a[2..], 10);
 			i += 1;
 			continue;
 		}
@@ -272,6 +395,11 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
 	}
 	if (block_size != null and block_count != null) return error.InvalidInput;
 	if (redundancy_percent != null and recovery_blocks != null) return error.InvalidInput;
+	if (uniform_recovery and limit_recovery) return error.InvalidInput;
+	if (limit_recovery and recovery_file_count != null) return error.InvalidInput;
+	if (recovery_file_count) |count| {
+		if (count == 0 or count > 31) return error.InvalidInput;
+	}
 	if (i >= args.len) return error.InvalidInput;
 	const par2_path = args[i];
 	const data_paths = args[i + 1 ..];
@@ -284,6 +412,10 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
 		.block_count = block_count,
 		.redundancy_percent = redundancy_percent,
 		.recovery_blocks = recovery_blocks,
+		.first_recovery_block = first_recovery_block,
+		.uniform_recovery = uniform_recovery,
+		.limit_recovery = limit_recovery,
+		.recovery_file_count = recovery_file_count,
 		.par2_path = par2_path,
 		.data_paths = data_paths,
 		.mute_defaults = mute_defaults,
@@ -292,17 +424,36 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
 		.emit_packed = emit_packed,
 		.emit_rfsc = emit_rfsc,
 		.include_volume_meta = include_volume_meta,
+		.basepath = basepath,
+		.verbosity = verbosity,
+		.memory_mb = memory_mb,
+		.recurse = recurse,
 	};
 }
 
 fn cmdCreate(args: CreateArgs) !void {
-	const total_size = try totalSizeBytes(args.data_paths);
+	var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+
+	const inputs = try collectCreateInputs(allocator, args.data_paths, args.recurse, args.basepath);
+	var total_size: u64 = 0;
+	var max_file_len: u64 = 0;
+	for (inputs) |input| {
+		total_size += input.length;
+		if (input.length > max_file_len) max_file_len = input.length;
+	}
 	const block_size = if (args.block_size) |v|
 		v
 	else if (args.block_count) |c|
 		core.create_plan.blockSizeFromCount(total_size, c)
 	else
 		core.heuristics.blockSizeHeuristic(total_size);
+	const cap_bytes = try memoryCapBytes(args.memory_mb);
+	if (cap_bytes) |cap| {
+		if (cap == 0) return error.InvalidInput;
+		if (block_size > cap) return error.InvalidInput;
+	}
 	const data_blocks = if (block_size == 0) 0 else (total_size + block_size - 1) / block_size;
 	const recovery_blocks = if (args.recovery_blocks) |v|
 		v
@@ -325,28 +476,21 @@ fn cmdCreate(args: CreateArgs) !void {
 		const plan = try std.fmt.bufPrint(
 			&plan_buf,
 			"derived plan: total_size={d} block_size={d} data_blocks={d} recovery_blocks={d}\n",
-			.{ total_size, block_size, data_blocks, recovery_blocks },
-		);
-		try std.fs.File.stderr().writeAll(plan);
+		.{ total_size, block_size, data_blocks, recovery_blocks },
+	);
+	try std.fs.File.stderr().writeAll(plan);
 	}
 
-	var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-	defer arena.deinit();
-	const allocator = arena.allocator();
-
-	var files = try allocator.alloc(FileMeta, args.data_paths.len);
+	var files = try allocator.alloc(FileMeta, inputs.len);
 	var i: usize = 0;
-	while (i < args.data_paths.len) : (i += 1) {
-		const path = args.data_paths[i];
-		const name = try safeFileName(path);
-		const info = try std.fs.cwd().statFile(path);
-		const file_len = info.size;
-		const file_hash_16k = try md5First16k(path);
-		const file_id = try core.file_id.fileIdFromHash16k(allocator, file_hash_16k, file_len, name);
+	while (i < inputs.len) : (i += 1) {
+		const input = inputs[i];
+		const file_hash_16k = try md5First16k(input.path);
+		const file_id = try core.file_id.fileIdFromHash16k(allocator, file_hash_16k, input.length, input.name);
 		files[i] = .{
-			.path = path,
-			.name = name,
-			.length = file_len,
+			.path = input.path,
+			.name = input.name,
+			.length = input.length,
 			.file_id = file_id,
 			.file_hash_16k = file_hash_16k,
 		};
@@ -462,14 +606,46 @@ fn cmdCreate(args: CreateArgs) !void {
 	}
 
 	if (recovery_blocks > 0) {
+		const offset = args.first_recovery_block orelse 0;
+		if (offset > std.math.maxInt(u32)) return error.InvalidInput;
+		if (recovery_blocks > 0 and offset > std.math.maxInt(u32) - (recovery_blocks - 1)) return error.InvalidInput;
 		var file_entries = try allocator.alloc(core.storage.FileEntry, files.len);
 		i = 0;
 		while (i < files.len) : (i += 1) {
 			file_entries[i] = .{ .path = files[i].path, .length = files[i].length, .present = true };
 		}
 		const store = core.storage.FileStore{ .files = file_entries };
-		const plan = try core.create_plan.splitRecoveryBlocksDefault(allocator, recovery_blocks);
-		const width = volumeIndexWidth(recovery_blocks);
+		var plan = blk: {
+			if (args.recovery_file_count) |count| {
+				if (count == 0 or count > recovery_blocks) return error.InvalidInput;
+				if (args.uniform_recovery) {
+					break :blk try core.create_plan.splitRecoveryBlocksUniform(allocator, recovery_blocks, count);
+				}
+				break :blk try core.create_plan.splitRecoveryBlocksCounted(allocator, recovery_blocks, count);
+			}
+			if (args.uniform_recovery) {
+				const count = core.create_plan.defaultVolumeCount(recovery_blocks);
+				break :blk try core.create_plan.splitRecoveryBlocksUniform(allocator, recovery_blocks, count);
+			}
+			if (args.limit_recovery) {
+				const max_blocks = if (block_size == 0) 0 else (max_file_len + block_size - 1) / block_size;
+				break :blk try core.create_plan.splitRecoveryBlocksLimited(allocator, recovery_blocks, max_blocks);
+			}
+			break :blk try core.create_plan.splitRecoveryBlocksDefault(allocator, recovery_blocks);
+		};
+		var pi: usize = 0;
+		while (pi < plan.len) : (pi += 1) {
+			plan[pi].start += offset;
+		}
+		if (cap_bytes) |cap| {
+			const slice_size_u64: u64 = @intCast(slice_size);
+			for (plan) |vol| {
+				const mul = @mulWithOverflow(vol.count, slice_size_u64);
+				if (mul[1] != 0) return error.InvalidInput;
+				if (mul[0] > cap) return error.InvalidInput;
+			}
+		}
+		const width = volumeIndexWidth(recovery_blocks, offset);
 		if (plan.len <= 1) {
 			for (plan) |vol| {
 				try buildVolume(
@@ -485,12 +661,13 @@ fn cmdCreate(args: CreateArgs) !void {
 					args.emit_rfsc,
 					args.emit_packed,
 					args.include_volume_meta,
+					cap_bytes,
 					true,
 				);
 			}
 		} else {
 			const cpu = std.Thread.getCpuCount() catch 1;
-			const thread_count = @min(cpu, plan.len);
+			const thread_count = if (args.memory_mb != null) 1 else @min(cpu, plan.len);
 			if (thread_count <= 1) {
 				for (plan) |vol| {
 					try buildVolume(
@@ -506,6 +683,7 @@ fn cmdCreate(args: CreateArgs) !void {
 						args.emit_rfsc,
 						args.emit_packed,
 						args.include_volume_meta,
+						cap_bytes,
 						true,
 					);
 				}
@@ -522,6 +700,7 @@ fn cmdCreate(args: CreateArgs) !void {
 					.emit_rfsc = args.emit_rfsc,
 					.emit_packed = args.emit_packed,
 					.include_volume_meta = args.include_volume_meta,
+					.cap_bytes = cap_bytes,
 					.next_index = std.atomic.Value(usize).init(0),
 					.stop = std.atomic.Value(u8).init(0),
 					.err = null,
@@ -707,18 +886,33 @@ fn volumePath(allocator: std.mem.Allocator, par2_path: []const u8, start: u64, c
 		base = par2_path[0 .. par2_path.len - 5];
 	}
 	const start_s = try indexPadded(allocator, start, width);
-	const count_s = try indexPadded(allocator, count, width);
+	var count_buf: [32]u8 = undefined;
+	const count_s = try std.fmt.bufPrint(&count_buf, "{d}", .{count});
 	const suffix = try std.mem.concat(allocator, u8, &.{ ".vol", start_s, "+", count_s, ".par2" });
 	return try std.mem.concat(allocator, u8, &.{ base, suffix });
 }
 
-fn volumeIndexWidth(total: u64) usize {
-	var t = if (total == 0) 1 else total;
-	var digits: usize = 0;
-	while (t > 0) : (t /= 10) {
-		digits += 1;
+fn volumeIndexWidth(total: u64, first: u64) usize {
+	if (total == 0) return 1;
+	var max_index = first;
+	if (total > 0) {
+		const add = total - 1;
+		const sum = @addWithOverflow(first, add);
+		if (sum[1] == 0) max_index = sum[0];
 	}
-	return if (digits < 3) 3 else digits;
+	var digits_total: usize = 0;
+	var t = total;
+	while (t > 0) : (t /= 10) {
+		digits_total += 1;
+	}
+	var digits_max: usize = 0;
+	t = max_index;
+	while (t > 0) : (t /= 10) {
+		digits_max += 1;
+	}
+	if (digits_total == 0) digits_total = 1;
+	if (digits_max == 0) digits_max = 1;
+	return if (digits_total > digits_max) digits_total else digits_max;
 }
 
 fn indexPadded(allocator: std.mem.Allocator, value: u64, width: usize) ![]const u8 {
@@ -744,6 +938,7 @@ const VolumeShared = struct {
 	emit_rfsc: bool,
 	emit_packed: bool,
 	include_volume_meta: bool,
+	cap_bytes: ?u64,
 	next_index: std.atomic.Value(usize),
 	stop: std.atomic.Value(u8),
 	err: ?anyerror,
@@ -770,6 +965,7 @@ fn volumeWorker(shared: *VolumeShared) void {
 			shared.emit_rfsc,
 			shared.emit_packed,
 			shared.include_volume_meta,
+			shared.cap_bytes,
 			false,
 		) catch |e| {
 			setVolumeError(shared, e);
@@ -798,11 +994,17 @@ fn buildVolume(
 	emit_rfsc: bool,
 	emit_packed: bool,
 	include_volume_meta: bool,
+	cap_bytes: ?u64,
 	parallel_slices: bool,
 ) !void {
 	var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 	defer _ = gpa.deinit();
-	const tmp_alloc = gpa.allocator();
+	var limited: LimitedAllocator = undefined;
+	var tmp_alloc = gpa.allocator();
+	if (cap_bytes) |cap| {
+		limited = LimitedAllocator.init(tmp_alloc, @intCast(cap));
+		tmp_alloc = limited.allocator();
+	}
 
 	const vol_path = try volumePath(allocator, par2_path, vol.start, vol.count, width);
 	var vol_file = try std.fs.cwd().createFile(vol_path, .{ .truncate = true });
@@ -911,6 +1113,207 @@ fn totalSizeBytes(paths: []const []const u8) !u64 {
 	return total;
 }
 
+fn memoryCapBytes(memory_mb: ?u64) !?u64 {
+	if (memory_mb == null) return null;
+	const mb = memory_mb.?;
+	const mul = @mulWithOverflow(mb, @as(u64, 1024 * 1024));
+	if (mul[1] != 0) return error.InvalidInput;
+	return mul[0];
+}
+
+const LimitedAllocator = struct {
+	child: std.mem.Allocator,
+	cap: usize,
+	used: usize,
+
+	pub fn init(child: std.mem.Allocator, cap: usize) LimitedAllocator {
+		return .{ .child = child, .cap = cap, .used = 0 };
+	}
+
+	pub fn allocator(self: *LimitedAllocator) std.mem.Allocator {
+		return .{ .ptr = self, .vtable = &vtable };
+	}
+
+	fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+		const self: *LimitedAllocator = @ptrCast(@alignCast(ctx));
+		const new_used = self.used + len;
+		if (new_used > self.cap) return null;
+		const ptr = self.child.rawAlloc(len, alignment, ret_addr) orelse return null;
+		self.used = new_used;
+		return ptr;
+	}
+
+	fn resize(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
+		const self: *LimitedAllocator = @ptrCast(@alignCast(ctx));
+		if (new_len <= buf.len) {
+			const ok = self.child.rawResize(buf, alignment, new_len, ret_addr);
+			if (!ok) return false;
+			self.used -= buf.len - new_len;
+			return true;
+		}
+		const add = new_len - buf.len;
+		if (self.used + add > self.cap) return false;
+		const ok = self.child.rawResize(buf, alignment, new_len, ret_addr);
+		if (!ok) return false;
+		self.used += add;
+		return true;
+	}
+
+	fn remap(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+		const self: *LimitedAllocator = @ptrCast(@alignCast(ctx));
+		if (new_len <= buf.len) {
+			const ptr = self.child.rawRemap(buf, alignment, new_len, ret_addr) orelse return null;
+			self.used -= buf.len - new_len;
+			return ptr;
+		}
+		const add = new_len - buf.len;
+		if (self.used + add > self.cap) return null;
+		const ptr = self.child.rawRemap(buf, alignment, new_len, ret_addr) orelse return null;
+		self.used += add;
+		return ptr;
+	}
+
+	fn free(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
+		const self: *LimitedAllocator = @ptrCast(@alignCast(ctx));
+		self.child.rawFree(buf, alignment, ret_addr);
+		if (self.used >= buf.len) {
+			self.used -= buf.len;
+		} else {
+			self.used = 0;
+		}
+	}
+
+	const vtable = std.mem.Allocator.VTable{
+		.alloc = alloc,
+		.resize = resize,
+		.remap = remap,
+		.free = free,
+	};
+};
+
+fn trimTrailingSeparators(path: []const u8) []const u8 {
+	if (path.len == 0) return path;
+	var end = path.len;
+	while (end > 1) : (end -= 1) {
+		const c = path[end - 1];
+		if (c != '/' and c != '\\') break;
+	}
+	return path[0..end];
+}
+
+fn isPathPrefix(base: []const u8, full: []const u8) bool {
+	if (!std.mem.startsWith(u8, full, base)) return false;
+	if (full.len == base.len) return true;
+	const next = full[base.len];
+	return next == '/' or next == '\\';
+}
+
+fn relativePathForInput(allocator: std.mem.Allocator, basepath: []const u8, path: []const u8) !?[]const u8 {
+	const base_abs = try std.fs.cwd().realpathAlloc(allocator, basepath);
+	defer allocator.free(base_abs);
+	const base_norm = trimTrailingSeparators(base_abs);
+	const path_abs = try std.fs.cwd().realpathAlloc(allocator, path);
+	defer allocator.free(path_abs);
+	return relativePathUnderBase(allocator, base_norm, path_abs);
+}
+
+fn relativePathUnderBase(allocator: std.mem.Allocator, base_abs: []const u8, file_abs: []const u8) !?[]const u8 {
+	if (!isPathPrefix(base_abs, file_abs)) return null;
+	var start = base_abs.len;
+	if (file_abs.len > base_abs.len) {
+		const c = file_abs[start];
+		if (c == '/' or c == '\\') start += 1;
+	}
+	if (start >= file_abs.len) return null;
+	const rel = file_abs[start..];
+	if (hasTraversalSegment(rel)) return null;
+	if (hasWindowsDrivePrefix(rel)) return null;
+	if (std.fs.path.isAbsolute(rel)) return null;
+	const out = try allocator.dupe(u8, rel);
+	return out;
+}
+
+fn collectCreateInputs(
+	allocator: std.mem.Allocator,
+	inputs: []const []const u8,
+	recurse: bool,
+	basepath: ?[]const u8,
+) ![]CreateInput {
+	var list = std.ArrayList(CreateInput).empty;
+	defer list.deinit(allocator);
+
+	var base_abs: ?[]u8 = null;
+	if (basepath) |bp| {
+		const abs = try std.fs.cwd().realpathAlloc(allocator, bp);
+		base_abs = abs;
+	}
+	if (base_abs) |abs| {
+		base_abs = try allocator.dupe(u8, trimTrailingSeparators(abs));
+	}
+
+	for (inputs) |path| {
+		const info = std.fs.cwd().statFile(path) catch continue;
+		if (info.kind == .file) {
+			const entry = try buildCreateInput(allocator, path, info.size, base_abs);
+			if (entry) |value| try list.append(allocator, value);
+			continue;
+		}
+		if (info.kind != .directory or !recurse) continue;
+		var dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
+		defer dir.close();
+		var walker = try dir.walk(allocator);
+		defer walker.deinit();
+		while (try walker.next()) |item| {
+			if (item.kind != .file) continue;
+			const full_path = try std.fs.path.join(allocator, &.{ path, item.path });
+			const file_info = std.fs.cwd().statFile(full_path) catch {
+				allocator.free(full_path);
+				continue;
+			};
+			const entry = try buildCreateInput(allocator, full_path, file_info.size, base_abs);
+			if (entry) |value| {
+				try list.append(allocator, value);
+			} else {
+				allocator.free(full_path);
+			}
+		}
+	}
+
+	if (list.items.len == 0) return error.InvalidInput;
+	return list.toOwnedSlice(allocator);
+}
+
+fn buildCreateInput(
+	allocator: std.mem.Allocator,
+	path: []const u8,
+	length: u64,
+	base_abs: ?[]const u8,
+) !?CreateInput {
+	if (base_abs) |base| {
+		const abs = try std.fs.cwd().realpathAlloc(allocator, path);
+		const rel = try relativePathUnderBase(allocator, base, abs);
+		if (rel == null) {
+			var buf: [256]u8 = undefined;
+			const msg = try std.fmt.bufPrint(&buf, "Ignoring out of basepath source file: {s}\n", .{abs});
+			try std.fs.File.stdout().writeAll(msg);
+			allocator.free(abs);
+			return null;
+		}
+		allocator.free(abs);
+		return .{
+			.path = try allocator.dupe(u8, path),
+			.name = rel.?,
+			.length = length,
+		};
+	}
+	const name = try safeFileName(path);
+	return .{
+		.path = try allocator.dupe(u8, path),
+		.name = name,
+		.length = length,
+	};
+}
+
 fn envMuteDefaults() bool {
 	const val = std.process.getEnvVarOwned(std.heap.page_allocator, "PAR2_MUTE_DEFAULTS") catch return false;
 	defer std.heap.page_allocator.free(val);
@@ -1013,6 +1416,33 @@ test "parseCreateArgs accepts par2-style short flags" {
 	try std.testing.expectEqual(@as(u64, 10), parsed.redundancy_percent.?);
 }
 
+test "parseCreateArgs parses basepath, memory, and verbosity" {
+	const parsed = try parseCreateArgs(&.{ "-v", "-q", "-m", "64", "-B", "base", "out.par2", "file.bin" });
+	try std.testing.expectEqual(@as(i32, 0), parsed.verbosity);
+	try std.testing.expectEqual(@as(u64, 64), parsed.memory_mb.?);
+	try std.testing.expectEqualStrings("base", parsed.basepath.?);
+}
+
+test "parseCreateArgs accepts recovery split flags" {
+	const parsed = try parseCreateArgs(&.{ "-u", "-n3", "-f5", "out.par2", "file.bin" });
+	try std.testing.expect(parsed.uniform_recovery);
+	try std.testing.expectEqual(@as(u64, 3), parsed.recovery_file_count.?);
+	try std.testing.expectEqual(@as(u64, 5), parsed.first_recovery_block.?);
+}
+
+test "parseCreateArgs accepts limit recovery" {
+	const parsed = try parseCreateArgs(&.{ "-l", "out.par2", "file.bin" });
+	try std.testing.expect(parsed.limit_recovery);
+}
+
+test "parseCreateArgs rejects uniform and limit" {
+	try std.testing.expectError(error.InvalidInput, parseCreateArgs(&.{ "-u", "-l", "out.par2", "file.bin" }));
+}
+
+test "parseCreateArgs rejects limit and recovery file count" {
+	try std.testing.expectError(error.InvalidInput, parseCreateArgs(&.{ "-l", "-n3", "out.par2", "file.bin" }));
+}
+
 test "transliterateAscii maps latin1 accents" {
 	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
 	defer arena.deinit();
@@ -1068,8 +1498,18 @@ fn cmdRecover(
 	stdout_only: bool,
 	out_dir: ?[]const u8,
 	allow_unsafe_paths: bool,
+	basepath: ?[]const u8,
+	verbosity: i32,
+	memory_mb: ?u64,
 ) !void {
 	const debug_recover = envFlagSet("PAR2_DEBUG_RECOVER");
+	const cap_bytes = try memoryCapBytes(memory_mb);
+	var limited: LimitedAllocator = undefined;
+	var recover_alloc = allocator;
+	if (cap_bytes) |cap| {
+		limited = LimitedAllocator.init(scratch, @intCast(cap));
+		recover_alloc = limited.allocator();
+	}
 	var ctx = core.api.initContext(allocator);
 	var recovery_slices = std.ArrayList(core.rs.RecoverySlice).empty;
 	defer recovery_slices.deinit(allocator);
@@ -1123,13 +1563,29 @@ fn cmdRecover(
 	}
 
 	var p: usize = 0;
-	while (p < data_paths.len) : (p += 1) {
-		const path = data_paths[p];
-		const base = std.fs.path.basename(path);
-		const idx = try findRecoveryIndexByName(rs_set, path, base);
-		if (file_entries[idx].present) return error.InvalidInput;
-		file_entries[idx].path = path;
-		file_entries[idx].present = true;
+	if (data_paths.len == 0) {
+		while (p < rs_set.recovery_files.len) : (p += 1) {
+			const entry = rs_set.recovery_files[p];
+			if (entry.desc == null) continue;
+			const name = entry.desc.?.file_name;
+			const candidate = if (basepath) |bp|
+				try std.fs.path.join(allocator, &.{ bp, name })
+			else
+				name;
+			_ = std.fs.cwd().statFile(candidate) catch continue;
+			file_entries[p].path = candidate;
+			file_entries[p].present = true;
+		}
+	} else {
+		while (p < data_paths.len) : (p += 1) {
+			const path = data_paths[p];
+			const base = std.fs.path.basename(path);
+			const rel = if (basepath) |bp| try relativePathForInput(allocator, bp, path) else null;
+			const idx = try findRecoveryIndexByName(rs_set, path, base, rel);
+			if (file_entries[idx].present) return error.InvalidInput;
+			file_entries[idx].path = path;
+			file_entries[idx].present = true;
+		}
 	}
 
 	const base_store = core.storage.FileStore{ .files = file_entries };
@@ -1189,6 +1645,14 @@ fn cmdRecover(
 		.base = base_store,
 		.overrides = &overrides,
 	};
+	if (cap_bytes) |cap| {
+		if (cap == 0) return error.InvalidInput;
+		const count_u64: u64 = @intCast(order.len);
+		const slice_u64: u64 = @intCast(slice_size);
+		const mul = @mulWithOverflow(count_u64, slice_u64);
+		if (mul[1] != 0) return error.InvalidInput;
+		if (mul[0] > cap) return error.InvalidInput;
+	}
 	var missing_indices = std.ArrayList(usize).empty;
 	defer missing_indices.deinit(allocator);
 	var oi: usize = 0;
@@ -1205,7 +1669,9 @@ fn cmdRecover(
 		if (!file_entries[i].present or anyMissing(missing_flags[i])) missing_files_count += 1;
 	}
 	if (missing_indices.items.len == 0 and missing_files_count == 0) {
-		try std.fs.File.stdout().writeAll("Nothing to recover\n");
+		if (verbosity >= 0) {
+			try std.fs.File.stdout().writeAll("Nothing to recover\n");
+		}
 		return;
 	}
 	if (missing_indices.items.len > 0 and recovery_slices.items.len < missing_indices.items.len) return error.InvalidInput;
@@ -1214,13 +1680,22 @@ fn cmdRecover(
 		try allocator.alloc([]u8, 0)
 	else
 		try core.api.recoverMissingSlicesMemory(
-			allocator,
+			recover_alloc,
 			files,
 			store,
 			missing_indices.items,
 			recovery_slices.items[0..missing_indices.items.len],
 			slice_size,
 		);
+	defer {
+		if (cap_bytes != null) {
+			var ri: usize = 0;
+			while (ri < recovered.len) : (ri += 1) {
+				recover_alloc.free(recovered[ri]);
+			}
+			recover_alloc.free(recovered);
+		}
+	}
 
 	var recovered_for = try allocator.alloc(?usize, order.len);
 	@memset(recovered_for, null);
@@ -1233,18 +1708,23 @@ fn cmdRecover(
 	while (i < rs_set.recovery_files.len) : (i += 1) {
 		if (file_entries[i].present and !anyMissing(missing_flags[i])) continue;
 		const desc = rs_set.recovery_files[i].desc.?;
+		var computed: [16]u8 = undefined;
 		if (stdout_only) {
 			const stdout = std.fs.File.stdout();
-			try writeRecoveredFileSlices(scratch, store, order, recovered_for, recovered, i, slice_size, stdout);
+			computed = try writeRecoveredFileSlicesWithHash(scratch, store, order, recovered_for, recovered, i, slice_size, stdout);
 		} else {
-			const out_path = try outputPath(allocator, out_dir, desc.file_name, allow_unsafe_paths);
-			try writeRecoveredFilePath(scratch, store, order, recovered_for, recovered, i, slice_size, out_path);
+			const target_dir = out_dir orelse basepath;
+			const out_path = try outputPath(allocator, target_dir, desc.file_name, allow_unsafe_paths);
+			computed = try writeRecoveredFilePathWithHash(scratch, store, order, recovered_for, recovered, i, slice_size, out_path);
 		}
+		if (!std.mem.eql(u8, &computed, &desc.file_hash)) return error.InvalidInput;
 	}
 
-	var msg_buf: [64]u8 = undefined;
-	const msg = try std.fmt.bufPrint(&msg_buf, "Recovered {d} slices\n", .{missing_indices.items.len});
-	try std.fs.File.stdout().writeAll(msg);
+	if (verbosity >= 0) {
+		var msg_buf: [64]u8 = undefined;
+		const msg = try std.fmt.bufPrint(&msg_buf, "Recovered {d} slices\n", .{missing_indices.items.len});
+		try std.fs.File.stdout().writeAll(msg);
+	}
 }
 
 const RecoverArgs = struct {
@@ -1253,15 +1733,25 @@ const RecoverArgs = struct {
 	par2_path: []const u8,
 	data_paths: []const []const u8,
 	allow_unsafe_paths: bool,
+	basepath: ?[]const u8,
+	verbosity: i32,
+	memory_mb: ?u64,
 };
 
 fn parseRecoverArgs(args: []const []const u8) !RecoverArgs {
 	var stdout_only = false;
 	var out_dir: ?[]const u8 = null;
 	var allow_unsafe_paths = false;
+	var basepath: ?[]const u8 = null;
+	var verbosity: i32 = 0;
+	var memory_mb: ?u64 = null;
 	var i: usize = 0;
 	while (i < args.len) {
 		const a = args[i];
+		if (std.mem.eql(u8, a, "--")) {
+			i += 1;
+			break;
+		}
 		if (std.mem.eql(u8, a, "--stdout")) {
 			stdout_only = true;
 			i += 1;
@@ -1278,6 +1768,39 @@ fn parseRecoverArgs(args: []const []const u8) !RecoverArgs {
 			i += 2;
 			continue;
 		}
+		if (std.mem.eql(u8, a, "-v")) {
+			verbosity += 1;
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-q")) {
+			verbosity -= 1;
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-R")) return error.InvalidInput;
+		if (std.mem.eql(u8, a, "-m")) {
+			if (i + 1 >= args.len) return error.InvalidInput;
+			memory_mb = try std.fmt.parseInt(u64, args[i + 1], 10);
+			i += 2;
+			continue;
+		}
+		if (std.mem.startsWith(u8, a, "-m") and a.len > 2) {
+			memory_mb = try std.fmt.parseInt(u64, a[2..], 10);
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-B") or std.mem.eql(u8, a, "--basepath")) {
+			if (i + 1 >= args.len) return error.InvalidInput;
+			basepath = args[i + 1];
+			i += 2;
+			continue;
+		}
+		if (std.mem.startsWith(u8, a, "-B") and a.len > 2) {
+			basepath = a[2..];
+			i += 1;
+			continue;
+		}
 		break;
 	}
 	if (stdout_only and out_dir != null) return error.InvalidInput;
@@ -1290,7 +1813,93 @@ fn parseRecoverArgs(args: []const []const u8) !RecoverArgs {
 		.par2_path = par2_path,
 		.data_paths = data_paths,
 		.allow_unsafe_paths = allow_unsafe_paths,
+		.basepath = basepath,
+		.verbosity = verbosity,
+		.memory_mb = memory_mb,
 	};
+}
+
+const VerifyArgs = struct {
+	par2_path: []const u8,
+	data_paths: []const []const u8,
+	basepath: ?[]const u8,
+	verbosity: i32,
+	memory_mb: ?u64,
+};
+
+fn parseVerifyArgs(args: []const []const u8) !VerifyArgs {
+	var basepath: ?[]const u8 = null;
+	var verbosity: i32 = 0;
+	var memory_mb: ?u64 = null;
+	var i: usize = 0;
+	while (i < args.len) {
+		const a = args[i];
+		if (std.mem.eql(u8, a, "--")) {
+			i += 1;
+			break;
+		}
+		if (std.mem.eql(u8, a, "-v")) {
+			verbosity += 1;
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-q")) {
+			verbosity -= 1;
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-R")) return error.InvalidInput;
+		if (std.mem.eql(u8, a, "-m")) {
+			if (i + 1 >= args.len) return error.InvalidInput;
+			memory_mb = try std.fmt.parseInt(u64, args[i + 1], 10);
+			i += 2;
+			continue;
+		}
+		if (std.mem.startsWith(u8, a, "-m") and a.len > 2) {
+			memory_mb = try std.fmt.parseInt(u64, a[2..], 10);
+			i += 1;
+			continue;
+		}
+		if (std.mem.eql(u8, a, "-B") or std.mem.eql(u8, a, "--basepath")) {
+			if (i + 1 >= args.len) return error.InvalidInput;
+			basepath = args[i + 1];
+			i += 2;
+			continue;
+		}
+		if (std.mem.startsWith(u8, a, "-B") and a.len > 2) {
+			basepath = a[2..];
+			i += 1;
+			continue;
+		}
+		break;
+	}
+	if (i >= args.len) return error.InvalidInput;
+	const par2_path = args[i];
+	const data_paths = args[i + 1 ..];
+	return .{
+		.par2_path = par2_path,
+		.data_paths = data_paths,
+		.basepath = basepath,
+		.verbosity = verbosity,
+		.memory_mb = memory_mb,
+	};
+}
+
+test "parseRecoverArgs accepts basepath, memory, and verbosity" {
+	const parsed = try parseRecoverArgs(&.{ "-v", "-q", "-m", "32", "-B", "base", "file.par2" });
+	try std.testing.expectEqual(@as(i32, 0), parsed.verbosity);
+	try std.testing.expectEqual(@as(u64, 32), parsed.memory_mb.?);
+	try std.testing.expectEqualStrings("base", parsed.basepath.?);
+}
+
+test "parseRecoverArgs rejects -R" {
+	try std.testing.expectError(error.InvalidInput, parseRecoverArgs(&.{ "-R", "file.par2" }));
+}
+
+test "parseVerifyArgs parses basepath and memory" {
+	const parsed = try parseVerifyArgs(&.{ "-m", "64", "-B", "base", "file.par2" });
+	try std.testing.expectEqual(@as(u64, 64), parsed.memory_mb.?);
+	try std.testing.expectEqualStrings("base", parsed.basepath.?);
 }
 
 fn loadPar2File(
@@ -1444,14 +2053,14 @@ fn isRfscType(t: [16]u8) bool {
 	return std.mem.eql(u8, &t, &rfsc);
 }
 
-fn findRecoveryIndexByName(set: core.recovery_set.RecoverySet, path: []const u8, base: []const u8) !usize {
+fn findRecoveryIndexByName(set: core.recovery_set.RecoverySet, path: []const u8, base: []const u8, rel: ?[]const u8) !usize {
 	var exact_match: ?usize = null;
 	var i: usize = 0;
 	while (i < set.recovery_files.len) : (i += 1) {
 		const entry = set.recovery_files[i];
 		if (entry.desc == null) continue;
 		const name = entry.desc.?.file_name;
-		if (std.mem.eql(u8, name, path)) {
+		if (std.mem.eql(u8, name, path) or (rel != null and std.mem.eql(u8, name, rel.?))) {
 			if (exact_match != null and exact_match.? != i) return error.InvalidInput;
 			exact_match = i;
 		}
@@ -1545,6 +2154,39 @@ fn writeRecoveredFileSlices(
 	}
 }
 
+fn writeRecoveredFileSlicesWithHash(
+	scratch: std.mem.Allocator,
+	store: anytype,
+	order: []const core.layout.SliceRef,
+	recovered_for: []const ?usize,
+	recovered: [][]u8,
+	file_index: usize,
+	slice_size: usize,
+	writer: anytype,
+) ![16]u8 {
+	var ctx = core.md5.Md5Ctx.init();
+	var oi: usize = 0;
+	while (oi < order.len) : (oi += 1) {
+		const ref = order[oi];
+		if (ref.file_index != file_index) continue;
+		const len = ref.length;
+		if (recovered_for[oi]) |rec_idx| {
+			const data = recovered[rec_idx][0..len];
+			ctx.update(data);
+			try writer.writeAll(data);
+			continue;
+		}
+		const slice = try store.readSlice(scratch, file_index, slice_size, ref.slice_index);
+		defer scratch.free(slice);
+		const data = slice[0..len];
+		ctx.update(data);
+		try writer.writeAll(data);
+	}
+	var out: [16]u8 = undefined;
+	ctx.final(&out);
+	return out;
+}
+
 fn writeRecoveredFilePath(
 	scratch: std.mem.Allocator,
 	store: anytype,
@@ -1563,6 +2205,26 @@ fn writeRecoveredFilePath(
 	var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
 	defer file.close();
 	try writeRecoveredFileSlices(scratch, store, order, recovered_for, recovered, file_index, slice_size, file);
+}
+
+fn writeRecoveredFilePathWithHash(
+	scratch: std.mem.Allocator,
+	store: anytype,
+	order: []const core.layout.SliceRef,
+	recovered_for: []const ?usize,
+	recovered: [][]u8,
+	file_index: usize,
+	slice_size: usize,
+	path: []const u8,
+) ![16]u8 {
+	if (std.fs.path.dirname(path)) |dir| {
+		if (dir.len > 0) {
+			try std.fs.cwd().makePath(dir);
+		}
+	}
+	var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
+	defer file.close();
+	return writeRecoveredFileSlicesWithHash(scratch, store, order, recovered_for, recovered, file_index, slice_size, file);
 }
 
 fn outputPath(allocator: std.mem.Allocator, out_dir: ?[]const u8, file_name: []const u8, allow_unsafe_paths: bool) ![]const u8 {

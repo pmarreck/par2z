@@ -45,8 +45,16 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 - [x] Streaming encode for file-backed store (avoid loading all slices in memory).
 
 ## TODO: par2cmdline-turbo Flags (Compatibility)
-- [ ] Implement behavior for `-B` (basepath), `-R` (recurse), `-m` (memory), `-v`/`-q` (verbosity).
-- [ ] Implement recovery file splitting flags: `-u`, `-l`, `-n`, and `-f` (first recovery block).
+- [x] Empirically verify par2cmdline-turbo flag behavior (no source code).
+- [x] Implement behavior for `-B` (basepath), `-R` (recurse), `-m` (memory), `-v`/`-q` (verbosity).
+- [x] Implement recovery file splitting flags: `-u`, `-l`, `-n`, and `-f` (first recovery block).
+
+### Empirical Notes (par2cmdline-turbo 1.3.0)
+- `-B` stores relative paths and is required for verify/repair to search basepath; files outside basepath are ignored with a warning (error if none remain).
+- `-R` is create-only; verify/repair reject it.
+- `-u` (uniform) evens recovery blocks across files; can combine with `-n`.
+- `-n` splits evenly across `n` volumes; `-l` is incompatible with `-n`; `-u` incompatible with `-l`.
+- `-f` offsets recovery block indices and volume names (e.g. `-f5` starts at `vol05+...`).
 
 ## Review Findings (2025-12-26)
 - [x] Verify packet hash before parsing packets (skip invalid hash).
