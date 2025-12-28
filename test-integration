@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$HOME/dotfiles/bin/src/capture.bash"
+
+out=""
+err=""
+rc=0
+
+root_dir="$(pwd)"
+
+if command -v mktmp >/dev/null 2>&1; then
+	tmpdir="$(mktmp --tmpdir)"
+else
+	tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/par2-cleanroom.XXXXXX")"
+	echo "warning: mktmp not found; using mktemp" >&2
+fi
+cleanup() {
+	if [ -n "${tmpdir-}" ] && [ -d "$tmpdir" ]; then
+		rm -rf "$tmpdir"
+	fi
+}
+trap cleanup EXIT
+
+seed="$(random 0 4294967295)"
+printf '%s\n' "$seed" > "$tmpdir/seed.txt"
+
+capture dd if=/dev/urandom of="$tmpdir/data.bin" bs=1 count=65536 status=none
+if [ "$rc" -ne 0 ]; then
+	echo "dd failed: $err" >&2
+	exit 1
+fi
+
+capture par2 create -s4096 -c16 "$tmpdir/data.par2" "$tmpdir/data.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 create failed: $err" >&2
+	exit 1
+fi
+
+cp "$tmpdir/data.bin" "$tmpdir/orig.bin"
+rm "$tmpdir/data.bin"
+
+capture zig build
+if [ "$rc" -ne 0 ]; then
+	echo "zig build failed: $err" >&2
+	exit 1
+fi
+
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/out\" data.par2"
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli recover failed: $err" >&2
+	exit 1
+fi
+
+orig_hash="$(openssl dgst -sha256 "$tmpdir/orig.bin" | awk '{print $NF}')"
+recovered_hash="$(openssl dgst -sha256 "$tmpdir/out/data.bin" | awk '{print $NF}')"
+if [ "$orig_hash" != "$recovered_hash" ]; then
+	echo "hash mismatch for recovered full-missing case" >&2
+	exit 1
+fi
+cp "$tmpdir/out/data.bin" "$tmpdir/data.bin"
+
+capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify data.par2 data.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 verify failed: $err" >&2
+	exit 1
+fi
+
+# Partial corruption case (less than protection)
+capture dd if=/dev/urandom of="$tmpdir/data2.bin" bs=1 count=65536 status=none
+if [ "$rc" -ne 0 ]; then
+	echo "dd failed: $err" >&2
+	exit 1
+fi
+capture par2 create -s4096 -r20 "$tmpdir/data2.par2" "$tmpdir/data2.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 create failed: $err" >&2
+	exit 1
+fi
+cp "$tmpdir/data2.bin" "$tmpdir/orig2.bin"
+capture dd if=/dev/urandom of="$tmpdir/data2.bin" bs=1 count=4096 seek=4096 conv=notrunc status=none
+if [ "$rc" -ne 0 ]; then
+	echo "dd corrupt failed: $err" >&2
+	exit 1
+fi
+capture dd if=/dev/urandom of="$tmpdir/data2.bin" bs=1 count=4096 seek=16384 conv=notrunc status=none
+if [ "$rc" -ne 0 ]; then
+	echo "dd corrupt failed: $err" >&2
+	exit 1
+fi
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/out2\" data2.par2 data2.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli recover failed: $err" >&2
+	exit 1
+fi
+orig2_hash="$(openssl dgst -sha256 "$tmpdir/orig2.bin" | awk '{print $NF}')"
+recovered2_hash="$(openssl dgst -sha256 "$tmpdir/out2/data2.bin" | awk '{print $NF}')"
+if [ "$orig2_hash" != "$recovered2_hash" ]; then
+	echo "hash mismatch for partial-corruption case" >&2
+	exit 1
+fi
+cp "$tmpdir/out2/data2.bin" "$tmpdir/data2.bin"
+capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify data2.par2 data2.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 verify failed: $err" >&2
+	exit 1
+fi
+
+# Create via our CLI and verify with par2 (and repair)
+capture dd if=/dev/urandom of="$tmpdir/data3.bin" bs=1 count=32768 status=none
+if [ "$rc" -ne 0 ]; then
+	echo "dd failed: $err" >&2
+	exit 1
+fi
+cp "$tmpdir/data3.bin" "$tmpdir/orig3.bin"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create --block-size 4096 --redundancy-percent 10 data3.par2 data3.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli create failed: $err" >&2
+	exit 1
+fi
+capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify data3.par2 data3.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 verify failed: $err" >&2
+	exit 1
+fi
+capture dd if=/dev/urandom of="$tmpdir/data3.bin" bs=1 count=4096 seek=4096 conv=notrunc status=none
+if [ "$rc" -ne 0 ]; then
+	echo "dd corrupt failed: $err" >&2
+	exit 1
+fi
+capture -- /bin/bash -c "cd \"$tmpdir\" && par2 repair -q data3.par2 data3.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 repair failed: $err" >&2
+	exit 1
+fi
+orig3_hash="$(openssl dgst -sha256 "$tmpdir/orig3.bin" | awk '{print $NF}')"
+recovered3_hash="$(openssl dgst -sha256 "$tmpdir/data3.bin" | awk '{print $NF}')"
+if [ "$orig3_hash" != "$recovered3_hash" ]; then
+	echo "hash mismatch for cli-create repair case" >&2
+	exit 1
+fi
+
+# Create with optional packets and verify with par2
+capture dd if=/dev/urandom of="$tmpdir/data4.bin" bs=1 count=16384 status=none
+if [ "$rc" -ne 0 ]; then
+	echo "dd failed: $err" >&2
+	exit 1
+fi
+cp "$tmpdir/data4.bin" "$tmpdir/orig4.bin"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create --block-size 4096 --redundancy-percent 10 --include-input-slices --emit-packed data4.par2 data4.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli create failed: $err" >&2
+	exit 1
+fi
+capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify data4.par2 data4.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 verify failed for optional packets" >&2
+	exit 1
+fi
+capture dd if=/dev/urandom of="$tmpdir/data4.bin" bs=1 count=4096 seek=4096 conv=notrunc status=none
+if [ "$rc" -ne 0 ]; then
+	echo "dd corrupt failed: $err" >&2
+	exit 1
+fi
+capture -- /bin/bash -c "cd \"$tmpdir\" && par2 repair -q data4.par2 data4.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 repair failed for optional packets" >&2
+	exit 1
+fi
+orig4_hash="$(openssl dgst -sha256 "$tmpdir/orig4.bin" | awk '{print $NF}')"
+recovered4_hash="$(openssl dgst -sha256 "$tmpdir/data4.bin" | awk '{print $NF}')"
+if [ "$orig4_hash" != "$recovered4_hash" ]; then
+	echo "hash mismatch for optional packets case" >&2
+	exit 1
+fi
+
+echo "integration ok"

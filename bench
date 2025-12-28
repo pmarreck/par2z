@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$HOME/dotfiles/bin/src/capture.bash"
+
+root_dir="$(pwd)"
+
+par2_cli="${PAR2_CLI_BIN:-$root_dir/zig-out/bin/par2-cli}"
+other_cli="${PAR2_OTHER_BIN:-par2}"
+bench_log="${PAR2_BENCH_LOG:-bench-results.tsv}"
+prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
+
+bench_size="${PAR2_BENCH_SIZE:-67108864}"
+block_size="${PAR2_BENCH_BLOCK_SIZE:-4096}"
+redundancy="${PAR2_BENCH_REDUNDANCY:-10}"
+iters="${PAR2_BENCH_ITERS:-3}"
+corrupt_bytes="${PAR2_BENCH_CORRUPT_BYTES:-4096}"
+bench_seed="${PAR2_BENCH_SEED:-1}"
+bench_seq="${PAR2_BENCH_SEQ:-1}"
+
+out=""
+err=""
+rc=0
+
+if command -v mktmp >/dev/null 2>&1; then
+	tmpdir="$(mktmp --tmpdir)"
+else
+	tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/par2-bench.XXXXXX")"
+	echo "warning: mktmp not found; using mktemp" >&2
+fi
+cleanup() {
+	if [ -n "${tmpdir-}" ] && [ -d "$tmpdir" ]; then
+		rm -rf "$tmpdir"
+	fi
+}
+trap cleanup EXIT
+
+now_ms() {
+	perl -MTime::HiRes -e 'printf "%.0f\n", Time::HiRes::time()*1000'
+}
+
+run_timed() {
+	local tool="$1"
+	local phase="$2"
+	shift 2
+	local start end elapsed
+	start="$(now_ms)"
+	capture -- "$@"
+	end="$(now_ms)"
+	elapsed=$((end - start))
+	if [ "$rc" -ne 0 ]; then
+		echo "$tool $phase failed: $err" >&2
+		exit 1
+	fi
+	printf '%-24s %8s ms\n' "$tool $phase" "$elapsed"
+	log_result "$tool" "$phase" "$elapsed"
+}
+
+gen_data() {
+	local path="$1"
+	if [ -x "$prng_gen" ]; then
+		capture "$prng_gen" "$path" "$bench_size" "$bench_seed" "$bench_seq"
+		if [ "$rc" -ne 0 ]; then
+			echo "prng-gen failed: $err" >&2
+			exit 1
+		fi
+	else
+		capture dd if=/dev/urandom of="$path" bs=1 count="$bench_size" status=none
+		if [ "$rc" -ne 0 ]; then
+			echo "dd failed: $err" >&2
+			exit 1
+		fi
+	fi
+}
+
+corrupt_file() {
+	local path="$1"
+	capture dd if=/dev/urandom of="$path" bs=1 count="$corrupt_bytes" seek=4096 conv=notrunc status=none
+	if [ "$rc" -ne 0 ]; then
+		echo "dd corrupt failed: $err" >&2
+		exit 1
+	fi
+}
+
+bench_tool() {
+	local name="$1"
+	local kind="$2"
+	local dir="$3"
+	local data="$4"
+	mkdir -p "$dir"
+	cp "$data" "$dir/data.bin"
+	cp "$data" "$dir/orig.bin"
+
+	if [ "$kind" = "par2" ]; then
+		local par2_path="$dir/data.par2"
+		run_timed "$name" "create" "$other_cli" create "-s$block_size" "-r$redundancy" "$par2_path" "$dir/data.bin"
+		run_timed "$name" "verify" "$other_cli" verify "$par2_path" "$dir/data.bin"
+		corrupt_file "$dir/data.bin"
+		run_timed "$name" "repair" "$other_cli" repair -q "$par2_path" "$dir/data.bin"
+	else
+		local par2_path="$dir/data.par2"
+		PAR2_MUTE_DEFAULTS=1 run_timed "$name" "create" "$par2_cli" create --block-size "$block_size" --redundancy-percent "$redundancy" "$par2_path" "$dir/data.bin"
+		run_timed "$name" "verify" "$par2_cli" verify "$par2_path" "$dir/data.bin"
+		corrupt_file "$dir/data.bin"
+		run_timed "$name" "recover" "$par2_cli" recover -o "$dir/out" "$par2_path" "$dir/data.bin"
+	fi
+}
+
+capture "$par2_cli" -h
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli not runnable at $par2_cli" >&2
+	exit 1
+fi
+capture "$other_cli" -V
+if [ "$rc" -ne 0 ]; then
+	echo "other par2 not runnable at $other_cli" >&2
+	exit 1
+fi
+
+bench_head="$(git rev-parse HEAD 2>/dev/null || true)"
+if [ -z "$bench_head" ]; then
+	bench_head="$(jj log --ignore-working-copy -n1 --template 'commit_id' 2>/dev/null || true)"
+fi
+if [ -z "$bench_head" ]; then
+	bench_head="unknown"
+fi
+
+if [ ! -f "$bench_log" ]; then
+	printf "timestamp\tcommit\ttool\tphase\telapsed_ms\tbench_size\tblock_size\tredundancy\titers\tother_cli\tpar2_cli\n" >> "$bench_log"
+fi
+
+log_result() {
+	local tool="$1"
+	local phase="$2"
+	local elapsed="$3"
+	local ts
+	ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+	printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+		"$ts" "$bench_head" "$tool" "$phase" "$elapsed" \
+		"$bench_size" "$block_size" "$redundancy" "$iters" \
+		"$other_cli" "$par2_cli" >> "$bench_log"
+}
+
+echo "bench size=$bench_size block_size=$block_size redundancy=$redundancy iters=$iters"
+data="$tmpdir/data.bin"
+gen_data "$data"
+
+iter=1
+while [ "$iter" -le "$iters" ]; do
+	echo "iteration $iter/$iters"
+	bench_tool "par2cmdline" "par2" "$tmpdir/par2-$iter" "$data"
+	bench_tool "par2-cli" "ours" "$tmpdir/ours-$iter" "$data"
+	iter=$((iter + 1))
+done

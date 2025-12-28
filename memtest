@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$HOME/dotfiles/bin/src/capture.bash"
+
+root_dir="$(pwd)"
+
+par2_cli="${PAR2_CLI_BIN:-$root_dir/zig-out/bin/par2-cli}"
+other_cli="${PAR2_OTHER_BIN:-par2}"
+mem_log="${PAR2_MEM_LOG:-mem-results.tsv}"
+prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
+
+mem_size="${PAR2_MEM_SIZE:-67108864}"
+block_size="${PAR2_MEM_BLOCK_SIZE:-4096}"
+redundancy="${PAR2_MEM_REDUNDANCY:-10}"
+iters="${PAR2_MEM_ITERS:-1}"
+bench_seed="${PAR2_MEM_SEED:-1}"
+bench_seq="${PAR2_MEM_SEQ:-1}"
+
+out=""
+err=""
+rc=0
+
+if command -v mktmp >/dev/null 2>&1; then
+	tmpdir="$(mktmp --tmpdir)"
+else
+	tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/par2-mem.XXXXXX")"
+	echo "warning: mktmp not found; using mktemp" >&2
+fi
+cleanup() {
+	if [ -n "${tmpdir-}" ] && [ -d "$tmpdir" ]; then
+		rm -rf "$tmpdir"
+	fi
+}
+trap cleanup EXIT
+
+bench_head="$(git rev-parse HEAD 2>/dev/null || true)"
+if [ -z "$bench_head" ]; then
+	bench_head="$(jj log --ignore-working-copy -n1 --template 'commit_id' 2>/dev/null || true)"
+fi
+if [ -z "$bench_head" ]; then
+	bench_head="unknown"
+fi
+
+if [ ! -f "$mem_log" ]; then
+	printf "timestamp\tcommit\ttool\tphase\tmax_rss_bytes\tmem_size\tblock_size\tredundancy\titers\n" >> "$mem_log"
+fi
+
+gen_data() {
+	local path="$1"
+	if [ -x "$prng_gen" ]; then
+		capture "$prng_gen" "$path" "$mem_size" "$bench_seed" "$bench_seq"
+		if [ "$rc" -ne 0 ]; then
+			echo "prng-gen failed: $err" >&2
+			exit 1
+		fi
+	else
+		capture dd if=/dev/urandom of="$path" bs=1 count="$mem_size" status=none
+		if [ "$rc" -ne 0 ]; then
+			echo "dd failed: $err" >&2
+			exit 1
+		fi
+	fi
+}
+
+time_cmd() {
+	local tool="$1"
+	local phase="$2"
+	shift 2
+	local time_bin=""
+	if /usr/bin/time -l true >/dev/null 2>&1; then
+		time_bin="/usr/bin/time -l"
+	elif /usr/bin/time -v true >/dev/null 2>&1; then
+		time_bin="/usr/bin/time -v"
+	else
+		echo "no suitable /usr/bin/time found" >&2
+		exit 1
+	fi
+	local time_out="$tmpdir/time.txt"
+	set +e
+	(eval "$time_bin" "$@" ) 2> "$time_out"
+	rc=$?
+	set -e
+	if [ "$rc" -ne 0 ]; then
+		echo "$tool $phase failed" >&2
+		exit 1
+	fi
+	local max_rss=""
+	if grep -q "maximum resident set size" "$time_out" 2>/dev/null; then
+		max_rss="$(grep "maximum resident set size" "$time_out" | awk '{print $1}')"
+	elif grep -q "Maximum resident set size" "$time_out" 2>/dev/null; then
+		max_rss="$(grep "Maximum resident set size" "$time_out" | awk '{print $6}')"
+	fi
+	if [ -z "$max_rss" ]; then
+		max_rss="0"
+	fi
+	local ts
+	ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+	printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+		"$ts" "$bench_head" "$tool" "$phase" "$max_rss" \
+		"$mem_size" "$block_size" "$redundancy" "$iters" >> "$mem_log"
+	printf '%-24s %10s bytes\n' "$tool $phase" "$max_rss"
+}
+
+data="$tmpdir/data.bin"
+gen_data "$data"
+
+iter=1
+while [ "$iter" -le "$iters" ]; do
+	echo "iteration $iter/$iters"
+	cp "$data" "$tmpdir/data-$iter.bin"
+	cp "$data" "$tmpdir/orig-$iter.bin"
+	time_cmd "par2cmdline" "create" "$other_cli" create "-q" "-s$block_size" "-r$redundancy" "$tmpdir/data-$iter.par2" "$tmpdir/data-$iter.bin"
+	time_cmd "par2cmdline" "verify" "$other_cli" verify "-q" "$tmpdir/data-$iter.par2" "$tmpdir/data-$iter.bin"
+	time_cmd "par2-cli" "create" "$par2_cli" create --block-size "$block_size" --redundancy-percent "$redundancy" "$tmpdir/ours-$iter.par2" "$tmpdir/orig-$iter.bin"
+	time_cmd "par2-cli" "verify" "$par2_cli" verify "$tmpdir/ours-$iter.par2" "$tmpdir/orig-$iter.bin"
+	iter=$((iter + 1))
+done
