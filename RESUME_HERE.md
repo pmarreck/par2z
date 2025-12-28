@@ -116,4 +116,4 @@ Other cases remain: full-missing, partial corruption, optional packets.
 - `verify` now streams from disk using `FileStore` + `core.api.verifyStoreFile` (low memory).
 - Added `slices.computeIfscEntry` and a low-memory-cap verify test.
 - `block_api` file-store recovery now reads each file sequentially (one open per file).
-- Bench script now builds ReleaseFast by default; perf gap on create remains large, verify memory now ~2–3MB.
+- Bench script now always builds ReleaseFast by default; create perf is near par2cmdline when ReleaseFast is used.

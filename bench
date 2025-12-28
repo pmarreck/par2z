@@ -108,19 +108,18 @@ bench_tool() {
 	fi
 }
 
-capture "$par2_cli" -h
-if [ "$rc" -ne 0 ]; then
-	if [ "$bench_build" -ne 0 ]; then
-		capture zig build -Doptimize="$bench_optimize"
-		if [ "$rc" -ne 0 ]; then
-			echo "zig build failed: $err" >&2
-			exit 1
-		fi
-		par2_cli="$root_dir/zig-out/bin/par2-cli"
-	else
-		echo "par2-cli not runnable at $par2_cli" >&2
+if [ "$bench_build" -ne 0 ]; then
+	capture zig build -Doptimize="$bench_optimize"
+	if [ "$rc" -ne 0 ]; then
+		echo "zig build failed: $err" >&2
 		exit 1
 	fi
+	par2_cli="$root_dir/zig-out/bin/par2-cli"
+fi
+capture "$par2_cli" -h
+if [ "$rc" -ne 0 ]; then
+	echo "par2-cli not runnable at $par2_cli" >&2
+	exit 1
 fi
 capture "$other_cli" -V
 if [ "$rc" -ne 0 ]; then
