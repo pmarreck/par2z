@@ -14,6 +14,15 @@ pub fn build(b: *std.Build) void {
 		.target = target,
 		.optimize = optimize,
 	});
+	const ops_mod = b.addModule("ops", .{
+		.root_source_file = b.path("src/ops.zig"),
+		.target = target,
+		.optimize = optimize,
+		.imports = &.{
+			.{ .name = "core", .module = core_mod },
+			.{ .name = "par2", .module = lib_mod },
+		},
+	});
 	const lib = b.addLibrary(.{
 		.name = "par2",
 		.root_module = lib_mod,
@@ -29,6 +38,7 @@ pub fn build(b: *std.Build) void {
 		.imports = &.{
 			.{ .name = "par2", .module = lib_mod },
 			.{ .name = "core", .module = core_mod },
+			.{ .name = "ops", .module = ops_mod },
 		},
 	});
 	const cli = b.addExecutable(.{
@@ -59,6 +69,7 @@ pub fn build(b: *std.Build) void {
 		.imports = &.{
 			.{ .name = "par2", .module = lib_mod },
 			.{ .name = "core", .module = core_mod },
+			.{ .name = "ops", .module = ops_mod },
 		},
 	});
 	const tests = b.addTest(.{

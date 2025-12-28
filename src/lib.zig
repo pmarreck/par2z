@@ -1,4 +1,5 @@
 const std = @import("std");
+pub const ops = @import("ops");
 
 pub const version_string: []const u8 = "par2-cleanroom 0.1.0";
 

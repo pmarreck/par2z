@@ -104,3 +104,10 @@ Other cases remain: full-missing, partial corruption, optional packets.
 - Verify now falls back to full-file MD5 when IFSC packets are missing; corruption is detected in that case.
 - Added LimitedAllocator-backed enforcement for `-m` in recover/create; still keeps conservative cap checks.
 - New tests cover verify fallback and memory-cap failures; `./test` and `./test-integration` pass.
+
+## 2025-12-28 Update (Ops Refactor + Fixes)
+- CLI now thin; operational logic moved into `src/ops.zig` (importable from C/C++/Swift).
+- Fixed RFSC validation map indexing in `loadPar2File` (exponent → index).
+- Fixed volume file discovery for relative paths; recover now loads `.vol*.par2` correctly.
+- Added extra `PAR2_DEBUG_RECOVER` logging for loaded volumes (debug only).
+- Build/test: `nix develop -c ./test` and `./test-integration` pass.
