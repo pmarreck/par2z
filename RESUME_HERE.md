@@ -111,3 +111,9 @@ Other cases remain: full-missing, partial corruption, optional packets.
 - Fixed volume file discovery for relative paths; recover now loads `.vol*.par2` correctly.
 - Added extra `PAR2_DEBUG_RECOVER` logging for loaded volumes (debug only).
 - Build/test: `nix develop -c ./test` and `./test-integration` pass.
+
+## 2025-12-28 Update (Verify Streaming + Bench)
+- `verify` now streams from disk using `FileStore` + `core.api.verifyStoreFile` (low memory).
+- Added `slices.computeIfscEntry` and a low-memory-cap verify test.
+- `block_api` file-store recovery now reads each file sequentially (one open per file).
+- Bench script now builds ReleaseFast by default; perf gap on create remains large, verify memory now ~2–3MB.

@@ -9,6 +9,8 @@ par2_cli="${PAR2_CLI_BIN:-$root_dir/zig-out/bin/par2-cli}"
 other_cli="${PAR2_OTHER_BIN:-par2}"
 bench_log="${PAR2_BENCH_LOG:-bench-results.tsv}"
 prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
+bench_optimize="${PAR2_BENCH_OPTIMIZE:-ReleaseFast}"
+bench_build="${PAR2_BENCH_BUILD:-1}"
 
 bench_size="${PAR2_BENCH_SIZE:-67108864}"
 block_size="${PAR2_BENCH_BLOCK_SIZE:-4096}"
@@ -108,8 +110,17 @@ bench_tool() {
 
 capture "$par2_cli" -h
 if [ "$rc" -ne 0 ]; then
-	echo "par2-cli not runnable at $par2_cli" >&2
-	exit 1
+	if [ "$bench_build" -ne 0 ]; then
+		capture zig build -Doptimize="$bench_optimize"
+		if [ "$rc" -ne 0 ]; then
+			echo "zig build failed: $err" >&2
+			exit 1
+		fi
+		par2_cli="$root_dir/zig-out/bin/par2-cli"
+	else
+		echo "par2-cli not runnable at $par2_cli" >&2
+		exit 1
+	fi
 fi
 capture "$other_cli" -V
 if [ "$rc" -ne 0 ]; then

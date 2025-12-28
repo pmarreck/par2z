@@ -83,9 +83,13 @@ pub fn verify(
 	}
 	if (ctx.recovery_set == null) return error.InvalidInput;
 	const rs_set = ctx.recovery_set.?;
-	var data_files = try allocator.alloc([]const u8, rs_set.recovery_files.len);
+	var file_entries = try allocator.alloc(core.storage.FileEntry, rs_set.recovery_files.len);
 	var present = try allocator.alloc(bool, rs_set.recovery_files.len);
 	@memset(present, false);
+	var i: usize = 0;
+	while (i < rs_set.recovery_files.len) : (i += 1) {
+		file_entries[i] = .{ .path = "", .length = 0, .present = false };
+	}
 
 	var limited: LimitedAllocator = undefined;
 	var verify_alloc = allocator;
@@ -96,7 +100,7 @@ pub fn verify(
 	}
 
 	if (opts.data_paths.len == 0) {
-		var i: usize = 0;
+		i = 0;
 		while (i < rs_set.recovery_files.len) : (i += 1) {
 			const entry = rs_set.recovery_files[i];
 			if (entry.desc == null) continue;
@@ -105,37 +109,39 @@ pub fn verify(
 				try std.fs.path.join(allocator, &.{ bp, name })
 			else
 				name;
-			data_files[i] = std.fs.cwd().readFileAlloc(verify_alloc, candidate, 1 << 24) catch {
+			const info = std.fs.cwd().statFile(candidate) catch {
 				continue;
 			};
+			file_entries[i] = .{ .path = candidate, .length = info.size, .present = true };
 			present[i] = true;
 		}
 	} else {
-		var i: usize = 0;
+		i = 0;
 		while (i < opts.data_paths.len) : (i += 1) {
 			const path = opts.data_paths[i];
 			const base = std.fs.path.basename(path);
 			const rel = if (opts.basepath) |bp| try relativePathForInput(allocator, bp, path) else null;
 			const idx = try findRecoveryIndexByName(rs_set, path, base, rel);
 			if (present[idx]) return error.InvalidInput;
-			data_files[idx] = try std.fs.cwd().readFileAlloc(verify_alloc, path, 1 << 24);
+			const info = try std.fs.cwd().statFile(path);
+			file_entries[idx] = .{ .path = path, .length = info.size, .present = true };
 			present[idx] = true;
 		}
 	}
 	for (present) |p| {
 		if (!p) return error.InvalidInput;
 	}
-	var i: usize = 0;
+	i = 0;
 	while (i < rs_set.recovery_files.len) : (i += 1) {
 		const entry = rs_set.recovery_files[i];
 		if (entry.desc == null) return error.InvalidInput;
+		if (entry.desc.?.file_length != file_entries[i].length) return error.InvalidInput;
 		if (entry.ifsc != null) continue;
-		var computed: [16]u8 = undefined;
-		try core.md5.md5Digest(data_files[i], &computed);
+		const computed = try md5File(file_entries[i].path);
 		if (!std.mem.eql(u8, &computed, &entry.desc.?.file_hash)) return error.InvalidInput;
 	}
-	const store = core.storage.MemoryStore{ .files = data_files };
-	try core.api.verifyStore(allocator, &ctx, store);
+	const store = core.storage.FileStore{ .files = file_entries };
+	try core.api.verifyStoreFile(verify_alloc, &ctx, store);
 	if (opts.verbosity >= 0) {
 		try std.fs.File.stdout().writeAll("OK\n");
 	}
@@ -1002,6 +1008,21 @@ fn md5First16k(path: []const u8) ![16]u8 {
 	const n = try file.readAll(&buf);
 	var out: [16]u8 = undefined;
 	try core.md5.md5Digest(buf[0..n], &out);
+	return out;
+}
+
+fn md5File(path: []const u8) ![16]u8 {
+	var file = try std.fs.cwd().openFile(path, .{});
+	defer file.close();
+	var ctx = core.md5.Md5Ctx.init();
+	var buf: [32768]u8 = undefined;
+	while (true) {
+		const n = try file.read(&buf);
+		if (n == 0) break;
+		ctx.update(buf[0..n]);
+	}
+	var out: [16]u8 = undefined;
+	ctx.final(&out);
 	return out;
 }
 

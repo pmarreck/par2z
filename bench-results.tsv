@@ -53,3 +53,9 @@ timestamp	commit	tool	phase	elapsed_ms	bench_size	block_size	redundancy	iters	ot
 2025-12-28T20:10:02Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2-cli	create	23482	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
 2025-12-28T20:10:03Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2-cli	verify	230	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
 2025-12-28T20:10:03Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2-cli	recover	597	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:23:51Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2cmdline	create	1288	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:23:51Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2cmdline	verify	98	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:23:51Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2cmdline	repair	166	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:24:14Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2-cli	create	23241	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:24:14Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2-cli	verify	244	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:24:15Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2-cli	recover	543	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli

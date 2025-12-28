@@ -1987,6 +1987,55 @@ test "cli verify detects corruption when IFSC missing" {
 	}
 }
 
+test "cli verify succeeds under low memory cap" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const build = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ "zig", "build" },
+	});
+	switch (build.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	const cli_path = try std.fs.cwd().realpathAlloc(arena.allocator(), "zig-out/bin/par2-cli");
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+	const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+	const size: usize = 2 * 1024 * 1024;
+	const buf = try arena.allocator().alloc(u8, size);
+	@memset(buf, 'A');
+	try tmp.dir.writeFile(.{ .sub_path = "cap.bin", .data = buf });
+	const create = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{
+			cli_path,
+			"create",
+			"--block-size",
+			"4096",
+			"--recovery-blocks",
+			"2",
+			"cap.par2",
+			"cap.bin",
+		},
+		.cwd = tmp_path,
+	});
+	switch (create.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	const verify = try std.process.Child.run(.{
+		.allocator = arena.allocator(),
+		.argv = &.{ cli_path, "verify", "-m", "1", "cap.par2", "cap.bin" },
+		.cwd = tmp_path,
+	});
+	switch (verify.term) {
+		.Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+		else => return error.UnexpectedTerm,
+	}
+	try std.testing.expect(std.mem.indexOf(u8, verify.stdout, "OK") != null);
+}
+
 test "cli create enforces memory cap" {
 	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
 	defer arena.deinit();

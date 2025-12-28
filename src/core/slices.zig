@@ -28,18 +28,21 @@ pub fn computeIfscEntries(allocator: std.mem.Allocator, data: []const u8, slice_
 		const end = @min(start + slice_size, data.len);
 		const chunk = data[start..end];
 		if (chunk.len == slice_size) {
-			md5.md5Digest(chunk, &entries[i].md5) catch return error.CryptoUnavailable;
-			entries[i].crc32 = crc32.crc32(chunk);
+			computeIfscEntry(chunk, &entries[i]) catch return error.CryptoUnavailable;
 		} else {
 			var tmp = try allocator.alloc(u8, slice_size);
 			defer allocator.free(tmp);
 			@memset(tmp, 0);
 			@memcpy(tmp[0..chunk.len], chunk);
-			md5.md5Digest(tmp, &entries[i].md5) catch return error.CryptoUnavailable;
-			entries[i].crc32 = crc32.crc32(tmp);
+			computeIfscEntry(tmp, &entries[i]) catch return error.CryptoUnavailable;
 		}
 	}
 	return entries;
+}
+
+pub fn computeIfscEntry(slice: []const u8, out: *types.IfscEntry) SliceError!void {
+	md5.md5Digest(slice, &out.md5) catch return error.CryptoUnavailable;
+	out.crc32 = crc32.crc32(slice);
 }
 
 pub fn verifyIfsc(computed: []const types.IfscEntry, expected: []const types.IfscEntry) SliceError!void {
