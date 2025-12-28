@@ -1,4 +1,5 @@
 const std = @import("std");
+const gf = @import("gf16.zig");
 const layout = @import("layout.zig");
 const storage = @import("storage.zig");
 const rs = @import("rs.zig");
@@ -9,6 +10,7 @@ pub const BlockError = error{
 	StoreError,
 	RsError,
 	Overflow,
+	TooManySlices,
 };
 
 pub fn computeRecoverySliceMemory(
@@ -52,7 +54,7 @@ pub fn computeRecoverySlicesFileStoreBatch(
 	slice_size: usize,
 	exponents: []const u32,
 ) BlockError![][]u8 {
-	return computeRecoverySlicesBatchGeneric(allocator, store, files, slice_size, exponents);
+	return computeRecoverySlicesBatchStreamGeneric(allocator, store, files, slice_size, exponents);
 }
 
 pub fn computeRecoverySlicesFileStoreBatchParallel(
@@ -62,7 +64,7 @@ pub fn computeRecoverySlicesFileStoreBatchParallel(
 	slice_size: usize,
 	exponents: []const u32,
 ) BlockError![][]u8 {
-	return computeRecoverySlicesBatchParallelGeneric(allocator, store, files, slice_size, exponents);
+	return computeRecoverySlicesBatchStreamGeneric(allocator, store, files, slice_size, exponents);
 }
 
 const Shared = struct {
@@ -186,6 +188,45 @@ fn computeRecoverySlicesBatchParallelGeneric(
 		outputs[i] = outputs_opt[i] orelse return error.OutOfMemory;
 	}
 	@memset(outputs_opt, null);
+	return outputs;
+}
+
+fn computeRecoverySlicesBatchStreamGeneric(
+	allocator: std.mem.Allocator,
+	store: anytype,
+	files: []const layout.FileInfo,
+	slice_size: usize,
+	exponents: []const u32,
+) BlockError![][]u8 {
+	if (exponents.len == 0) return allocator.alloc([]u8, 0);
+	const order = try layout.buildSliceOrder(allocator, files, slice_size);
+	defer allocator.free(order);
+	if (order.len > gf.maxValidIndexCount()) return error.TooManySlices;
+	var outputs = try allocator.alloc([]u8, exponents.len);
+	errdefer {
+		var j: usize = 0;
+		while (j < outputs.len) : (j += 1) {
+			if (outputs[j].len > 0) allocator.free(outputs[j]);
+		}
+		allocator.free(outputs);
+	}
+	var i: usize = 0;
+	while (i < outputs.len) : (i += 1) {
+		outputs[i] = try allocator.alloc(u8, slice_size);
+		@memset(outputs[i], 0);
+	}
+	var s: usize = 0;
+	while (s < order.len) : (s += 1) {
+		const ref = order[s];
+		const slice = store.readSlice(allocator, ref.file_index, slice_size, ref.slice_index) catch return error.StoreError;
+		defer allocator.free(slice);
+		const constant = gf.constantForIndex(@as(u32, @intCast(s)));
+		var e: usize = 0;
+		while (e < exponents.len) : (e += 1) {
+			const factor = gf.pow(constant, exponents[e]);
+			rs.accumulateRecoverySlice(outputs[e], slice, factor) catch return error.RsError;
+		}
+	}
 	return outputs;
 }
 

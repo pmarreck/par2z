@@ -14,6 +14,21 @@ pub const RecoverySlice = struct {
 	data: []const u8,
 };
 
+pub fn accumulateRecoverySlice(out: []u8, data_slice: []const u8, factor: u16) RsError!void {
+	if (out.len == 0 or data_slice.len == 0) return error.InvalidSliceSize;
+	if (out.len != data_slice.len) return error.InvalidSliceSize;
+	if ((out.len % 2) != 0) return error.InvalidSliceSize;
+	if (factor == 0) return;
+	const word_count = out.len / 2;
+	var w: usize = 0;
+	while (w < word_count) : (w += 1) {
+		const word = readWord(data_slice, w);
+		const prod = gf.mul(word, factor);
+		const acc = readWord(out, w) ^ prod;
+		writeWord(out, w, acc);
+	}
+}
+
 pub fn encodeRecoverySlice(out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
 	return encodeRecoverySliceParallel(out, data_slices, exponent);
 }
