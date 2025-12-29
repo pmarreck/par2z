@@ -37,6 +37,7 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 
 ## Implementation Phase
 - [x] CLI recover command uses core recovery API and writes recovered output to disk or stdout.
+- [x] CLI tar streaming (`--tar`) for create/recover with tests.
 - [x] File-backed store adapter for streaming disk access.
 - [x] Full-file recovery integration test with larger fixture vs par2.
 - [x] CLI tests using Zig 0.15 process API or bash harness.
@@ -77,3 +78,39 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 
 ## TODO (Performance/Portability)
 - [ ] Optional platform-specific SIMD intrinsics (x86_64 SSE2/AVX2, ARM NEON) behind target checks; keep portable SIMD + scalar fallback as default.
+
+## Streaming Core Interface (No Temp Files)
+### Goal
+Support true streaming inputs/outputs (no temp file spooling), suitable for SQLite-backed storage or in-memory pipelines.
+
+### Design Decisions (Agreed)
+- Forward-only output is supported; no requirement for random access.
+- RFSC emission in streaming mode:
+  - Buffer the first 16 KiB of each output stream.
+  - Emit RFSC after 16 KiB is available (or skip if total output < 16 KiB).
+  - If output supports random access, optional in-place patching is allowed but not required.
+- Streaming inputs are modeled as logical files: name + length + read-at callback.
+- Streaming outputs are modeled as per-file outputs: open(path) → writer/close.
+
+### Steps (TDD, small increments)
+- [ ] Define stream interfaces in core/ops (InputFileStream, OutputStreamOpener) with strict bounds/overflow checks.
+- [x] Define stream interfaces in core/ops (InputFileStream, OutputStreamOpener) with strict bounds/overflow checks.
+- [x] Implement streaming create for main file (emit packets directly to OutputStream without temp files).
+- [x] Implement streaming volume emit with buffered RFSC (16 KiB) and late emission.
+- [x] Implement streaming recover output (write recovered slices to OutputStream).
+- [x] Implement streaming verify path (read-at without file paths).
+- [x] Add tests for streaming create/recover/verify with in-memory sinks (small fixtures).
+- [ ] Add SQLite adapter example (in docs/tests) showing zero-disk usage.
+
+## C ABI Library (New)
+### Goal
+Expose a stable C API with separate handles for create/verify/recover, supporting file paths and in-memory/streaming inputs, optional memory caps, configurable threading, and last-error strings.
+
+### Done Criteria
+- [x] `include/par2.h` documents the C ABI: handles, options, callbacks, error codes.
+- [x] `src/lib.zig` implements C ABI with separate handles (create/verify/recover).
+- [x] Supports file-path inputs and memory/streaming inputs (read-at callback).
+- [x] Recover can write to file path (default: directory of par2 file) or write callback.
+- [x] Optional memory cap and optional custom allocator callbacks.
+- [x] Threading configurable (0 = all cores).
+- [x] TDD: add unit tests for C API behaviors (memory input + verify + recover happy path).

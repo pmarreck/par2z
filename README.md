@@ -19,6 +19,8 @@ Behavior notes:
 - `verify`/`recover` match inputs by exact path when possible, then by basename. Ambiguous basenames cause an error unless exact paths are used.
 - Defaults: redundancy 5%, block size via file-size heuristic (bitrot_guard).
 - Use `--mute-defaults` or set `PAR2_MUTE_DEFAULTS` (non-empty, not `0`/`false`) to suppress default reporting and derived plan on stderr.
+- Set `STDOUT_TO_STDERR` (non-empty, not `0`/`false`) to redirect informational stdout messages to stderr (does not affect `--stdout` file data).
+- `--tar` on `create` or `recover` emits a tar stream on stdout (main+volumes or recovered files).
 - `--include-input-slices` emits `FileSlic` packets (large size increase).
 - `--emit-packed` emits `PkdMain` and `PkdRecvS` packets.
 - RFSC packets are emitted by default when recovery volumes exceed 16 KiB; use `--no-rfsc` to skip.
@@ -58,6 +60,7 @@ This avoids shipping GPL components and keeps the core algorithm independent of 
 
 ## Testing
 - Unit tests: `nix develop -c ./test`
+- If `zig build test` hangs on C-API tests (Zig `--listen` runner issue), use: `nix develop -c zig build test-direct`
 - Integration recovery test (par2 cross-check): `nix develop -c ./test-integration`
 - Optional stress tests:
   - `PAR2_STRESS=1` enables stress-only unit tests.

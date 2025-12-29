@@ -117,3 +117,78 @@ Other cases remain: full-missing, partial corruption, optional packets.
 - Added `slices.computeIfscEntry` and a low-memory-cap verify test.
 - `block_api` file-store recovery now reads each file sequentially (one open per file).
 - Bench script now always builds ReleaseFast by default; create perf is near par2cmdline when ReleaseFast is used.
+
+## 2025-12-28 Update (C ABI WIP)
+- Added C ABI plan section to `PLAN.md`.
+- Implemented C ABI in `src/lib.zig` (separate handles, path/memory/stream inputs, options with memory cap + allocator, last-error strings).
+- Updated `include/par2.h` with full API surface.
+- `ops.create` now takes an allocator param; CLI updated to call `ops.create(allocator, ...)`.
+- `ops.CreateOptions` gained `thread_count` (CLI currently sets null).
+- Removed `ops` → `par2` import loop; creator text is now literal `"par2-cleanroom 0.1.0"`.
+- Added tests in `tests/tests.zig`:
+  - `c api create/verify with memory input` passes.
+  - `c api recover writes to output dir` fails with `Par2Error.invalid_argument`.
+
+### Current blocker
+- `par2_recover_run` returns `.invalid_argument` in C API test; need exact error cause.
+- Suspect is in `par2_recover_run` / `ops.recover` path handling; add/expand `setLastError` or debug print to capture `@errorName(e)` (already set but not surfaced).
+
+### Diagnostics to run
+- Run cached test binary (faster): `nix develop -c ./.zig-cache/o/<hash>/test`
+- Or rebuild: `nix develop -c zig build test`
+- Inspect `par2_recover_last_error` in failing test and print it.
+
+### Files changed in this WIP
+- `src/lib.zig`, `include/par2.h`, `tests/tests.zig`, `src/ops.zig`, `src/cli.zig`,
+  `src/core/api.zig`, `src/core/slices.zig`, `src/core/block_api.zig`, `build.zig`.
+
+## 2025-12-29 Update (C ABI Default Fix)
+- Adjusted C API defaults so `par2_create_new(null, …)` uses redundancy_percent=5 (matches CLI), ensuring small files emit recovery slices.
+- Intended to fix failing test `c api recover writes to output dir`.
+
+### Tests
+- `nix develop -c zig build test` timed out multiple times (10s/120s/300s/600s). No output; needs investigation.
+- `zig test tests/tests.zig --test-filter …` fails because module `par2` is only available via build.zig.
+
+## 2025-12-29 Update (Test Runner/CLI Build Changes)
+- Removed `zig build` invocations from unit tests; now use `cliPath()` / `prngPath()` helpers.
+- `build.zig` now installs `par2-cli` and `prng-gen` for the test step and adds `-Dtest-filter` support via compile-time filters.
+- C API default verbosity set to `-1` (silent by default) to avoid library output on stdout.
+
+### Tests
+- `zig build test -Dtest-filter="version string"` succeeds.
+- `zig build test -Dtest-filter="c api create/verify with memory input"` still hangs; root cause unclear.
+- Running the emitted test binary directly (latest in `.zig-cache/o/*/test`) succeeds; C API tests pass when run manually.
+
+### Suspected Issue
+- `zig build test` hangs only on C API tests; seems to be a Zig test-runner/listen-mode handshake issue.
+  - `sample` shows test binary stuck in `test_runner.mainServer` waiting on `zig.Server.receiveMessage` (stdin).
+  - `sample` shows build runner stuck in `Build.Step.Run.evalZigTest` poll loop.
+  - Running the same emitted test binary directly (no `--listen=-`) passes.
+  - Not correlated with input size; other filtered tests run fine.
+
+## 2025-12-29 Update (Test-Direct Workaround + STDOUT_TO_STDERR)
+- Added `STDOUT_TO_STDERR` env flag; when set, info output that would go to stdout is redirected to stderr (does not affect `--stdout` file data).
+- `build.zig` now provides `zig build test-direct` (installs test binary and runs it directly, bypassing `--listen`).
+- README updated with `test-direct` workaround.
+
+## 2025-12-29 Update (CLI --tar Streaming)
+- Added `--tar` to CLI create/recover: emits tar stream on stdout (main+volumes or recovered files).
+- Implemented tar capture/output in `src/cli.zig` (captures outputs via `output_open`, writes tar to stdout).
+- Tar output disables CLI verbosity to keep stdout clean.
+- Added unit tests that untar and verify outputs.
+
+## 2025-12-30 Update (Streaming Core Interface)
+- Implemented stream-based core operations (no temp files) in `src/ops.zig`:
+  - `createStreams`, `verifyStreams`, `recoverStreams`
+  - Stream input type uses read-at callback + length + name
+- Added `core.storage.StreamStore` and `core.api.verifyStoreStream`, plus stream recovery slice batch in `core.block_api`.
+- Added `buildVolumeStream` and stream volume workers; streaming volumes emit RFSC with 16 KiB buffer/late emission (same behavior as file-based).
+- Added SliceOverrideStoreStream for FileSlic overrides in streaming recover.
+- Added tests: `ops streaming create/verify/recover` in `tests/tests.zig` (passes via `zig build test-direct -Dtest-filter="ops streaming create/verify/recover"`).
+- `./test` currently times out after 120s (needs investigation or increase timeout).
+
+## Remaining TODOs
+- Add SQLite adapter example (docs/tests) for zero-disk use.
+- Consider C ABI wiring to streaming ops (avoid temp spooling).
+- Investigate `./test` timeout (possibly large integration tests).
