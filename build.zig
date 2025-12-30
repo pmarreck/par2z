@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -114,4 +115,64 @@ pub fn build(b: *std.Build) void {
 
     const test_direct_step = b.step("test-direct", "Run unit tests directly (no zig --listen)");
     test_direct_step.dependOn(&run_tests_direct.step);
+
+    addStaticCliVariant(b, optimize, .{
+        .cpu_arch = builtin.cpu.arch,
+        .os_tag = .macos,
+    }, "bin-static/macos");
+    addStaticCliVariant(b, optimize, .{
+        .cpu_arch = .x86_64,
+        .os_tag = .linux,
+        .abi = .musl,
+    }, "bin-static/linux-x86_64");
+}
+
+fn addStaticCliVariant(
+    b: *std.Build,
+    optimize: std.builtin.OptimizeMode,
+    target_query: std.Target.Query,
+    install_subdir: []const u8,
+) void {
+    const target = b.resolveTargetQuery(target_query);
+    const core_mod = b.addModule(b.fmt("core-{s}", .{install_subdir}), .{
+        .root_source_file = b.path("src/core/mod.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const ops_mod = b.addModule(b.fmt("ops-{s}", .{install_subdir}), .{
+        .root_source_file = b.path("src/ops.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "core", .module = core_mod },
+        },
+    });
+    const lib_mod = b.addModule(b.fmt("par2-{s}", .{install_subdir}), .{
+        .root_source_file = b.path("src/lib.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "ops", .module = ops_mod },
+            .{ .name = "core", .module = core_mod },
+        },
+    });
+    const cli_mod = b.createModule(.{
+        .root_source_file = b.path("src/cli.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "par2", .module = lib_mod },
+            .{ .name = "core", .module = core_mod },
+            .{ .name = "ops", .module = ops_mod },
+        },
+    });
+    const cli = b.addExecutable(.{
+        .name = "par2z-cli",
+        .root_module = cli_mod,
+    });
+    cli.root_module.link_libc = true;
+    const install_cli = b.addInstallArtifact(cli, .{
+        .dest_dir = .{ .override = .{ .custom = install_subdir } },
+    });
+    b.getInstallStep().dependOn(&install_cli.step);
 }
