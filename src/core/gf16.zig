@@ -62,21 +62,23 @@ pub fn mul(a: u16, b: u16) u16 {
 	if (a == 0 or b == 0) return 0;
 	const la = tables.log[a];
 	const lb = tables.log[b];
-	const idx = (@as(u32, la) + @as(u32, lb)) % 65535;
+	var idx = @as(u32, la) + @as(u32, lb);
+	if (idx >= 65535) idx -= 65535;
 	return tables.exp[@as(usize, @intCast(idx))];
 }
 
 pub fn inv(a: u16) u16 {
 	if (a == 0) return 0;
 	const la = tables.log[a];
-	const idx = (65535 - la) % 65535;
+	var idx: u32 = 65535 - la;
+	if (idx == 65535) idx = 0;
 	return tables.exp[@as(usize, @intCast(idx))];
 }
 
 pub fn pow(base: u16, exponent: u32) u16 {
 	if (base == 0) return 0;
 	const lb = tables.log[base];
-	const idx = (@as(u64, lb) * @as(u64, exponent)) % 65535;
+	const idx = mod65535(@as(u64, lb) * @as(u64, exponent));
 	return tables.exp[@as(usize, @intCast(idx))];
 }
 
@@ -85,7 +87,7 @@ pub fn isValidExponent(exp: u32) bool {
 }
 
 pub fn constantForExponent(exp: u32) u16 {
-	return tables.exp[@as(usize, @intCast(exp % 65535))];
+	return tables.exp[@as(usize, @intCast(mod65535(exp)))];
 }
 
 pub fn constantForIndex(index: u32) u16 {
@@ -100,4 +102,13 @@ pub fn exponentForIndex(index: u32) u32 {
 
 pub fn maxValidIndexCount() u32 {
 	return tables.valid_exponent_count;
+}
+
+fn mod65535(x: u64) u32 {
+	var v = x;
+	while (v >= 65535) {
+		v = (v & 0xFFFF) + (v >> 16);
+	}
+	if (v == 65535) return 0;
+	return @as(u32, @intCast(v));
 }

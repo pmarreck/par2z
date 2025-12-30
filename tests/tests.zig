@@ -720,8 +720,8 @@ test "rs encode serial matches parallel" {
     const slices = [_][]const u8{ data_a, data_b };
     var out_serial: [4]u8 = undefined;
     var out_parallel: [4]u8 = undefined;
-    try core.rs.encodeRecoverySliceSerial(&out_serial, &slices, 7);
-    try core.rs.encodeRecoverySlice(&out_parallel, &slices, 7);
+    try core.rs.encodeRecoverySliceSerial(std.testing.allocator, &out_serial, &slices, 7);
+    try core.rs.encodeRecoverySlice(std.testing.allocator, &out_parallel, &slices, 7);
     try std.testing.expectEqualSlices(u8, &out_serial, &out_parallel);
 }
 
@@ -786,7 +786,7 @@ test "rs encode rejects too many slices" {
         slices[i] = "aa";
     }
     var out: [2]u8 = undefined;
-    try std.testing.expectError(error.TooManySlices, core.rs.encodeRecoverySlice(&out, slices, 1));
+    try std.testing.expectError(error.TooManySlices, core.rs.encodeRecoverySlice(std.testing.allocator, &out, slices, 1));
 }
 
 test "block size heuristic rounds to 4 and decreases with size" {
@@ -1470,7 +1470,7 @@ test "api recoverMissingSlicesMemory skips missing slice reads" {
     const data_s0 = "ABCD";
     const data_s1 = "WXYZ";
     var rec_buf: [4]u8 = undefined;
-    try core.rs.encodeRecoverySlice(&rec_buf, &.{ data_s0, data_s1 }, 1);
+    try core.rs.encodeRecoverySlice(std.testing.allocator, &rec_buf, &.{ data_s0, data_s1 }, 1);
     const files = [_]core.layout.FileInfo{.{ .length = 8 }};
     const store = core.storage.MemoryStore{ .files = &.{data_s0} };
     const missing = [_]usize{1};
@@ -1483,7 +1483,7 @@ test "rs encodeRecoverySlice shape" {
     var s1: [4]u8 = .{ 1, 2, 3, 4 };
     var s2: [4]u8 = .{ 5, 6, 7, 8 };
     var out: [4]u8 = undefined;
-    try core.rs.encodeRecoverySlice(&out, &.{ &s1, &s2 }, 1);
+    try core.rs.encodeRecoverySlice(std.testing.allocator, &out, &.{ &s1, &s2 }, 1);
     try std.testing.expect(out[0] != 0 or out[1] != 0 or out[2] != 0 or out[3] != 0);
 }
 
@@ -1541,7 +1541,7 @@ test "rs matches par2cmdline fixture" {
     }
 
     var out: [4]u8 = undefined;
-    try core.rs.encodeRecoverySlice(&out, slices, exponent);
+    try core.rs.encodeRecoverySlice(std.testing.allocator, &out, slices, exponent);
     try std.testing.expectEqualSlices(u8, rec_data, &out);
 }
 
@@ -2475,6 +2475,17 @@ test "c api create/verify with stream input" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_set_par2_path(verify_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_stream(verify_handle, "stream.bin", payload.len, capiReadAt, &mem_ctx));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_run(verify_handle));
+}
+
+test "c api thread pool configure" {
+    const par2 = @import("par2");
+    var pool: ?*par2.Par2ThreadPool = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_thread_pool_create(2, &pool));
+    try std.testing.expect(pool != null);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_thread_pool_set_global(pool));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_thread_pool_set_global(null));
+    par2.par2_thread_pool_destroy(pool);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_thread_pool_configure(0));
 }
 
 test "ffi swift example (optional)" {

@@ -12,6 +12,8 @@ Cleanroom PAR2 implementation with a Zig core, C ABI for FFI (Swift/LuaJIT), and
 ## C API Examples
 The C ABI is declared in `include/par2.h`. Memory and stream inputs do not touch disk.
 
+Thread pool configuration (optional): the library uses a global thread pool by default. You can configure the global pool size or supply your own pool handle via the C ABI.
+
 Create from memory (no temp files), write `.par2` to a path:
 ```c
 #include "par2.h"
@@ -23,6 +25,9 @@ par2_create_add_memory(create, "data.bin", data, sizeof(data));
 par2_create_set_output_path(create, "set.par2");
 par2_create_run(create);
 par2_create_destroy(create);
+
+// optional: configure global pool size (0 = default)
+par2_thread_pool_configure(0);
 ```
 
 Verify from in-memory PAR2 bytes and a stream input:
@@ -72,6 +77,13 @@ par2_recover_add_path(recover, "data.bin");
 par2_recover_set_output_open(recover, open_out, NULL);
 par2_recover_run(recover);
 par2_recover_destroy(recover);
+
+// optional: caller-owned pool
+Par2ThreadPool *pool = NULL;
+par2_thread_pool_create(4, &pool);
+par2_thread_pool_set_global(pool);
+par2_thread_pool_set_global(NULL);
+par2_thread_pool_destroy(pool);
 ```
 
 ### Swift (FFI)

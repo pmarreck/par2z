@@ -167,9 +167,15 @@ pub fn recoverMissingSlicesMemory(
 	defer allocator.free(order);
 	var slices_list = try allocator.alloc(?[]const u8, order.len);
 	defer allocator.free(slices_list);
+	var is_missing = try allocator.alloc(bool, order.len);
+	defer allocator.free(is_missing);
+	@memset(is_missing, false);
+	for (missing_indices) |mi| {
+		if (mi < is_missing.len) is_missing[mi] = true;
+	}
 	var i: usize = 0;
 	while (i < order.len) : (i += 1) {
-		if (isMissingIndex(missing_indices, i)) {
+		if (is_missing[i]) {
 			slices_list[i] = null;
 			continue;
 		}
@@ -185,11 +191,4 @@ pub fn recoverMissingSlicesMemory(
 	}
 	const recovered = rs.decodeMissingSlices(allocator, slices_list, missing_indices, recovery_slices, slice_size) catch return error.RsError;
 	return recovered;
-}
-
-fn isMissingIndex(missing_indices: []const usize, index: usize) bool {
-	for (missing_indices) |mi| {
-		if (mi == index) return true;
-	}
-	return false;
 }

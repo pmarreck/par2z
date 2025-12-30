@@ -17,3 +17,4 @@ pub const create_plan = @import("create_plan.zig");
 pub const packet_write = @import("packet_write.zig");
 pub const create_packets = @import("create_packets.zig");
 pub const prng = @import("prng.zig");
+pub const thread_pool = @import("thread_pool.zig");

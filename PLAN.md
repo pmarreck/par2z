@@ -79,6 +79,36 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 ## TODO (Performance/Portability)
 - [ ] Optional platform-specific SIMD intrinsics (x86_64 SSE2/AVX2, ARM NEON) behind target checks; keep portable SIMD + scalar fallback as default.
 
+## Recommendations Backlog (Merged Gemini + Claude, 2025-12-30)
+### High Priority (Correctness / Portability / Perf)
+- [x] Replace platform-specific MD5 bindings with `std.crypto.hash.Md5` (pure Zig, portable); delete `src/core/md5_macos.zig` and `src/core/md5_linux.zig` after migration.
+- [x] Optimize GF16 mul/pow to avoid `% 65535` (conditional subtract or doubled LUT).
+- [x] CRC32: replace bit-loop with 256-entry lookup table.
+- [x] Make `isMissingIndex` O(1) (hash set or bitmap) in recovery hot path.
+- [x] Remove per-slice `page_allocator` in RS hot loops; accept scratch allocator/buffer or use arena reset per batch.
+- [x] Use a persistent `std.Thread.Pool` instead of per-chunk thread spawn/join.
+
+### Medium Priority (Architecture / Maintainability)
+- [ ] Split `src/ops.zig` into `create.zig`, `verify.zig`, `recover.zig`, `common.zig`.
+- [ ] Consolidate duplicated `verify*Store` and `computeRecoverySlices*` functions (generic/store interface).
+- [ ] Normalize error naming across modules for validation failures.
+- [ ] Either remove `checked.zig` or standardize on checked wrappers across codebase.
+- [ ] Reduce temp allocations in `findMismatchedSlices` (two-pass or exact-size allocation).
+- [ ] Remove empty `src/ffi/` dir or implement it (decide).
+
+### Test Coverage Gaps
+- [ ] Add tests for `LimitedAllocator` edge cases (cap exhaustion, resize).
+- [ ] Add direct tests for `transliterateAscii` / `mapLatin1`.
+- [ ] Add edge-case tests for `volumePath` and `volumeIndexWidth`.
+- [ ] Add tests for error paths in streaming ops (`recoverStreams`, `verifyStreams`).
+- [ ] Add tests for C API error messages (`par2_*_last_error`).
+- [ ] Add thread-safety tests for concurrent volume building.
+
+### Low Priority / Cleanup
+- [ ] Remove or relocate `data.bin` if it’s a stray artifact (confirm intended use).
+- [ ] Simplify repeated path-building helpers into shared util.
+- [ ] Reduce verbose `while` loops / redundant casts where safe.
+
 ## Streaming Core Interface (No Temp Files)
 ### Goal
 Support true streaming inputs/outputs (no temp file spooling), suitable for SQLite-backed storage or in-memory pipelines.

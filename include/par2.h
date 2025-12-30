@@ -11,6 +11,7 @@ extern "C" {
 typedef struct Par2CreateHandle Par2CreateHandle;
 typedef struct Par2VerifyHandle Par2VerifyHandle;
 typedef struct Par2RecoverHandle Par2RecoverHandle;
+typedef struct Par2ThreadPool Par2ThreadPool;
 
 typedef enum Par2Error {
 	PAR2_OK = 0,
@@ -113,6 +114,13 @@ Par2Error par2_recover_set_output_dir(Par2RecoverHandle *handle, const char *out
 Par2Error par2_recover_set_output_open(Par2RecoverHandle *handle, Par2OpenOutputFn open_fn, void *ctx);
 Par2Error par2_recover_run(Par2RecoverHandle *handle);
 const char *par2_recover_last_error(Par2RecoverHandle *handle);
+
+// Thread pool configuration (global or caller-owned).
+// If a caller-owned pool is set global, it must outlive all work that uses it.
+Par2Error par2_thread_pool_create(uint32_t thread_count, Par2ThreadPool **out_pool);
+void par2_thread_pool_destroy(Par2ThreadPool *pool);
+Par2Error par2_thread_pool_set_global(Par2ThreadPool *pool);
+Par2Error par2_thread_pool_configure(uint32_t thread_count);
 
 #ifdef __cplusplus
 }

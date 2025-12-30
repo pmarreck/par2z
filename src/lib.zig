@@ -1,5 +1,6 @@
 const std = @import("std");
 const ops = @import("ops");
+const core = @import("core");
 
 pub const version_string: []const u8 = "par2z 0.1.0";
 
@@ -17,6 +18,7 @@ pub const Par2Error = enum(c_int) {
 pub const Par2CreateHandle = opaque {};
 pub const Par2VerifyHandle = opaque {};
 pub const Par2RecoverHandle = opaque {};
+pub const Par2ThreadPool = opaque {};
 
 pub const Par2AllocFn = *const fn (ctx: ?*anyopaque, size: usize, alignment: usize) callconv(.c) ?*anyopaque;
 pub const Par2ReallocFn = *const fn (ctx: ?*anyopaque, ptr: ?*anyopaque, old_size: usize, new_size: usize, alignment: usize) callconv(.c) ?*anyopaque;
@@ -74,6 +76,11 @@ pub const Par2RecoverOptions = extern struct {
     thread_count: u32 = 0,
     basepath: ?[*:0]const u8 = null,
     allocator: Par2Allocator = .{},
+};
+
+const ThreadPoolHandle = struct {
+    pool: std.Thread.Pool,
+    max_jobs: ?usize,
 };
 
 const AllocState = struct {
@@ -1204,4 +1211,44 @@ pub export fn par2_recover_last_error(handle: ?*Par2RecoverHandle) ?[*:0]const u
     if (handle == null) return null;
     const h = castRecover(handle.?);
     return if (h.last_error) |msg| @ptrCast(msg.ptr) else null;
+}
+
+fn castThreadPool(handle: *Par2ThreadPool) *ThreadPoolHandle {
+    return @ptrCast(@alignCast(handle));
+}
+
+pub export fn par2_thread_pool_create(thread_count: u32, out_pool: ?*?*Par2ThreadPool) Par2Error {
+    if (out_pool == null) return .invalid_argument;
+    const jobs: ?usize = if (thread_count == 0) null else @as(usize, thread_count);
+    const handle = std.heap.c_allocator.create(ThreadPoolHandle) catch return .out_of_memory;
+    handle.* = .{ .pool = undefined, .max_jobs = jobs };
+    handle.pool.init(.{ .allocator = std.heap.c_allocator, .n_jobs = jobs }) catch {
+        std.heap.c_allocator.destroy(handle);
+        return .out_of_memory;
+    };
+    out_pool.?.* = @ptrCast(handle);
+    return .ok;
+}
+
+pub export fn par2_thread_pool_destroy(pool: ?*Par2ThreadPool) void {
+    if (pool == null) return;
+    const handle = castThreadPool(pool.?);
+    handle.pool.deinit();
+    std.heap.c_allocator.destroy(handle);
+}
+
+pub export fn par2_thread_pool_set_global(pool: ?*Par2ThreadPool) Par2Error {
+    if (pool) |p| {
+        const handle = castThreadPool(p);
+        core.thread_pool.setExternalPool(&handle.pool, handle.max_jobs);
+        return .ok;
+    }
+    core.thread_pool.setExternalPool(null, null);
+    return .ok;
+}
+
+pub export fn par2_thread_pool_configure(thread_count: u32) Par2Error {
+    const jobs: ?usize = if (thread_count == 0) null else @as(usize, thread_count);
+    core.thread_pool.configureGlobalPool(.{ .n_jobs = jobs }) catch return .out_of_memory;
+    return .ok;
 }

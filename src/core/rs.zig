@@ -1,5 +1,6 @@
 const std = @import("std");
 const gf = @import("gf16.zig");
+const thread_pool = @import("thread_pool.zig");
 
 pub const RsError = error{
 	InvalidSliceSize,
@@ -29,18 +30,18 @@ pub fn accumulateRecoverySlice(out: []u8, data_slice: []const u8, factor: u16) R
 	}
 }
 
-pub fn encodeRecoverySlice(out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
-	return encodeRecoverySliceParallel(out, data_slices, exponent);
+pub fn encodeRecoverySlice(allocator: std.mem.Allocator, out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
+	return encodeRecoverySliceParallel(allocator, out, data_slices, exponent);
 }
 
-pub fn encodeRecoverySliceSerial(out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
+pub fn encodeRecoverySliceSerial(allocator: std.mem.Allocator, out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
 	if (data_slices.len == 0) return;
 	if (data_slices.len > gf.maxValidIndexCount()) return error.TooManySlices;
 	const slice_size = data_slices[0].len;
 	if (slice_size == 0 or (slice_size % 2) != 0) return error.InvalidSliceSize;
 	if (out.len != slice_size) return error.InvalidSliceSize;
-	const factors = try std.heap.page_allocator.alloc(u16, data_slices.len);
-	defer std.heap.page_allocator.free(factors);
+	const factors = try allocator.alloc(u16, data_slices.len);
+	defer allocator.free(factors);
 	var i: usize = 0;
 	while (i < data_slices.len) : (i += 1) {
 		const slice = data_slices[i];
@@ -51,15 +52,15 @@ pub fn encodeRecoverySliceSerial(out: []u8, data_slices: []const []const u8, exp
 	encodeRange(out, data_slices, factors, slice_size, 0, slice_size / 2);
 }
 
-fn encodeRecoverySliceParallel(out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
+fn encodeRecoverySliceParallel(allocator: std.mem.Allocator, out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
 	if (data_slices.len == 0) return;
 	if (data_slices.len > gf.maxValidIndexCount()) return error.TooManySlices;
 	const slice_size = data_slices[0].len;
 	if (slice_size == 0 or (slice_size % 2) != 0) return error.InvalidSliceSize;
 	if (out.len != slice_size) return error.InvalidSliceSize;
 	const word_count = slice_size / 2;
-	const factors = try std.heap.page_allocator.alloc(u16, data_slices.len);
-	defer std.heap.page_allocator.free(factors);
+	const factors = try allocator.alloc(u16, data_slices.len);
+	defer allocator.free(factors);
 	var i: usize = 0;
 	while (i < data_slices.len) : (i += 1) {
 		const slice = data_slices[i];
@@ -73,10 +74,9 @@ fn encodeRecoverySliceParallel(out: []u8, data_slices: []const []const u8, expon
 		encodeRange(out, data_slices, factors, slice_size, 0, word_count);
 		return;
 	}
-	var threads = try std.heap.page_allocator.alloc(std.Thread, thread_count - 1);
-	defer std.heap.page_allocator.free(threads);
-	var ctxs = try std.heap.page_allocator.alloc(EncodeCtx, thread_count);
-	defer std.heap.page_allocator.free(ctxs);
+	const pool = thread_pool.getGlobalPool() catch return error.OutOfMemory;
+	var ctxs = try allocator.alloc(EncodeCtx, thread_count);
+	defer allocator.free(ctxs);
 
 	var t: usize = 0;
 	while (t < thread_count) : (t += 1) {
@@ -91,29 +91,13 @@ fn encodeRecoverySliceParallel(out: []u8, data_slices: []const []const u8, expon
 			.end_word = end,
 		};
 	}
+	var wg: std.Thread.WaitGroup = .{};
 	t = 0;
-	var spawned: usize = 0;
-	var spawn_ok = true;
 	while (t + 1 < thread_count) : (t += 1) {
-		threads[t] = std.Thread.spawn(.{}, encodeRangeThread, .{&ctxs[t]}) catch {
-			spawn_ok = false;
-			break;
-		};
-		spawned += 1;
-	}
-	if (!spawn_ok) {
-		t = 0;
-		while (t < spawned) : (t += 1) {
-			threads[t].join();
-		}
-		encodeRange(out, data_slices, factors, slice_size, 0, word_count);
-		return;
+		pool.spawnWg(&wg, encodeRangeThread, .{&ctxs[t]});
 	}
 	encodeRangeThread(&ctxs[thread_count - 1]);
-	t = 0;
-	while (t + 1 < thread_count) : (t += 1) {
-		threads[t].join();
-	}
+	wg.wait();
 }
 
 pub fn decodeMissingSlices(
@@ -196,18 +180,20 @@ pub fn decodeMissingSlices(
 	}
 
 	const thread_count = threadCount(word_count);
+	var rhs_buf = try allocator.alloc(u16, n * thread_count);
+	defer allocator.free(rhs_buf);
 	if (thread_count == 1) {
-		try decodeRange(word_count, n, present_slices, factors, inv, recovery_slices, out_slices, pcount, 0, word_count);
+		try decodeRange(word_count, n, present_slices, factors, inv, recovery_slices, out_slices, pcount, 0, word_count, rhs_buf[0..n]);
 		return out_slices;
 	}
-	var threads = try allocator.alloc(std.Thread, thread_count - 1);
-	defer allocator.free(threads);
+	const pool = thread_pool.getGlobalPool() catch return error.OutOfMemory;
 	var ctxs = try allocator.alloc(DecodeCtx, thread_count);
 	defer allocator.free(ctxs);
 	var t: usize = 0;
 	while (t < thread_count) : (t += 1) {
 		const start = (word_count * t) / thread_count;
 		const end = (word_count * (t + 1)) / thread_count;
+		const rhs = rhs_buf[(t * n)..((t + 1) * n)];
 		ctxs[t] = .{
 			.word_count = word_count,
 			.n = n,
@@ -219,32 +205,17 @@ pub fn decodeMissingSlices(
 			.pcount = pcount,
 			.start_word = start,
 			.end_word = end,
+			.rhs = rhs,
 			.err = null,
 		};
 	}
+	var wg: std.Thread.WaitGroup = .{};
 	t = 0;
-	var spawned: usize = 0;
-	var spawn_ok = true;
 	while (t + 1 < thread_count) : (t += 1) {
-		threads[t] = std.Thread.spawn(.{}, decodeRangeThread, .{&ctxs[t]}) catch {
-			spawn_ok = false;
-			break;
-		};
-		spawned += 1;
-	}
-	if (!spawn_ok) {
-		t = 0;
-		while (t < spawned) : (t += 1) {
-			threads[t].join();
-		}
-		try decodeRange(word_count, n, present_slices, factors, inv, recovery_slices, out_slices, pcount, 0, word_count);
-		return out_slices;
+		pool.spawnWg(&wg, decodeRangeThread, .{&ctxs[t]});
 	}
 	decodeRangeThread(&ctxs[thread_count - 1]);
-	t = 0;
-	while (t + 1 < thread_count) : (t += 1) {
-		threads[t].join();
-	}
+	wg.wait();
 	t = 0;
 	while (t < thread_count) : (t += 1) {
 		if (ctxs[t].err) |e| return e;
@@ -319,11 +290,12 @@ const DecodeCtx = struct {
 	pcount: usize,
 	start_word: usize,
 	end_word: usize,
+	rhs: []u16,
 	err: ?RsError,
 };
 
 fn decodeRangeThread(ctx: *DecodeCtx) void {
-	decodeRange(ctx.word_count, ctx.n, ctx.present_slices, ctx.factors, ctx.inv, ctx.recovery_slices, ctx.out_slices, ctx.pcount, ctx.start_word, ctx.end_word) catch |e| {
+	decodeRange(ctx.word_count, ctx.n, ctx.present_slices, ctx.factors, ctx.inv, ctx.recovery_slices, ctx.out_slices, ctx.pcount, ctx.start_word, ctx.end_word, ctx.rhs) catch |e| {
 		ctx.err = e;
 	};
 }
@@ -339,10 +311,9 @@ fn decodeRange(
 	pcount: usize,
 	start_word: usize,
 	end_word: usize,
+	rhs: []u16,
 ) RsError!void {
 	_ = word_count;
-	var rhs = try std.heap.page_allocator.alloc(u16, n);
-	defer std.heap.page_allocator.free(rhs);
 	var w: usize = start_word;
 	while (w < end_word) : (w += 1) {
 		var r: usize = 0;
@@ -376,7 +347,12 @@ fn threadCount(word_count: usize) usize {
 	if (word_count < min_words_per_thread) return 1;
 	const cpu = std.Thread.getCpuCount() catch return 1;
 	const desired = @max(@as(usize, 1), word_count / min_words_per_thread);
-	return @min(cpu, desired);
+	var cap = cpu;
+	if (thread_pool.maxJobs()) |max_jobs| {
+		if (max_jobs > 0) cap = @min(cap, max_jobs);
+	}
+	if (cap == 0) cap = 1;
+	return @min(cap, desired);
 }
 
 fn invertMatrix(mat: []u16, inv: []u16, n: usize) RsError!void {

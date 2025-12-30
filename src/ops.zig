@@ -1733,7 +1733,7 @@ fn md5First16k(path: []const u8) ![16]u8 {
 fn md5File(path: []const u8) ![16]u8 {
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
-    var ctx = core.md5.Md5Ctx.init();
+    var ctx = core.md5.Md5Ctx.init(.{});
     var buf: [32768]u8 = undefined;
     while (true) {
         const n = try file.read(&buf);
@@ -1767,7 +1767,7 @@ fn md5First16kStream(input: StreamInput) ![16]u8 {
 }
 
 fn md5Stream(input: StreamInput) ![16]u8 {
-	var ctx = core.md5.Md5Ctx.init();
+	var ctx = core.md5.Md5Ctx.init(.{});
 	var buf: [32768]u8 = undefined;
 	var offset: u64 = 0;
 	while (offset < input.length) {
@@ -1797,7 +1797,7 @@ fn computeFileInfoAndMaybeWriteSlices(
     const file_len = info.size;
     const slice_count = try core.slices.sliceCount(file_len, slice_size);
     var entries = try allocator.alloc(core.packet_types.IfscEntry, slice_count);
-    var md5_ctx = core.md5.Md5Ctx.init();
+    var md5_ctx = core.md5.Md5Ctx.init(.{});
 
     var slice_buf = try allocator.alloc(u8, slice_size);
     defer allocator.free(slice_buf);
@@ -1847,7 +1847,7 @@ fn computeFileInfoAndMaybeWriteSlicesStream(
 ) !FileInfoResult {
 	const slice_count = try core.slices.sliceCount(input.length, slice_size);
 	var entries = try allocator.alloc(core.packet_types.IfscEntry, slice_count);
-	var md5_ctx = core.md5.Md5Ctx.init();
+	var md5_ctx = core.md5.Md5Ctx.init(.{});
 
 	var slice_buf = try allocator.alloc(u8, slice_size);
 	defer allocator.free(slice_buf);
@@ -2387,7 +2387,7 @@ fn writeRecoveredFileSlicesWithHash(
     slice_size: usize,
     writer: anytype,
 ) ![16]u8 {
-    var ctx = core.md5.Md5Ctx.init();
+    var ctx = core.md5.Md5Ctx.init(.{});
     var oi: usize = 0;
     while (oi < order.len) : (oi += 1) {
         const ref = order[oi];

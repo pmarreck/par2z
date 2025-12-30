@@ -24,7 +24,7 @@ pub fn computeRecoverySliceMemory(
 	const slices = try loadSlices(allocator, store, files, slice_size);
 	defer freeSlices(allocator, slices);
 	const out = try allocator.alloc(u8, slice_size);
-	rs.encodeRecoverySlice(out, slices, exponent) catch return error.RsError;
+	rs.encodeRecoverySlice(allocator, out, slices, exponent) catch return error.RsError;
 	return out;
 }
 
@@ -109,7 +109,7 @@ fn worker(shared: *Shared) void {
 			return;
 		};
 		const exponent = shared.exponents[idx];
-		rs.encodeRecoverySliceSerial(out, shared.slices, exponent) catch {
+		rs.encodeRecoverySliceSerial(shared.allocator, out, shared.slices, exponent) catch {
 			shared.allocator.free(out);
 			setError(shared, error.RsError);
 			return;
@@ -139,7 +139,7 @@ fn computeRecoverySlicesBatchGeneric(
 	var i: usize = 0;
 	while (i < exponents.len) : (i += 1) {
 		outputs[i] = try allocator.alloc(u8, slice_size);
-		rs.encodeRecoverySliceSerial(outputs[i], slices, exponents[i]) catch return error.RsError;
+		rs.encodeRecoverySliceSerial(allocator, outputs[i], slices, exponents[i]) catch return error.RsError;
 	}
 	return outputs;
 }
@@ -161,7 +161,7 @@ fn computeRecoverySlicesBatchParallelGeneric(
 		var i: usize = 0;
 		while (i < exponents.len) : (i += 1) {
 			outputs[i] = try allocator.alloc(u8, slice_size);
-			rs.encodeRecoverySliceSerial(outputs[i], slices, exponents[i]) catch return error.RsError;
+			rs.encodeRecoverySliceSerial(allocator, outputs[i], slices, exponents[i]) catch return error.RsError;
 		}
 		return outputs;
 	}

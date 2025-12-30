@@ -28,6 +28,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "ops", .module = ops_mod },
+            .{ .name = "core", .module = core_mod },
         },
     });
     const lib = b.addLibrary(.{
