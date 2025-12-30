@@ -1,6 +1,7 @@
 const std = @import("std");
 const core = @import("core");
 const common = @import("common.zig");
+const path_util = @import("path.zig");
 
 const OutputTarget = common.OutputTarget;
 const OutputOpener = common.OutputOpener;
@@ -586,7 +587,7 @@ fn collectCreateInputs(
         defer walker.deinit();
         while (try walker.next()) |item| {
             if (item.kind != .file) continue;
-            const full_path = try std.fs.path.join(allocator, &.{ path, item.path });
+            const full_path = try path_util.join(allocator, path, item.path);
             const file_info = std.fs.cwd().statFile(full_path) catch {
                 allocator.free(full_path);
                 continue;
@@ -1022,7 +1023,7 @@ fn buildVolume(
     }
     if (emit_rfsc and rfsc_offset != null) {
         if (output_open != null) {
-            try patchRfscFileIdBytes(allocator, buffer.items, rfsc_offset.?, std.fs.path.basename(vol_path));
+            try patchRfscFileIdBytes(allocator, buffer.items, rfsc_offset.?, path_util.baseName(vol_path));
         } else {
             try patchRfscFileId(vol_path, rfsc_offset.?);
         }
@@ -1145,7 +1146,7 @@ fn buildVolumeStream(
     }
     if (emit_rfsc and rfsc_offset != null) {
         if (output_open != null) {
-            try patchRfscFileIdBytes(allocator, buffer.items, rfsc_offset.?, std.fs.path.basename(vol_path));
+            try patchRfscFileIdBytes(allocator, buffer.items, rfsc_offset.?, path_util.baseName(vol_path));
         } else {
             try patchRfscFileId(vol_path, rfsc_offset.?);
         }
@@ -1171,7 +1172,7 @@ fn patchRfscFileId(path: []const u8, rfsc_offset: usize) !void {
     _ = try file.readAll(buf[0..@as(usize, @intCast(read_len))]);
     var md5_16k: [16]u8 = undefined;
     try core.md5.md5Digest(buf[0..@as(usize, @intCast(read_len))], &md5_16k);
-    const name = std.fs.path.basename(path);
+    const name = path_util.baseName(path);
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const file_id = try core.file_id.fileIdFromHash16k(arena.allocator(), md5_16k, length, name);

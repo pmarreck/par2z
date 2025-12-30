@@ -1,6 +1,7 @@
 const std = @import("std");
 const core = @import("core");
 const common = @import("common.zig");
+const path_util = @import("path.zig");
 
 const StreamInput = common.StreamInput;
 
@@ -27,9 +28,8 @@ pub fn verify(
     var file_entries = try allocator.alloc(core.storage.FileEntry, rs_set.recovery_files.len);
     var present = try allocator.alloc(bool, rs_set.recovery_files.len);
     @memset(present, false);
-    var i: usize = 0;
-    while (i < rs_set.recovery_files.len) : (i += 1) {
-        file_entries[i] = .{ .path = "", .length = 0, .present = false };
+    for (file_entries) |*entry| {
+        entry.* = .{ .path = "", .length = 0, .present = false };
     }
 
     var limited: common.LimitedAllocator = undefined;
@@ -41,15 +41,10 @@ pub fn verify(
     }
 
     if (opts.data_paths.len == 0) {
-        i = 0;
-        while (i < rs_set.recovery_files.len) : (i += 1) {
-            const entry = rs_set.recovery_files[i];
+        for (rs_set.recovery_files, 0..) |entry, i| {
             if (entry.desc == null) continue;
             const name = entry.desc.?.file_name;
-            const candidate = if (opts.basepath) |bp|
-                try std.fs.path.join(allocator, &.{ bp, name })
-            else
-                name;
+            const candidate = try path_util.joinOptional(allocator, opts.basepath, name);
             const info = std.fs.cwd().statFile(candidate) catch {
                 continue;
             };
@@ -57,10 +52,8 @@ pub fn verify(
             present[i] = true;
         }
     } else {
-        i = 0;
-        while (i < opts.data_paths.len) : (i += 1) {
-            const path = opts.data_paths[i];
-            const base = std.fs.path.basename(path);
+        for (opts.data_paths) |path| {
+            const base = path_util.baseName(path);
             const rel = if (opts.basepath) |bp| try common.relativePathForInput(allocator, bp, path) else null;
             const idx = try common.findRecoveryIndexByName(rs_set, path, base, rel);
             if (present[idx]) return error.InvalidInput;
@@ -72,9 +65,7 @@ pub fn verify(
     for (present) |p| {
         if (!p) return error.InvalidInput;
     }
-    i = 0;
-    while (i < rs_set.recovery_files.len) : (i += 1) {
-        const entry = rs_set.recovery_files[i];
+    for (rs_set.recovery_files, 0..) |entry, i| {
         if (entry.desc == null) return error.InvalidInput;
         if (entry.desc.?.file_length != file_entries[i].length) return error.InvalidInput;
         if (entry.ifsc != null) continue;
@@ -114,12 +105,11 @@ pub fn verifyStreams(
     defer allocator.free(stream_entries);
     defer allocator.free(present);
     @memset(present, false);
-    var i: usize = 0;
-    while (i < rs_set.recovery_files.len) : (i += 1) {
-        stream_entries[i] = .{ .length = 0, .read_at = common.missingReadAt, .ctx = &common.missing_ctx };
+    for (stream_entries) |*entry| {
+        entry.* = .{ .length = 0, .read_at = common.missingReadAt, .ctx = &common.missing_ctx };
     }
     for (inputs) |input| {
-        const base = std.fs.path.basename(input.name);
+        const base = path_util.baseName(input.name);
         const rel = if (opts.basepath) |bp| try common.relativePathForInput(allocator, bp, input.name) else null;
         const idx = try common.findRecoveryIndexByName(rs_set, input.name, base, rel);
         if (present[idx]) return error.InvalidInput;
@@ -140,9 +130,7 @@ pub fn verifyStreams(
         verify_alloc = limited.allocator();
     }
 
-    i = 0;
-    while (i < rs_set.recovery_files.len) : (i += 1) {
-        const entry = rs_set.recovery_files[i];
+    for (rs_set.recovery_files, 0..) |entry, i| {
         if (entry.desc == null) return error.InvalidInput;
         if (entry.ifsc != null) continue;
         const computed = try common.md5Stream(.{

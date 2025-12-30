@@ -1,6 +1,7 @@
 const std = @import("std");
 const core = @import("core");
 const common = @import("common.zig");
+const path_util = @import("path.zig");
 
 const OutputTarget = common.OutputTarget;
 const StreamInput = common.StreamInput;
@@ -84,10 +85,7 @@ pub fn recover(
             const entry = rs_set.recovery_files[i];
             if (entry.desc == null) continue;
             const name = entry.desc.?.file_name;
-            const candidate = if (opts.basepath) |bp|
-                try std.fs.path.join(allocator, &.{ bp, name })
-            else
-                name;
+            const candidate = try path_util.joinOptional(allocator, opts.basepath, name);
             const info = std.fs.cwd().statFile(candidate) catch {
                 continue;
             };
@@ -98,7 +96,7 @@ pub fn recover(
         i = 0;
         while (i < opts.data_paths.len) : (i += 1) {
             const path = opts.data_paths[i];
-            const base = std.fs.path.basename(path);
+            const base = path_util.baseName(path);
             const rel = if (opts.basepath) |bp| try common.relativePathForInput(allocator, bp, path) else null;
             const idx = try common.findRecoveryIndexByName(rs_set, path, base, rel);
             if (present[idx]) return error.InvalidInput;
@@ -334,7 +332,7 @@ pub fn recoverStreams(
     }
 
     for (inputs) |input| {
-        const base = std.fs.path.basename(input.name);
+        const base = path_util.baseName(input.name);
         const rel = if (opts.basepath) |bp| try common.relativePathForInput(allocator, bp, input.name) else null;
         const idx = try common.findRecoveryIndexByName(rs_set, input.name, base, rel);
         if (present[idx]) return error.InvalidInput;
@@ -564,11 +562,7 @@ fn writeRecoveredFilePath(
     slice_size: usize,
     path: []const u8,
 ) !void {
-    if (std.fs.path.dirname(path)) |dir| {
-        if (dir.len > 0) {
-            try std.fs.cwd().makePath(dir);
-        }
-    }
+    try common.ensureDirForPath(path);
     var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
     defer file.close();
     try writeRecoveredFileSlices(scratch, store, order, recovered_for, recovered, file_index, slice_size, file);
@@ -584,11 +578,7 @@ fn writeRecoveredFilePathWithHash(
     slice_size: usize,
     path: []const u8,
 ) ![16]u8 {
-    if (std.fs.path.dirname(path)) |dir| {
-        if (dir.len > 0) {
-            try std.fs.cwd().makePath(dir);
-        }
-    }
+    try common.ensureDirForPath(path);
     var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
     defer file.close();
     return writeRecoveredFileSlicesWithHash(scratch, store, order, recovered_for, recovered, file_index, slice_size, file);
@@ -601,7 +591,7 @@ fn outputPath(allocator: std.mem.Allocator, out_dir: ?[]const u8, file_name: []c
         if (common.hasWindowsDrivePrefix(file_name)) return error.InvalidInput;
     }
     if (out_dir == null) return file_name;
-    return try std.fs.path.join(allocator, &.{ out_dir.?, file_name });
+    return try path_util.join(allocator, out_dir.?, file_name);
 }
 
 const SliceOverrideStore = struct {

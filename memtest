@@ -10,7 +10,7 @@ other_cli="${PAR2_OTHER_BIN:-par2}"
 mem_log="${PAR2_MEM_LOG:-mem-results.tsv}"
 prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
 
-mem_size="${PAR2_MEM_SIZE:-67108864}"
+mem_size="${PAR2_MEM_SIZE:-33554432}"
 block_size="${PAR2_MEM_BLOCK_SIZE:-4096}"
 redundancy="${PAR2_MEM_REDUNDANCY:-10}"
 iters="${PAR2_MEM_ITERS:-1}"
@@ -99,7 +99,8 @@ time_cmd() {
 	printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
 		"$ts" "$bench_head" "$tool" "$phase" "$max_rss" \
 		"$mem_size" "$block_size" "$redundancy" "$iters" >> "$mem_log"
-	printf '%-24s %10s bytes\n' "$tool $phase" "$max_rss"
+printf '%-24s %10s bytes\n' "$tool $phase" "$max_rss"
+printf 'mem_size=%s bytes\n' "$mem_size"
 }
 
 data="$tmpdir/data.bin"

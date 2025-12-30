@@ -106,8 +106,8 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 
 ### Low Priority / Cleanup
 - [x] Remove or relocate `data.bin` if it’s a stray artifact (confirm intended use).
-- [ ] Simplify repeated path-building helpers into shared util.
-- [ ] Reduce verbose `while` loops / redundant casts where safe.
+- [x] Simplify repeated path-building helpers into shared util.
+- [x] Reduce verbose `while` loops / redundant casts where safe.
 
 ## Streaming Core Interface (No Temp Files)
 ### Goal

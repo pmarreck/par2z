@@ -1,5 +1,6 @@
 const std = @import("std");
 const core = @import("core");
+const path_util = @import("path.zig");
 
 pub const CreateOptions = struct {
     block_size: ?u64,
@@ -264,7 +265,7 @@ pub fn safeFileName(path: []const u8) ![]const u8 {
     if (hasTraversalSegment(path)) return error.InvalidInput;
     if (hasWindowsDrivePrefix(path)) return error.InvalidInput;
     if (std.fs.path.isAbsolute(path)) {
-        return std.fs.path.basename(path);
+        return path_util.baseName(path);
     }
     return path;
 }
@@ -281,6 +282,13 @@ pub fn hasTraversalSegment(path: []const u8) bool {
         }
     }
     return false;
+}
+
+pub fn ensureDirForPath(path: []const u8) !void {
+    const dir = path_util.dirNameOrDot(path);
+    if (dir.len > 0) {
+        try std.fs.cwd().makePath(dir);
+    }
 }
 
 pub fn hasWindowsDrivePrefix(path: []const u8) bool {
@@ -674,15 +682,15 @@ pub fn loadVolumeFiles(
     if (std.mem.indexOf(u8, base, ".vol")) |idx| {
         base = base[0..idx];
     }
-    const base_name = std.fs.path.basename(base);
-    var dir = try std.fs.cwd().openDir(std.fs.path.dirname(path) orelse ".", .{ .iterate = true });
+    const base_name = path_util.baseName(base);
+    var dir = try std.fs.cwd().openDir(path_util.dirNameOrDot(path), .{ .iterate = true });
     defer dir.close();
     var it = dir.iterate();
     while (try it.next()) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
         if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
-        const full = try std.fs.path.join(allocator, &.{ std.fs.path.dirname(path) orelse ".", entry.name });
+        const full = try path_util.join(allocator, path_util.dirNameOrDot(path), entry.name);
         if (std.mem.eql(u8, full, path)) {
             allocator.free(full);
             continue;
@@ -721,7 +729,7 @@ pub fn findRecoveryIndexByName(set: core.recovery_set.RecoverySet, path: []const
             base_match = i;
             continue;
         }
-        const entry_base = std.fs.path.basename(name);
+        const entry_base = path_util.baseName(name);
         if (std.mem.eql(u8, entry_base, base)) {
             if (base_match != null and base_match.? != i) return error.InvalidInput;
             base_match = i;
