@@ -25,7 +25,7 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 - [x] Library of Congress format description (format context) — accessed 2025-12-24.
 
 ## Licensing Notes (Initial)
-- [ ] MD5 reference implementation in RFC 1321 allows use/modify with attribution notice; suitable for proprietary use with notice retention.
+- [x] MD5 licensing note: implementation now uses Zig stdlib (`std.crypto.hash.Md5`), so no RFC 1321 code is shipped; keep attribution note only if a standalone RFC 1321 implementation is added later.
 - [x] par2cmdline is GPL; confirmed test-only usage (not shipped), not linkable for Mac App Store distribution.
 
 ## Progress Log
@@ -97,15 +97,15 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 - [x] Remove empty `src/ffi/` dir or implement it (decide).
 
 ### Test Coverage Gaps
-- [ ] Add tests for `LimitedAllocator` edge cases (cap exhaustion, resize).
-- [ ] Add direct tests for `transliterateAscii` / `mapLatin1`.
-- [ ] Add edge-case tests for `volumePath` and `volumeIndexWidth`.
-- [ ] Add tests for error paths in streaming ops (`recoverStreams`, `verifyStreams`).
-- [ ] Add tests for C API error messages (`par2_*_last_error`).
-- [ ] Add thread-safety tests for concurrent volume building.
+- [x] Add tests for `LimitedAllocator` edge cases (cap exhaustion, resize).
+- [x] Add direct tests for `transliterateAscii` / `mapLatin1`.
+- [x] Add edge-case tests for `volumePath` and `volumeIndexWidth`.
+- [x] Add tests for error paths in streaming ops (`recoverStreams`, `verifyStreams`).
+- [x] Add tests for C API error messages (`par2_*_last_error`).
+- [x] Add thread-safety tests for concurrent volume building.
 
 ### Low Priority / Cleanup
-- [ ] Remove or relocate `data.bin` if it’s a stray artifact (confirm intended use).
+- [x] Remove or relocate `data.bin` if it’s a stray artifact (confirm intended use).
 - [ ] Simplify repeated path-building helpers into shared util.
 - [ ] Reduce verbose `while` loops / redundant casts where safe.
 
@@ -123,7 +123,6 @@ Support true streaming inputs/outputs (no temp file spooling), suitable for SQLi
 - Streaming outputs are modeled as per-file outputs: open(path) → writer/close.
 
 ### Steps (TDD, small increments)
-- [ ] Define stream interfaces in core/ops (InputFileStream, OutputStreamOpener) with strict bounds/overflow checks.
 - [x] Define stream interfaces in core/ops (InputFileStream, OutputStreamOpener) with strict bounds/overflow checks.
 - [x] Implement streaming create for main file (emit packets directly to OutputStream without temp files).
 - [x] Implement streaming volume emit with buffered RFSC (16 KiB) and late emission.

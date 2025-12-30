@@ -12,10 +12,10 @@ prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
 bench_optimize="${PAR2_BENCH_OPTIMIZE:-ReleaseFast}"
 bench_build="${PAR2_BENCH_BUILD:-1}"
 
-bench_size="${PAR2_BENCH_SIZE:-67108864}"
+bench_size="${PAR2_BENCH_SIZE:-33554432}"
 block_size="${PAR2_BENCH_BLOCK_SIZE:-4096}"
 redundancy="${PAR2_BENCH_REDUNDANCY:-10}"
-iters="${PAR2_BENCH_ITERS:-3}"
+iters="${PAR2_BENCH_ITERS:-2}"
 corrupt_bytes="${PAR2_BENCH_CORRUPT_BYTES:-4096}"
 bench_seed="${PAR2_BENCH_SEED:-1}"
 bench_seq="${PAR2_BENCH_SEQ:-1}"
@@ -45,7 +45,7 @@ run_timed() {
 	local tool="$1"
 	local phase="$2"
 	shift 2
-	local start end elapsed
+	local start end elapsed rate
 	start="$(now_ms)"
 	capture -- "$@"
 	end="$(now_ms)"
@@ -54,8 +54,9 @@ run_timed() {
 		echo "$tool $phase failed: $err" >&2
 		exit 1
 	fi
-	printf '%-24s %8s ms\n' "$tool $phase" "$elapsed"
-	log_result "$tool" "$phase" "$elapsed"
+	rate="$(awk -v size="$bench_size" -v ms="$elapsed" 'BEGIN { if (ms == 0) { print "inf"; } else { printf "%.2f", (size/1048576)/(ms/1000) } }')"
+	printf '%-24s %8s ms %8s MiB/s\n' "$tool $phase" "$elapsed" "$rate"
+	log_result "$tool" "$phase" "$elapsed" "$rate"
 }
 
 gen_data() {
@@ -136,17 +137,18 @@ if [ -z "$bench_head" ]; then
 fi
 
 if [ ! -f "$bench_log" ]; then
-	printf "timestamp\tcommit\ttool\tphase\telapsed_ms\tbench_size\tblock_size\tredundancy\titers\tother_cli\tpar2_cli\n" >> "$bench_log"
+	printf "timestamp\tcommit\ttool\tphase\telapsed_ms\trate_mib_s\tbench_size\tblock_size\tredundancy\titers\tother_cli\tpar2_cli\n" >> "$bench_log"
 fi
 
 log_result() {
 	local tool="$1"
 	local phase="$2"
 	local elapsed="$3"
+	local rate="$4"
 	local ts
 	ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-	printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-		"$ts" "$bench_head" "$tool" "$phase" "$elapsed" \
+	printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+		"$ts" "$bench_head" "$tool" "$phase" "$elapsed" "$rate" \
 		"$bench_size" "$block_size" "$redundancy" "$iters" \
 		"$other_cli" "$par2_cli" >> "$bench_log"
 }

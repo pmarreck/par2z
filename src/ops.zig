@@ -9,6 +9,8 @@ pub const VerifyOptions = common.VerifyOptions;
 pub const OutputTarget = common.OutputTarget;
 pub const OutputOpener = common.OutputOpener;
 pub const StreamInput = common.StreamInput;
+pub const LimitedAllocator = common.LimitedAllocator;
+pub const transliterateAscii = common.transliterateAscii;
 
 pub fn stdoutToStderrEnabled() bool {
     return common.stdoutToStderrEnabled();

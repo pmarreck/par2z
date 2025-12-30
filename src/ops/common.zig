@@ -185,6 +185,10 @@ pub const LimitedAllocator = struct {
     fn remap(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const self: *LimitedAllocator = @ptrCast(@alignCast(ctx));
         if (new_len <= buf.len) {
+            if (self.child.rawResize(buf, alignment, new_len, ret_addr)) {
+                self.used -= buf.len - new_len;
+                return buf.ptr;
+            }
             const ptr = self.child.rawRemap(buf, alignment, new_len, ret_addr) orelse return null;
             self.used -= buf.len - new_len;
             return ptr;

@@ -67,6 +67,234 @@ test "ops stdout-to-stderr env flag" {
     _ = c_std.unsetenv("STDOUT_TO_STDERR");
 }
 
+test "limited allocator enforces cap" {
+    var limited = ops.LimitedAllocator.init(std.testing.allocator, 8);
+    const alloc = limited.allocator();
+    const buf = try alloc.alloc(u8, 8);
+    defer alloc.free(buf);
+    try std.testing.expectError(error.OutOfMemory, alloc.alloc(u8, 1));
+}
+
+test "limited allocator resize frees cap" {
+    var backing: [16]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&backing);
+    var limited = ops.LimitedAllocator.init(fba.allocator(), 8);
+    const alloc = limited.allocator();
+    var buf = try alloc.alloc(u8, 8);
+    const ok = alloc.resize(buf, 4);
+    if (!ok) {
+        defer alloc.free(buf);
+        try std.testing.expect(ok);
+        return;
+    }
+    buf = buf[0..4];
+    defer alloc.free(buf);
+    const extra = try alloc.alloc(u8, 4);
+    defer alloc.free(extra);
+    try std.testing.expectError(error.OutOfMemory, alloc.alloc(u8, 1));
+}
+
+test "transliterateAscii maps latin1 accents (direct)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const out = try ops.transliterateAscii(arena.allocator(), "hé");
+    try std.testing.expectEqualStrings("he?", out.?);
+}
+
+test "transliterateAscii returns null on unmapped (direct)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const out = try ops.transliterateAscii(arena.allocator(), "€");
+    try std.testing.expect(out == null);
+}
+
+test "transliterateAscii covers all latin1 mappings (direct)" {
+    const cases = [_]struct { in: []const u8, out: []const u8 }{
+        .{ .in = "á", .out = "a?" },  .{ .in = "à", .out = "a?" }, .{ .in = "ä", .out = "a?" },  .{ .in = "â", .out = "a?" },
+        .{ .in = "ã", .out = "a?" },  .{ .in = "å", .out = "a?" }, .{ .in = "Á", .out = "A?" },  .{ .in = "À", .out = "A?" },
+        .{ .in = "Ä", .out = "A?" },  .{ .in = "Â", .out = "A?" }, .{ .in = "Ã", .out = "A?" },  .{ .in = "Å", .out = "A?" },
+        .{ .in = "é", .out = "e?" },  .{ .in = "è", .out = "e?" }, .{ .in = "ë", .out = "e?" },  .{ .in = "ê", .out = "e?" },
+        .{ .in = "É", .out = "E?" },  .{ .in = "È", .out = "E?" }, .{ .in = "Ë", .out = "E?" },  .{ .in = "Ê", .out = "E?" },
+        .{ .in = "í", .out = "i?" },  .{ .in = "ì", .out = "i?" }, .{ .in = "ï", .out = "i?" },  .{ .in = "î", .out = "i?" },
+        .{ .in = "Í", .out = "I?" },  .{ .in = "Ì", .out = "I?" }, .{ .in = "Ï", .out = "I?" },  .{ .in = "Î", .out = "I?" },
+        .{ .in = "ó", .out = "o?" },  .{ .in = "ò", .out = "o?" }, .{ .in = "ö", .out = "o?" },  .{ .in = "ô", .out = "o?" },
+        .{ .in = "õ", .out = "o?" },  .{ .in = "Ó", .out = "O?" }, .{ .in = "Ò", .out = "O?" },  .{ .in = "Ö", .out = "O?" },
+        .{ .in = "Ô", .out = "O?" },  .{ .in = "Õ", .out = "O?" }, .{ .in = "ú", .out = "u?" },  .{ .in = "ù", .out = "u?" },
+        .{ .in = "ü", .out = "u?" },  .{ .in = "û", .out = "u?" }, .{ .in = "Ú", .out = "U?" },  .{ .in = "Ù", .out = "U?" },
+        .{ .in = "Ü", .out = "U?" },  .{ .in = "Û", .out = "U?" }, .{ .in = "ñ", .out = "n?" },  .{ .in = "Ñ", .out = "N?" },
+        .{ .in = "ç", .out = "c?" },  .{ .in = "Ç", .out = "C?" }, .{ .in = "ß", .out = "ss?" }, .{ .in = "æ", .out = "ae?" },
+        .{ .in = "Æ", .out = "AE?" }, .{ .in = "ø", .out = "o?" }, .{ .in = "Ø", .out = "O?" },
+    };
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    for (cases) |c| {
+        const out = try ops.transliterateAscii(arena.allocator(), c.in);
+        try std.testing.expect(out != null);
+        try std.testing.expectEqualStrings(c.out, out.?);
+    }
+}
+
+test "transliterateAscii preserves ascii and maps accents in mixed string (direct)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const out = try ops.transliterateAscii(arena.allocator(), "File_éß.txt");
+    try std.testing.expectEqualStrings("File_e?ss?.txt", out.?);
+}
+
+test "ops verifyStreams rejects data_paths" {
+    const opts = ops.VerifyOptions{
+        .par2_path = "unused.par2",
+        .data_paths = &.{ "a.bin" },
+        .basepath = null,
+        .verbosity = 0,
+        .memory_mb = null,
+    };
+    try std.testing.expectError(error.InvalidInput, ops.verifyStreams(std.testing.allocator, "", opts, &.{}));
+}
+
+test "ops recoverStreams rejects data_paths" {
+    const opts = ops.RecoverOptions{
+        .stdout_only = false,
+        .out_dir = null,
+        .par2_path = "unused.par2",
+        .data_paths = &.{ "a.bin" },
+        .allow_unsafe_paths = false,
+        .basepath = null,
+        .verbosity = 0,
+        .memory_mb = null,
+        .output_open = null,
+    };
+    try std.testing.expectError(error.InvalidInput, ops.recoverStreams(std.testing.allocator, std.testing.allocator, "", &.{}, opts, &.{}));
+}
+
+test "ops verifyStreams rejects missing inputs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const data = "hello";
+    var input_ctx = StreamMemCtx{ .data = data };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "a.bin",
+        .length = data.len,
+        .read_at = streamReadAt,
+        .ctx = &input_ctx,
+    }};
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+    const create_opts = ops.CreateOptions{
+        .block_size = null,
+        .block_count = null,
+        .redundancy_percent = 10,
+        .recovery_blocks = null,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+    const main_buf = cap.map.getPtr("set.par2") orelse return error.NotFound;
+    const verify_opts = ops.VerifyOptions{
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+    };
+    try std.testing.expectError(error.InvalidInput, ops.verifyStreams(allocator, main_buf.data.items, verify_opts, &.{}));
+}
+
+test "ops createStreams is deterministic across thread counts" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    const data = "abcdefghijklmnopqrstuvwxyz";
+    var input_ctx = StreamMemCtx{ .data = data };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "a.bin",
+        .length = data.len,
+        .read_at = streamReadAt,
+        .ctx = &input_ctx,
+    }};
+
+    var cap_one = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap_one);
+    const opts_one = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 4,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap_one, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, opts_one, &inputs);
+
+    var cap_many = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap_many);
+    const opts_many = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 4,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 4,
+        .output_open = .{ .ctx = &cap_many, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, opts_many, &inputs);
+
+    try std.testing.expectEqual(cap_one.map.count(), cap_many.map.count());
+    var it = cap_one.map.iterator();
+    while (it.next()) |entry| {
+        const name = entry.key_ptr.*;
+        const other = cap_many.map.getPtr(name) orelse return error.NotFound;
+        try std.testing.expectEqualSlices(u8, entry.value_ptr.data.items, other.data.items);
+    }
+}
+
 const StreamMemCtx = struct {
 	data: []const u8,
 };
@@ -88,10 +316,11 @@ const OutBuffer = struct {
 const OutCapture = struct {
 	allocator: std.mem.Allocator,
 	map: std.StringHashMap(OutBuffer),
+	mutex: std.Thread.Mutex = .{},
 };
 
 fn outCaptureInit(allocator: std.mem.Allocator) OutCapture {
-	return .{ .allocator = allocator, .map = std.StringHashMap(OutBuffer).init(allocator) };
+	return .{ .allocator = allocator, .map = std.StringHashMap(OutBuffer).init(allocator), .mutex = .{} };
 }
 
 fn outCaptureDeinit(cap: *OutCapture) void {
@@ -113,6 +342,8 @@ fn outClose(_: *anyopaque) void {}
 
 fn outOpen(ctx: *anyopaque, path: []const u8) anyerror!ops.OutputTarget {
 	const cap: *OutCapture = @ptrCast(@alignCast(ctx));
+	cap.mutex.lock();
+	defer cap.mutex.unlock();
 	const name = std.fs.path.basename(path);
 	if (cap.map.getPtr(name)) |existing| {
 		existing.*.data.clearRetainingCapacity();
@@ -2446,6 +2677,35 @@ test "c api create/verify with memory input" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_set_par2_path(verify_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_memory(verify_handle, "mem.bin", payload, payload.len));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_run(verify_handle));
+}
+
+test "c api last_error reports mixed input types" {
+    const par2 = @import("par2");
+    const payload = "abcd";
+
+    var create_handle: ?*par2.Par2CreateHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(null, &create_handle));
+    defer par2.par2_create_destroy(create_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_path(create_handle, "file.bin"));
+    try std.testing.expectEqual(par2.Par2Error.invalid_argument, par2.par2_create_add_memory(create_handle, "mem.bin", payload, payload.len));
+    const create_err = par2.par2_create_last_error(create_handle) orelse return error.NotFound;
+    try std.testing.expectEqualStrings("cannot mix path and memory inputs", std.mem.span(create_err));
+
+    var verify_handle: ?*par2.Par2VerifyHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &verify_handle));
+    defer par2.par2_verify_destroy(verify_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_path(verify_handle, "file.bin"));
+    try std.testing.expectEqual(par2.Par2Error.invalid_argument, par2.par2_verify_add_memory(verify_handle, "mem.bin", payload, payload.len));
+    const verify_err = par2.par2_verify_last_error(verify_handle) orelse return error.NotFound;
+    try std.testing.expectEqualStrings("cannot mix path and memory inputs", std.mem.span(verify_err));
+
+    var recover_handle: ?*par2.Par2RecoverHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_new(null, &recover_handle));
+    defer par2.par2_recover_destroy(recover_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_add_path(recover_handle, "file.bin"));
+    try std.testing.expectEqual(par2.Par2Error.invalid_argument, par2.par2_recover_add_memory(recover_handle, "mem.bin", payload, payload.len));
+    const recover_err = par2.par2_recover_last_error(recover_handle) orelse return error.NotFound;
+    try std.testing.expectEqualStrings("cannot mix path and memory inputs", std.mem.span(recover_err));
 }
 
 test "c api create/verify with stream input" {

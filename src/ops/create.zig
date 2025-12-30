@@ -787,6 +787,23 @@ fn indexPadded(allocator: std.mem.Allocator, value: u64, width: usize) ![]const 
     return out;
 }
 
+test "volumeIndexWidth uses max of total and last index digits" {
+    try std.testing.expectEqual(@as(usize, 1), volumeIndexWidth(0, 0));
+    try std.testing.expectEqual(@as(usize, 1), volumeIndexWidth(1, 0));
+    try std.testing.expectEqual(@as(usize, 2), volumeIndexWidth(10, 5));
+    try std.testing.expectEqual(@as(usize, 4), volumeIndexWidth(1000, 0));
+    try std.testing.expectEqual(@as(usize, 2), volumeIndexWidth(1, 12));
+}
+
+test "volumePath formats base and padded start index" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const out = try volumePath(arena.allocator(), "set.par2", 7, 3, 4);
+    try std.testing.expectEqualStrings("set.vol0007+3.par2", out);
+    const out2 = try volumePath(arena.allocator(), "set", 7, 3, 2);
+    try std.testing.expectEqualStrings("set.vol07+3.par2", out2);
+}
+
 const VolumeShared = struct {
     volume_meta_packets: []const []const u8,
     store: core.storage.FileStore,

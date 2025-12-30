@@ -1,394 +1,532 @@
-timestamp	commit	tool	phase	elapsed_ms	bench_size	block_size	redundancy	iters	other_cli	par2_cli
-2025-12-27T18:53:11Z	HEAD	par2cmdline	create	402	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T18:53:11Z	HEAD	par2cmdline	verify	150	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T18:53:12Z	HEAD	par2cmdline	repair	478	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T19:04:01Z	HEAD	par2cmdline	create	522	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T19:04:02Z	HEAD	par2cmdline	verify	157	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T19:04:02Z	HEAD	par2cmdline	repair	527	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T19:07:28Z	HEAD	par2cmdline	create	62	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T19:07:28Z	HEAD	par2cmdline	verify	34	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T19:07:28Z	HEAD	par2cmdline	repair	86	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T19:07:50Z	HEAD	par2-cli	create	21368	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T19:07:50Z	HEAD	par2-cli	verify	168	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T19:08:43Z	HEAD	par2-cli	recover	52762	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:19:52Z	HEAD	par2cmdline	create	56	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:19:52Z	HEAD	par2cmdline	verify	30	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:19:53Z	HEAD	par2cmdline	repair	75	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:19:55Z	HEAD	par2-cli	create	2026	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:19:55Z	HEAD	par2-cli	verify	69	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:20:05Z	HEAD	par2-cli	recover	10720	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:25:52Z	HEAD	par2cmdline	create	59	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:25:52Z	HEAD	par2cmdline	verify	30	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:25:52Z	HEAD	par2cmdline	repair	69	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:25:54Z	HEAD	par2-cli	create	1277	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:25:54Z	HEAD	par2-cli	verify	70	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:25:54Z	HEAD	par2-cli	recover	155	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:43:05Z	HEAD	par2cmdline	create	57	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:43:05Z	HEAD	par2cmdline	verify	30	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:43:05Z	HEAD	par2cmdline	repair	69	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:43:05Z	HEAD	par2-cli	create	192	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:43:05Z	HEAD	par2-cli	verify	69	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-27T20:43:05Z	HEAD	par2-cli	recover	158	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T18:24:41Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	create	52419	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T18:24:41Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	verify	914	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T18:24:43Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	repair	1752	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T18:26:00Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	create	1387	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T18:26:00Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	verify	114	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T18:26:00Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	repair	218	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T18:26:31Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	create	30503	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T18:26:31Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	verify	241	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T18:26:32Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	recover	758	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T19:00:03Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	create	1310	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T19:00:03Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	verify	100	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T19:00:03Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	repair	170	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T19:00:26Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	create	23558	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T19:00:27Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	verify	229	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T19:00:27Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	recover	541	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:07:52Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	create	20412	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:07:53Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	verify	334	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:07:53Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	repair	635	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:09:39Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	create	1289	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:09:39Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	verify	103	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:09:39Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	repair	181	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:10:02Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2-cli	create	23482	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:10:03Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2-cli	verify	230	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:10:03Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2-cli	recover	597	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:23:51Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2cmdline	create	1288	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:23:51Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2cmdline	verify	98	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:23:51Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2cmdline	repair	166	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:24:14Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2-cli	create	23241	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:24:14Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2-cli	verify	244	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:24:15Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2-cli	recover	543	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:25:59Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2cmdline	create	1285	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:25:59Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2cmdline	verify	97	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:25:59Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2cmdline	repair	170	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:26:01Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2-cli	create	1187	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:26:01Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2-cli	verify	166	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:26:01Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2-cli	recover	342	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:05Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	1293	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:05Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	97	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:06Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	168	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:07Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	1186	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:07Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	155	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:07Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	326	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:09Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	1281	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:09Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	96	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:09Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	166	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:10Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	1200	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:10Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	154	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:11Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	327	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:12Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	1292	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:12Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	105	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:12Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	179	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:14Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	1194	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:14Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	167	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:14Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	365	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:40Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20267	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:40Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	348	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:41Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	638	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:58Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	16736	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:43:58Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	594	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:44:00Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1320	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:44:21Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20683	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:44:21Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	367	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:44:22Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	687	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:44:39Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	17703	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:44:40Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	608	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:44:41Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1336	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:45:02Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20577	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:45:02Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	336	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:45:03Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	643	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:45:46Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20578	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:45:46Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	359	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:45:47Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	678	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:46:04Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	17133	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:46:05Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	622	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:46:06Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1354	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:46:27Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20572	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:46:27Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	343	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:46:28Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	674	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:46:45Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	17480	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:46:46Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	625	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:46:47Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1358	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:47:08Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20561	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:47:08Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	344	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:47:09Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	677	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:47:27Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	17503	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:47:27Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	638	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:47:29Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1364	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:48:47Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	66864	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:48:49Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1214	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:48:51Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2441	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:50:02Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	70575	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:50:04Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2184	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:50:08Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3607	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:51:15Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	67314	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:51:16Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1294	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:51:19Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2589	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:52:32Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	72694	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:52:34Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2195	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:52:37Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3502	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:54:53Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	67674	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:54:54Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1217	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:54:57Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2444	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:56:08Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	70913	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:56:10Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2200	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:56:14Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3574	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:57:21Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	67651	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:57:23Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1285	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:57:25Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2594	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:58:37Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	71226	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:58:39Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2186	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:58:42Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3493	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:59:50Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	67556	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:59:51Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1257	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T20:59:54Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2506	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T21:01:04Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	70752	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T21:01:07Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2176	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-28T21:01:10Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3568	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
-2025-12-30T15:54:06Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	20701	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:54:06Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	365	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:54:07Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	710	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:54:23Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16259	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:54:24Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	665	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:54:25Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1456	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:54:46Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	20746	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:54:47Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	361	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:54:47Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	716	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:55:04Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16635	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:55:05Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	647	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:55:06Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1444	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:55:27Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	21104	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:55:28Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	367	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:55:28Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	725	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:55:58Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	21074	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:55:58Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	373	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:55:59Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	725	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:56:15Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16108	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:56:16Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	664	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:56:17Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1503	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:56:38Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	20934	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:56:39Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	378	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:56:39Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	724	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:56:56Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16169	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:56:56Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	693	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:56:58Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1461	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:57:19Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	20909	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:57:19Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	378	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:57:20Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	726	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:57:36Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16069	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:57:37Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	659	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T15:57:38Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1457	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:21:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21026	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:21:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	360	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:21:41Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	701	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:21:57Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16640	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:21:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	701	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:21:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1514	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:22:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21154	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:22:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	373	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:22:22Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	724	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:22:38Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16313	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:22:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	658	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:22:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1461	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:23:01Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21012	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:23:02Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	370	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:23:02Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	721	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:23:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16266	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:23:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	659	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:23:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1413	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:25:42Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21263	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:25:42Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	374	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:25:43Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	720	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:25:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16105	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:26:00Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	708	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:26:02Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1519	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:26:23Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21057	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:26:23Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	373	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:26:24Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	717	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:26:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15997	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:26:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	706	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:26:42Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1534	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:27:03Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21040	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:27:03Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	382	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:27:04Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	729	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:27:20Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15980	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:27:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	691	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:27:23Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1555	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:29:38Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20579	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:29:38Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	365	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:29:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	706	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:29:55Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16396	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:29:56Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	365	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:29:57Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1143	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:30:18Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20966	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:30:18Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	375	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:30:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	734	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:30:35Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15950	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:30:35Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	387	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:30:36Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1161	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:30:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21182	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:30:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	377	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:30:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	731	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:31:15Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15868	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:31:15Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	376	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:31:16Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1176	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:33:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21327	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:33:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	375	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:33:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	726	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:33:56Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15881	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:33:56Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	357	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:33:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1141	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:34:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21412	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:34:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	385	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:34:20Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	754	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:34:37Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16378	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:34:37Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	363	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:34:38Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1162	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:34:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20842	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:34:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	388	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:35:00Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	739	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:35:16Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15667	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:35:16Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	349	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:35:17Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1069	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:39:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20837	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:39:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	365	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:39:22Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	708	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:39:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16621	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:39:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	362	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:39:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1075	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:01Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20700	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:01Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	368	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:02Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	701	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:18Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16207	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	383	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:20Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1144	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:41Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20944	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:41Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	380	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:42Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	724	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16151	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	348	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T16:40:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1043	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:36:55Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20855	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:36:55Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	363	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:36:56Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	717	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:37:12Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16295	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:37:12Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	346	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:37:13Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1049	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:37:35Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21249	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:37:35Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	370	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:37:36Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	716	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:37:52Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16233	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:37:52Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	355	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:37:54Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1102	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:38:15Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20887	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:38:15Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	371	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:38:16Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	714	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:38:31Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15728	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:38:32Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	362	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T18:38:33Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1079	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:02:52Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	21083	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:02:53Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	362	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:02:53Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	686	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:03:10Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16244	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:03:10Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	356	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:03:11Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1120	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:03:32Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20782	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:03:32Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	365	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:03:33Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	699	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:03:50Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	17414	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:03:51Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	351	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:03:52Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1080	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:04:13Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	21112	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:04:13Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	366	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:04:14Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	700	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:04:31Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16999	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:04:32Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	344	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:04:33Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1078	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:07:47Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20761	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:07:48Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	353	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:07:48Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	676	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:08:05Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16569	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:08:05Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	363	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:08:07Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1161	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:08:27Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20422	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:08:27Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	366	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:08:28Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	700	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:08:46Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	17375	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:08:46Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	344	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:08:47Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1083	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:09:08Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20768	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:09:08Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	365	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:09:09Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	700	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:09:26Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16983	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:09:26Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	359	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:09:27Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1093	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:12:18Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20657	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:12:18Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	347	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:12:19Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	680	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:12:36Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16949	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:12:36Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	345	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:12:37Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1080	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:12:58Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20936	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:12:58Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	367	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:12:59Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	752	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:13:16Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16647	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:13:16Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	345	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:13:17Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1082	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:13:38Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20775	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:13:38Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	371	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:13:39Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	720	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:13:56Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16618	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:13:56Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	350	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:13:57Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1105	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:16:16Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20631	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:16:17Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	368	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:16:18Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	686	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:16:35Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	17445	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:16:35Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	365	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:16:37Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1098	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:16:57Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20435	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:16:57Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	369	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:16:58Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	696	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:17:15Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16820	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:17:15Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	358	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:17:16Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1068	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:17:37Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20719	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:17:38Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	376	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:17:38Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	720	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:17:55Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16934	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:17:56Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	394	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:17:57Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1184	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:54:40Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20633	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:54:41Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	364	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:54:41Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	652	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:54:59Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	17624	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:54:59Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	345	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:55:01Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1051	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:55:21Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20610	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:55:22Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	363	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:55:22Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	658	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:55:39Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	16739	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:55:39Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	341	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:55:40Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1051	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:56:01Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20469	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:56:01Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	342	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:56:02Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	654	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:56:34Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20585	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:56:34Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	344	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:56:35Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	658	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:56:52Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	17143	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:56:52Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	343	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:56:53Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1068	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:57:14Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20850	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:57:15Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	360	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:57:15Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	702	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:57:33Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	17193	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:57:33Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	344	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:57:34Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1065	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:57:55Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20817	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:57:55Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	359	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:57:56Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	676	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:58:13Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	17317	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:58:14Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	360	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
-2025-12-30T19:58:15Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1094	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+timestamp	commit	tool	phase	elapsed_ms	rate_mib_s	bench_size	block_size	redundancy	iters	other_cli	par2_cli
+2025-12-27T18:53:11Z	HEAD	par2cmdline	create	402	159.20	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T18:53:11Z	HEAD	par2cmdline	verify	150	426.67	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T18:53:12Z	HEAD	par2cmdline	repair	478	133.89	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T19:04:01Z	HEAD	par2cmdline	create	522	122.61	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T19:04:02Z	HEAD	par2cmdline	verify	157	407.64	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T19:04:02Z	HEAD	par2cmdline	repair	527	121.44	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T19:07:28Z	HEAD	par2cmdline	create	62	129.03	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T19:07:28Z	HEAD	par2cmdline	verify	34	235.29	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T19:07:28Z	HEAD	par2cmdline	repair	86	93.02	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T19:07:50Z	HEAD	par2-cli	create	21368	0.37	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T19:07:50Z	HEAD	par2-cli	verify	168	47.62	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T19:08:43Z	HEAD	par2-cli	recover	52762	0.15	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:19:52Z	HEAD	par2cmdline	create	56	142.86	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:19:52Z	HEAD	par2cmdline	verify	30	266.67	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:19:53Z	HEAD	par2cmdline	repair	75	106.67	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:19:55Z	HEAD	par2-cli	create	2026	3.95	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:19:55Z	HEAD	par2-cli	verify	69	115.94	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:20:05Z	HEAD	par2-cli	recover	10720	0.75	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:25:52Z	HEAD	par2cmdline	create	59	135.59	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:25:52Z	HEAD	par2cmdline	verify	30	266.67	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:25:52Z	HEAD	par2cmdline	repair	69	115.94	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:25:54Z	HEAD	par2-cli	create	1277	6.26	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:25:54Z	HEAD	par2-cli	verify	70	114.29	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:25:54Z	HEAD	par2-cli	recover	155	51.61	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:43:05Z	HEAD	par2cmdline	create	57	140.35	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:43:05Z	HEAD	par2cmdline	verify	30	266.67	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:43:05Z	HEAD	par2cmdline	repair	69	115.94	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:43:05Z	HEAD	par2-cli	create	192	41.67	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:43:05Z	HEAD	par2-cli	verify	69	115.94	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-27T20:43:05Z	HEAD	par2-cli	recover	158	50.63	8388608	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T18:24:41Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	create	52419	1.22	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T18:24:41Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	verify	914	70.02	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T18:24:43Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	repair	1752	36.53	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T18:26:00Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	create	1387	11.54	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T18:26:00Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	verify	114	140.35	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T18:26:00Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	repair	218	73.39	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T18:26:31Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	create	30503	0.52	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T18:26:31Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	verify	241	66.39	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T18:26:32Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	recover	758	21.11	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T19:00:03Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	create	1310	12.21	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T19:00:03Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	verify	100	160.00	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T19:00:03Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2cmdline	repair	170	94.12	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T19:00:26Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	create	23558	0.68	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T19:00:27Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	verify	229	69.87	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T19:00:27Z	09d7b4a7d68895cf63b43589b302817dbfde0ea3	par2-cli	recover	541	29.57	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:07:52Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	create	20412	3.14	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:07:53Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	verify	334	191.62	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:07:53Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	repair	635	100.79	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:09:39Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	create	1289	12.41	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:09:39Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	verify	103	155.34	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:09:39Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2cmdline	repair	181	88.40	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:10:02Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2-cli	create	23482	0.68	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:10:03Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2-cli	verify	230	69.57	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:10:03Z	13a74f84411f3a0e44d2b409a03da103c347c5f7	par2-cli	recover	597	26.80	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:23:51Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2cmdline	create	1288	12.42	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:23:51Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2cmdline	verify	98	163.27	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:23:51Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2cmdline	repair	166	96.39	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:24:14Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2-cli	create	23241	0.69	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:24:14Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2-cli	verify	244	65.57	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:24:15Z	8e5126c016a4b55f6975c9f7c5f7e06daec56fc1	par2-cli	recover	543	29.47	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:25:59Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2cmdline	create	1285	12.45	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:25:59Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2cmdline	verify	97	164.95	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:25:59Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2cmdline	repair	170	94.12	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:26:01Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2-cli	create	1187	13.48	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:26:01Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2-cli	verify	166	96.39	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:26:01Z	03354644a0bd1c8abb4d966a843a231e6c780858	par2-cli	recover	342	46.78	16777216	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:05Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	1293	12.37	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:05Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	97	164.95	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:06Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	168	95.24	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:07Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	1186	13.49	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:07Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	155	103.23	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:07Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	326	49.08	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:09Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	1281	12.49	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:09Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	96	166.67	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:09Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	166	96.39	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:10Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	1200	13.33	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:10Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	154	103.90	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:11Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	327	48.93	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:12Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	1292	12.38	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:12Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	105	152.38	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:12Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	179	89.39	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:14Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	1194	13.40	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:14Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	167	95.81	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:14Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	365	43.84	16777216	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:40Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20267	3.16	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:40Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	348	183.91	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:41Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	638	100.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:58Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	16736	3.82	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:43:58Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	594	107.74	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:44:00Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1320	48.48	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:44:21Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20683	3.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:44:21Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	367	174.39	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:44:22Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	687	93.16	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:44:39Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	17703	3.62	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:44:40Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	608	105.26	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:44:41Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1336	47.90	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:45:02Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20577	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:45:02Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	336	190.48	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:45:03Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	643	99.53	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:45:46Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20578	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:45:46Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	359	178.27	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:45:47Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	678	94.40	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:46:04Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	17133	3.74	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:46:05Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	622	102.89	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:46:06Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1354	47.27	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:46:27Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20572	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:46:27Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	343	186.59	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:46:28Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	674	94.96	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:46:45Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	17480	3.66	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:46:46Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	625	102.40	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:46:47Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1358	47.13	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:47:08Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	20561	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:47:08Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	344	186.05	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:47:09Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	677	94.53	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:47:27Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	17503	3.66	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:47:27Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	638	100.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:47:29Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	1364	46.92	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:48:47Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	66864	3.83	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:48:49Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1214	210.87	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:48:51Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2441	104.88	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:50:02Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	70575	3.63	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:50:04Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2184	117.22	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:50:08Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3607	70.97	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:51:15Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	67314	3.80	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:51:16Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1294	197.84	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:51:19Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2589	98.88	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:52:32Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	72694	3.52	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:52:34Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2195	116.63	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:52:37Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3502	73.10	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:54:53Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	67674	3.78	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:54:54Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1217	210.35	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:54:57Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2444	104.75	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:56:08Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	70913	3.61	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:56:10Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2200	116.36	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:56:14Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3574	71.63	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:57:21Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	67651	3.78	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:57:23Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1285	199.22	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:57:25Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2594	98.69	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:58:37Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	71226	3.59	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:58:39Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2186	117.11	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:58:42Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3493	73.29	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:59:50Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	create	67556	3.79	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:59:51Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	verify	1257	203.66	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T20:59:54Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2cmdline	repair	2506	102.15	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T21:01:04Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	create	70752	3.62	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T21:01:07Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	verify	2176	117.65	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-28T21:01:10Z	5bf6709f94709e6fa6803dcfe8e2c85406a730db	par2-cli	recover	3568	71.75	268435456	16384	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2-cli
+2025-12-30T15:54:06Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	20701	3.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:54:06Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	365	175.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:54:07Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	710	90.14	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:54:23Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16259	3.94	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:54:24Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	665	96.24	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:54:25Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1456	43.96	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:54:46Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	20746	3.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:54:47Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	361	177.29	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:54:47Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	716	89.39	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:55:04Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16635	3.85	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:55:05Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	647	98.92	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:55:06Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1444	44.32	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:55:27Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	21104	3.03	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:55:28Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	367	174.39	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:55:28Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	725	88.28	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:55:58Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	21074	3.04	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:55:58Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	373	171.58	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:55:59Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	725	88.28	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:56:15Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16108	3.97	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:56:16Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	664	96.39	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:56:17Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1503	42.58	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:56:38Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	20934	3.06	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:56:39Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	378	169.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:56:39Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	724	88.40	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:56:56Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16169	3.96	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:56:56Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	693	92.35	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:56:58Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1461	43.81	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:57:19Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	create	20909	3.06	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:57:19Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	verify	378	169.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:57:20Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2cmdline	repair	726	88.15	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:57:36Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	create	16069	3.98	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:57:37Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	verify	659	97.12	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T15:57:38Z	6134a84f7469ed190430c572912c695aa91ba4d1	par2z-cli	recover	1457	43.93	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:21:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21026	3.04	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:21:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	360	177.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:21:41Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	701	91.30	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:21:57Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16640	3.85	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:21:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	701	91.30	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:21:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1514	42.27	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:22:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21154	3.03	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:22:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	373	171.58	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:22:22Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	724	88.40	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:22:38Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16313	3.92	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:22:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	658	97.26	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:22:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1461	43.81	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:23:01Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21012	3.05	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:23:02Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	370	172.97	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:23:02Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	721	88.77	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:23:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16266	3.93	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:23:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	659	97.12	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:23:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1413	45.29	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:25:42Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21263	3.01	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:25:42Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	374	171.12	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:25:43Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	720	88.89	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:25:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16105	3.97	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:26:00Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	708	90.40	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:26:02Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1519	42.13	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:26:23Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21057	3.04	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:26:23Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	373	171.58	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:26:24Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	717	89.26	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:26:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15997	4.00	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:26:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	706	90.65	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:26:42Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1534	41.72	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:27:03Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21040	3.04	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:27:03Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	382	167.54	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:27:04Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	729	87.79	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:27:20Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15980	4.01	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:27:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	691	92.62	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:27:23Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1555	41.16	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:29:38Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20579	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:29:38Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	365	175.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:29:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	706	90.65	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:29:55Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16396	3.90	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:29:56Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	365	175.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:29:57Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1143	55.99	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:30:18Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20966	3.05	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:30:18Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	375	170.67	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:30:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	734	87.19	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:30:35Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15950	4.01	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:30:35Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	387	165.37	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:30:36Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1161	55.12	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:30:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21182	3.02	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:30:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	377	169.76	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:30:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	731	87.55	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:31:15Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15868	4.03	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:31:15Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	376	170.21	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:31:16Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1176	54.42	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:33:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21327	3.00	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:33:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	375	170.67	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:33:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	726	88.15	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:33:56Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15881	4.03	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:33:56Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	357	179.27	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:33:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1141	56.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:34:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21412	2.99	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:34:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	385	166.23	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:34:20Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	754	84.88	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:34:37Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16378	3.91	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:34:37Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	363	176.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:34:38Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1162	55.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:34:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20842	3.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:34:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	388	164.95	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:35:00Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	739	86.60	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:35:16Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15667	4.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:35:16Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	349	183.38	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:35:17Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1069	59.87	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:39:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20837	3.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:39:21Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	365	175.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:39:22Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	708	90.40	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:39:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16621	3.85	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:39:39Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	362	176.80	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:39:40Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1075	59.53	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:01Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20700	3.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:01Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	368	173.91	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:02Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	701	91.30	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:18Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16207	3.95	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:19Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	383	167.10	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:20Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1144	55.94	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:41Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20944	3.06	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:41Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	380	168.42	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:42Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	724	88.40	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16151	3.96	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:58Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	348	183.91	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T16:40:59Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1043	61.36	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:36:55Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20855	3.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:36:55Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	363	176.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:36:56Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	717	89.26	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:37:12Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16295	3.93	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:37:12Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	346	184.97	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:37:13Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1049	61.01	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:37:35Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	21249	3.01	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:37:35Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	370	172.97	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:37:36Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	716	89.39	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:37:52Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	16233	3.94	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:37:52Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	355	180.28	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:37:54Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1102	58.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:38:15Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	create	20887	3.06	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:38:15Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	verify	371	172.51	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:38:16Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2cmdline	repair	714	89.64	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:38:31Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	create	15728	4.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:38:32Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	verify	362	176.80	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T18:38:33Z	13354a3cd3b12f9ef74401f001d1132095b308df	par2z-cli	recover	1079	59.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:02:52Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	21083	3.04	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:02:53Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	362	176.80	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:02:53Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	686	93.29	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:03:10Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16244	3.94	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:03:10Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	356	179.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:03:11Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1120	57.14	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:03:32Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20782	3.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:03:32Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	365	175.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:03:33Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	699	91.56	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:03:50Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	17414	3.68	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:03:51Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	351	182.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:03:52Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1080	59.26	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:04:13Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	21112	3.03	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:04:13Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	366	174.86	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:04:14Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	700	91.43	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:04:31Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16999	3.76	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:04:32Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	344	186.05	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:04:33Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1078	59.37	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:07:47Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20761	3.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:07:48Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	353	181.30	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:07:48Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	676	94.67	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:08:05Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16569	3.86	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:08:05Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	363	176.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:08:07Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1161	55.12	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:08:27Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20422	3.13	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:08:27Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	366	174.86	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:08:28Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	700	91.43	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:08:46Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	17375	3.68	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:08:46Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	344	186.05	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:08:47Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1083	59.10	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:09:08Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20768	3.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:09:08Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	365	175.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:09:09Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	700	91.43	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:09:26Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16983	3.77	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:09:26Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	359	178.27	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:09:27Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1093	58.55	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:12:18Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20657	3.10	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:12:18Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	347	184.44	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:12:19Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	680	94.12	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:12:36Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16949	3.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:12:36Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	345	185.51	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:12:37Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1080	59.26	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:12:58Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20936	3.06	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:12:58Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	367	174.39	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:12:59Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	752	85.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:13:16Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16647	3.84	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:13:16Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	345	185.51	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:13:17Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1082	59.15	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:13:38Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20775	3.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:13:38Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	371	172.51	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:13:39Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	720	88.89	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:13:56Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16618	3.85	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:13:56Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	350	182.86	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:13:57Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1105	57.92	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:16:16Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20631	3.10	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:16:17Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	368	173.91	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:16:18Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	686	93.29	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:16:35Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	17445	3.67	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:16:35Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	365	175.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:16:37Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1098	58.29	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:16:57Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20435	3.13	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:16:57Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	369	173.44	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:16:58Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	696	91.95	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:17:15Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16820	3.80	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:17:15Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	358	178.77	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:17:16Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1068	59.93	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:17:37Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	create	20719	3.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:17:38Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	verify	376	170.21	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:17:38Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2cmdline	repair	720	88.89	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:17:55Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	create	16934	3.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:17:56Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	verify	394	162.44	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:17:57Z	0a548ff0b45214463aad07b40898f27cfcb672a1	par2z-cli	recover	1184	54.05	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:54:40Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20633	3.10	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:54:41Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	364	175.82	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:54:41Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	652	98.16	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:54:59Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	17624	3.63	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:54:59Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	345	185.51	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:55:01Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1051	60.89	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:55:21Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20610	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:55:22Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	363	176.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:55:22Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	658	97.26	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:55:39Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	16739	3.82	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:55:39Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	341	187.68	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:55:40Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1051	60.89	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:56:01Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20469	3.13	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:56:01Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	342	187.13	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:56:02Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	654	97.86	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:56:34Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20585	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:56:34Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	344	186.05	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:56:35Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	658	97.26	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:56:52Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	17143	3.73	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:56:52Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	343	186.59	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:56:53Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1068	59.93	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:57:14Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20850	3.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:57:15Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	360	177.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:57:15Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	702	91.17	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:57:33Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	17193	3.72	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:57:33Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	344	186.05	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:57:34Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1065	60.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:57:55Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	create	20817	3.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:57:55Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	verify	359	178.27	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:57:56Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2cmdline	repair	676	94.67	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:58:13Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	create	17317	3.70	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:58:14Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	verify	360	177.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T19:58:15Z	a37b12e9059db0a65de0cb76fbfce29b82db67f9	par2z-cli	recover	1094	58.50	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:15:18Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20687	3.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:15:18Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	334	191.62	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:15:19Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	636	100.63	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:15:37Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17697	3.62	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:15:37Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	332	192.77	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:15:38Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1018	62.87	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:15:59Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20419	3.13	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:15:59Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	365	175.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:00Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	703	91.04	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:16Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	16523	3.87	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:17Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	357	179.27	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:18Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1088	58.82	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:38Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20641	3.10	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:39Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	341	187.68	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:39Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	650	98.46	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:57Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17570	3.64	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:57Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	358	178.77	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:16:58Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1128	56.74	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:20:46Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20724	3.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:20:46Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	368	173.91	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:20:47Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	670	95.52	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:21:04Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17630	3.63	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:21:05Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	334	191.62	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:21:06Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1039	61.60	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:21:26Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20407	3.14	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:21:27Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	336	190.48	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:21:27Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	646	99.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:21:45Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17702	3.62	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:21:45Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	360	177.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:21:46Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1103	58.02	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:22:07Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20753	3.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:22:08Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	368	173.91	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:22:08Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	708	90.40	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:22:25Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	16603	3.85	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:22:25Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	342	187.13	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:22:26Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1051	60.89	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:38:44Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20378	3.14	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:38:45Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	361	177.29	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:38:45Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	691	92.62	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:39:02Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	16766	3.82	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:39:03Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	351	182.34	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:39:04Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1043	61.36	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:39:24Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20613	3.10	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:39:25Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	336	190.48	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:39:25Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	646	99.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:39:42Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17189	3.72	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:39:43Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	355	180.28	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:39:44Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1059	60.43	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:40:05Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20639	3.10	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:40:05Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	341	187.68	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:40:06Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	676	94.67	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:40:22Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	16697	3.83	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:40:23Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	361	177.29	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:40:24Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1055	60.66	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:43:22Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20604	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:43:22Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	332	192.77	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:43:23Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	658	97.26	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:43:40Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	16586	3.86	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:43:40Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	340	188.24	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:43:41Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1051	60.89	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:44:02Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20763	3.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:44:02Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	345	185.51	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:44:03Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	662	96.68	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:44:20Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	16885	3.79	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:44:20Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	358	178.77	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:44:21Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1099	58.23	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:44:42Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20511	3.12	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:44:42Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	349	183.38	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:44:43Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	665	96.24	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:45:00Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17138	3.73	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:45:00Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	346	184.97	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:45:02Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1068	59.93	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:47:59Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20585	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:47:59Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	339	188.79	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:00Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	740	86.49	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:17Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17027	3.76	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:17Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	360	177.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:19Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1065	60.09	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:39Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20595	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:40Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	348	183.91	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:40Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	683	93.70	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:57Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17187	3.72	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:58Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	355	180.28	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:48:59Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1059	60.43	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:49:20Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20617	3.10	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:49:20Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	353	181.30	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:49:21Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	681	93.98	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:49:38Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	16923	3.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:49:38Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	345	185.51	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:49:39Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1059	60.43	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:52:53Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20822	3.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:52:53Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	364	175.82	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:52:54Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	696	91.95	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:53:11Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17151	3.73	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:53:11Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	374	171.12	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:53:13Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1102	58.08	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:53:33Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20839	3.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:53:34Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	352	181.82	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:53:35Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	671	95.38	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:53:52Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17177	3.73	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:53:52Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	363	176.31	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:53:53Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1107	57.81	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:54:14Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20831	3.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:54:14Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	369	173.44	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:54:15Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	709	90.27	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:54:32Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	16818	3.81	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:54:32Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	370	172.97	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:54:34Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1082	59.15	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:57:30Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20884	3.06	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:57:30Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	339	188.79	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:57:31Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	646	99.07	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:57:49Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17881	3.58	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:57:49Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	341	187.68	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:57:50Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1060	60.38	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:58:11Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20603	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:58:11Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	356	179.78	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:58:12Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	661	96.82	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:58:30Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17570	3.64	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:58:30Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	344	186.05	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:58:31Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1055	60.66	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:58:52Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	20586	3.11	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:58:52Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	348	183.91	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:58:53Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	668	95.81	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:59:10Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	17031	3.76	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:59:10Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	343	186.59	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T20:59:11Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	1059	60.43	67108864	4096	10	3	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:01Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	5079	6.30	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:02Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	178	179.78	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:02Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	330	96.97	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:06Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	4508	7.10	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:07Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	173	184.97	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:07Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	531	60.26	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:12Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	create	5102	6.27	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:13Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	verify	179	178.77	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:13Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2cmdline	repair	332	96.39	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:17Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	create	4378	7.31	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:17Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	verify	175	182.86	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2025-12-30T21:01:18Z	47d44bbb37573d5d69a68530a70c865fbadde3af	par2z-cli	recover	524	61.07	33554432	4096	10	2	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
