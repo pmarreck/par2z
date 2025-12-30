@@ -794,7 +794,8 @@ pub fn verifyStreams(
 	}
 	for (inputs) |input| {
 		const base = std.fs.path.basename(input.name);
-		const idx = try findRecoveryIndexByName(rs_set, input.name, base, null);
+		const rel = if (opts.basepath) |bp| try relativePathForInput(allocator, bp, input.name) else null;
+		const idx = try findRecoveryIndexByName(rs_set, input.name, base, rel);
 		if (present[idx]) return error.InvalidInput;
 		const desc = rs_set.recovery_files[idx].desc orelse return error.InvalidInput;
 		if (desc.file_length != input.length) return error.InvalidInput;
@@ -1234,7 +1235,8 @@ pub fn recoverStreams(
 
 	for (inputs) |input| {
 		const base = std.fs.path.basename(input.name);
-		const idx = try findRecoveryIndexByName(rs_set, input.name, base, null);
+		const rel = if (opts.basepath) |bp| try relativePathForInput(allocator, bp, input.name) else null;
+		const idx = try findRecoveryIndexByName(rs_set, input.name, base, rel);
 		if (present[idx]) return error.InvalidInput;
 		if (input.length != files[idx].length) return error.InvalidInput;
 		stream_entries[idx] = .{ .length = input.length, .read_at = input.read_at, .ctx = input.ctx };

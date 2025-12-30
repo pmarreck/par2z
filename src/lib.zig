@@ -182,11 +182,71 @@ fn openOutputC(ctx: *anyopaque, path: []const u8) anyerror!ops.OutputTarget {
     return .{ .ctx = state, .writeFn = cOutputWrite, .closeFn = cOutputClose };
 }
 
+const OwnedStreamCtx = struct {
+    ptr: *anyopaque,
+    freeFn: *const fn (allocator: std.mem.Allocator, ctx: *anyopaque) void,
+};
+
+const MemStreamCtx = struct {
+    data: []const u8,
+};
+
+const CStreamCtx = struct {
+    read_at: Par2ReadAtFn,
+    ctx: ?*anyopaque,
+};
+
+const FileStreamCtx = struct {
+    path: []const u8,
+    length: u64,
+};
+
+fn freeMemStreamCtx(allocator: std.mem.Allocator, ctx: *anyopaque) void {
+    allocator.destroy(@as(*MemStreamCtx, @ptrCast(@alignCast(ctx))));
+}
+
+fn freeFileStreamCtx(allocator: std.mem.Allocator, ctx: *anyopaque) void {
+    const fs_ctx: *FileStreamCtx = @ptrCast(@alignCast(ctx));
+    allocator.free(fs_ctx.path);
+    allocator.destroy(fs_ctx);
+}
+
+fn freeCStreamCtx(allocator: std.mem.Allocator, ctx: *anyopaque) void {
+    allocator.destroy(@as(*CStreamCtx, @ptrCast(@alignCast(ctx))));
+}
+
+fn memReadAt(ctx: *anyopaque, offset: u64, out: []u8) usize {
+    const mem: *MemStreamCtx = @ptrCast(@alignCast(ctx));
+    if (offset >= mem.data.len) return 0;
+    const avail = mem.data.len - @as(usize, @intCast(offset));
+    const n = @min(avail, out.len);
+    @memcpy(out[0..n], mem.data[@as(usize, @intCast(offset)) .. @as(usize, @intCast(offset)) + n]);
+    return n;
+}
+
+fn cStreamReadAt(ctx: *anyopaque, offset: u64, out: []u8) usize {
+    const cctx: *CStreamCtx = @ptrCast(@alignCast(ctx));
+    return cctx.read_at(cctx.ctx, offset, out.ptr, out.len);
+}
+
+fn fileReadAt(ctx: *anyopaque, offset: u64, out: []u8) usize {
+    const fs_ctx: *FileStreamCtx = @ptrCast(@alignCast(ctx));
+    if (offset >= fs_ctx.length) return 0;
+    var file = std.fs.cwd().openFile(fs_ctx.path, .{}) catch return 0;
+    defer file.close();
+    file.seekTo(offset) catch return 0;
+    const n = file.readAll(out) catch return 0;
+    return n;
+}
+
 const CreateHandle = struct {
     alloc_state: AllocState,
     allocator: std.mem.Allocator,
     options: ops.CreateOptions,
     data_paths: std.ArrayList([]const u8),
+    stream_inputs: std.ArrayList(ops.StreamInput),
+    owned_stream_ctxs: std.ArrayList(OwnedStreamCtx),
+    owned_stream_names: std.ArrayList([]const u8),
     par2_path: ?[]const u8,
     basepath: ?[]const u8,
     comment: ?[]const u8,
@@ -204,6 +264,9 @@ const VerifyHandle = struct {
     allocator: std.mem.Allocator,
     options: ops.VerifyOptions,
     data_paths: std.ArrayList([]const u8),
+    stream_inputs: std.ArrayList(ops.StreamInput),
+    owned_stream_ctxs: std.ArrayList(OwnedStreamCtx),
+    owned_stream_names: std.ArrayList([]const u8),
     par2_path: ?[]const u8,
     basepath: ?[]const u8,
     par2_data: ?[]const u8,
@@ -218,6 +281,9 @@ const RecoverHandle = struct {
     allocator: std.mem.Allocator,
     options: ops.RecoverOptions,
     data_paths: std.ArrayList([]const u8),
+    stream_inputs: std.ArrayList(ops.StreamInput),
+    owned_stream_ctxs: std.ArrayList(OwnedStreamCtx),
+    owned_stream_names: std.ArrayList([]const u8),
     par2_path: ?[]const u8,
     basepath: ?[]const u8,
     par2_data: ?[]const u8,
@@ -353,6 +419,36 @@ fn writeTempFileFromStream(allocator: std.mem.Allocator, temp_dir: []const u8, n
     return out_path;
 }
 
+fn loadVolumeBytes(allocator: std.mem.Allocator, par2_path: []const u8) ![][]u8 {
+    var list = std.ArrayList([]u8).empty;
+    defer list.deinit(allocator);
+    var base = par2_path;
+    if (std.mem.endsWith(u8, par2_path, ".par2")) {
+        base = par2_path[0 .. par2_path.len - 5];
+    }
+    if (std.mem.indexOf(u8, base, ".vol")) |idx| {
+        base = base[0..idx];
+    }
+    const base_name = std.fs.path.basename(base);
+    var dir = try std.fs.cwd().openDir(std.fs.path.dirname(par2_path) orelse ".", .{ .iterate = true });
+    defer dir.close();
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
+        if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
+        if (!std.mem.startsWith(u8, entry.name, base_name)) continue;
+        const full = try std.fs.path.join(allocator, &.{ std.fs.path.dirname(par2_path) orelse ".", entry.name });
+        defer allocator.free(full);
+        if (std.mem.eql(u8, full, par2_path)) continue;
+        const info = try std.fs.cwd().statFile(full);
+        const max_len = std.math.cast(usize, info.size) orelse return error.InvalidInput;
+        const data = try std.fs.cwd().readFileAlloc(allocator, full, max_len);
+        try list.append(allocator, data);
+    }
+    return try list.toOwnedSlice(allocator);
+}
+
 fn castCreate(handle: *Par2CreateHandle) *CreateHandle {
     return @ptrCast(@alignCast(handle));
 }
@@ -414,6 +510,9 @@ pub export fn par2_create_new(opts: ?*const Par2CreateOptions, out_handle: ?*?*P
             .output_open = null,
         },
         .data_paths = std.ArrayList([]const u8).empty,
+        .stream_inputs = std.ArrayList(ops.StreamInput).empty,
+        .owned_stream_ctxs = std.ArrayList(OwnedStreamCtx).empty,
+        .owned_stream_names = std.ArrayList([]const u8).empty,
         .par2_path = null,
         .basepath = null,
         .comment = null,
@@ -443,6 +542,8 @@ pub export fn par2_create_destroy(handle: ?*Par2CreateHandle) void {
     const allocator = h.allocator;
     if (h.last_error) |msg| allocator.free(msg);
     for (h.data_paths.items) |p| allocator.free(p);
+    for (h.owned_stream_names.items) |name| allocator.free(name);
+    for (h.owned_stream_ctxs.items) |owned| owned.freeFn(allocator, owned.ptr);
     if (h.temp_dir) |d| {
         _ = std.fs.cwd().deleteTree(d) catch {};
         allocator.free(d);
@@ -450,6 +551,9 @@ pub export fn par2_create_destroy(handle: ?*Par2CreateHandle) void {
     if (h.basepath) |bp| allocator.free(bp);
     if (h.comment) |c| allocator.free(c);
     h.data_paths.deinit(allocator);
+    h.stream_inputs.deinit(allocator);
+    h.owned_stream_ctxs.deinit(allocator);
+    h.owned_stream_names.deinit(allocator);
     h.temp_paths.deinit(allocator);
     freeHandle(CreateHandle, &h.alloc_state, h);
 }
@@ -473,17 +577,18 @@ pub export fn par2_create_add_memory(handle: ?*Par2CreateHandle, name: ?[*:0]con
         setLastError(h.allocator, &h.last_error, "cannot mix path and memory inputs");
         return .invalid_argument;
     }
-    const temp_dir = ensureTempDir(h.allocator, &h.temp_dir) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp dir creation failed");
-        return errorCodeFrom(e);
-    };
     const name_slice = std.mem.span(name.?);
-    const data_slice = data.?[0..len];
-    const temp_path = writeTempFile(h.allocator, temp_dir, name_slice, data_slice) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp file write failed");
-        return errorCodeFrom(e);
-    };
-    h.data_paths.append(h.allocator, temp_path) catch return .out_of_memory;
+    const name_copy = h.allocator.dupe(u8, name_slice) catch return .out_of_memory;
+    const ctx_ptr = h.allocator.create(MemStreamCtx) catch return .out_of_memory;
+    ctx_ptr.* = .{ .data = data.?[0..len] };
+    h.stream_inputs.append(h.allocator, .{
+        .name = name_copy,
+        .length = len,
+        .read_at = memReadAt,
+        .ctx = ctx_ptr,
+    }) catch return .out_of_memory;
+    h.owned_stream_ctxs.append(h.allocator, .{ .ptr = ctx_ptr, .freeFn = freeMemStreamCtx }) catch return .out_of_memory;
+    h.owned_stream_names.append(h.allocator, name_copy) catch return .out_of_memory;
     h.memory_inputs = true;
     return .ok;
 }
@@ -495,16 +600,18 @@ pub export fn par2_create_add_stream(handle: ?*Par2CreateHandle, name: ?[*:0]con
         setLastError(h.allocator, &h.last_error, "cannot mix path and memory inputs");
         return .invalid_argument;
     }
-    const temp_dir = ensureTempDir(h.allocator, &h.temp_dir) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp dir creation failed");
-        return errorCodeFrom(e);
-    };
     const name_slice = std.mem.span(name.?);
-    const temp_path = writeTempFileFromStream(h.allocator, temp_dir, name_slice, len, read_at.?, ctx) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp file write failed");
-        return errorCodeFrom(e);
-    };
-    h.data_paths.append(h.allocator, temp_path) catch return .out_of_memory;
+    const name_copy = h.allocator.dupe(u8, name_slice) catch return .out_of_memory;
+    const cctx = h.allocator.create(CStreamCtx) catch return .out_of_memory;
+    cctx.* = .{ .read_at = read_at.?, .ctx = ctx };
+    h.stream_inputs.append(h.allocator, .{
+        .name = name_copy,
+        .length = len,
+        .read_at = cStreamReadAt,
+        .ctx = cctx,
+    }) catch return .out_of_memory;
+    h.owned_stream_ctxs.append(h.allocator, .{ .ptr = cctx, .freeFn = freeCStreamCtx }) catch return .out_of_memory;
+    h.owned_stream_names.append(h.allocator, name_copy) catch return .out_of_memory;
     h.memory_inputs = true;
     return .ok;
 }
@@ -535,7 +642,7 @@ pub export fn par2_create_run(handle: ?*Par2CreateHandle) Par2Error {
         open_ctx = .{ .open_fn = open_fn, .ctx = h.output_ctx, .allocator = h.allocator };
         output_open = .{ .ctx = &open_ctx, .openFn = openOutputC };
     }
-    const basepath = if (h.memory_inputs) h.temp_dir else h.basepath;
+    const basepath = h.basepath;
     const opts = ops.CreateOptions{
         .block_size = h.options.block_size,
         .block_count = h.options.block_count,
@@ -560,10 +667,17 @@ pub export fn par2_create_run(handle: ?*Par2CreateHandle) Par2Error {
         .thread_count = h.options.thread_count,
         .output_open = output_open,
     };
-    ops.create(h.allocator, opts) catch |e| {
-        setLastError(h.allocator, &h.last_error, @errorName(e));
-        return errorCodeFrom(e);
-    };
+    if (h.memory_inputs) {
+        ops.createStreams(h.allocator, opts, h.stream_inputs.items) catch |e| {
+            setLastError(h.allocator, &h.last_error, @errorName(e));
+            return errorCodeFrom(e);
+        };
+    } else {
+        ops.create(h.allocator, opts) catch |e| {
+            setLastError(h.allocator, &h.last_error, @errorName(e));
+            return errorCodeFrom(e);
+        };
+    }
     return .ok;
 }
 
@@ -590,6 +704,9 @@ pub export fn par2_verify_new(opts: ?*const Par2VerifyOptions, out_handle: ?*?*P
             .memory_mb = if (memory_mb == 0) null else memory_mb,
         },
         .data_paths = std.ArrayList([]const u8).empty,
+        .stream_inputs = std.ArrayList(ops.StreamInput).empty,
+        .owned_stream_ctxs = std.ArrayList(OwnedStreamCtx).empty,
+        .owned_stream_names = std.ArrayList([]const u8).empty,
         .par2_path = null,
         .basepath = null,
         .par2_data = null,
@@ -612,12 +729,17 @@ pub export fn par2_verify_destroy(handle: ?*Par2VerifyHandle) void {
     const allocator = h.allocator;
     if (h.last_error) |msg| allocator.free(msg);
     for (h.data_paths.items) |p| allocator.free(p);
+    for (h.owned_stream_names.items) |name| allocator.free(name);
+    for (h.owned_stream_ctxs.items) |owned| owned.freeFn(allocator, owned.ptr);
     if (h.temp_dir) |d| {
         _ = std.fs.cwd().deleteTree(d) catch {};
         allocator.free(d);
     }
     if (h.basepath) |bp| allocator.free(bp);
     h.data_paths.deinit(allocator);
+    h.stream_inputs.deinit(allocator);
+    h.owned_stream_ctxs.deinit(allocator);
+    h.owned_stream_names.deinit(allocator);
     h.temp_paths.deinit(allocator);
     freeHandle(VerifyHandle, &h.alloc_state, h);
 }
@@ -658,17 +780,18 @@ pub export fn par2_verify_add_memory(handle: ?*Par2VerifyHandle, name: ?[*:0]con
         setLastError(h.allocator, &h.last_error, "cannot mix path and memory inputs");
         return .invalid_argument;
     }
-    const temp_dir = ensureTempDir(h.allocator, &h.temp_dir) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp dir creation failed");
-        return errorCodeFrom(e);
-    };
     const name_slice = std.mem.span(name.?);
-    const data_slice = data.?[0..len];
-    const temp_path = writeTempFile(h.allocator, temp_dir, name_slice, data_slice) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp file write failed");
-        return errorCodeFrom(e);
-    };
-    h.data_paths.append(h.allocator, temp_path) catch return .out_of_memory;
+    const name_copy = h.allocator.dupe(u8, name_slice) catch return .out_of_memory;
+    const ctx_ptr = h.allocator.create(MemStreamCtx) catch return .out_of_memory;
+    ctx_ptr.* = .{ .data = data.?[0..len] };
+    h.stream_inputs.append(h.allocator, .{
+        .name = name_copy,
+        .length = len,
+        .read_at = memReadAt,
+        .ctx = ctx_ptr,
+    }) catch return .out_of_memory;
+    h.owned_stream_ctxs.append(h.allocator, .{ .ptr = ctx_ptr, .freeFn = freeMemStreamCtx }) catch return .out_of_memory;
+    h.owned_stream_names.append(h.allocator, name_copy) catch return .out_of_memory;
     h.memory_inputs = true;
     return .ok;
 }
@@ -680,16 +803,18 @@ pub export fn par2_verify_add_stream(handle: ?*Par2VerifyHandle, name: ?[*:0]con
         setLastError(h.allocator, &h.last_error, "cannot mix path and memory inputs");
         return .invalid_argument;
     }
-    const temp_dir = ensureTempDir(h.allocator, &h.temp_dir) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp dir creation failed");
-        return errorCodeFrom(e);
-    };
     const name_slice = std.mem.span(name.?);
-    const temp_path = writeTempFileFromStream(h.allocator, temp_dir, name_slice, len, read_at.?, ctx) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp file write failed");
-        return errorCodeFrom(e);
-    };
-    h.data_paths.append(h.allocator, temp_path) catch return .out_of_memory;
+    const name_copy = h.allocator.dupe(u8, name_slice) catch return .out_of_memory;
+    const cctx = h.allocator.create(CStreamCtx) catch return .out_of_memory;
+    cctx.* = .{ .read_at = read_at.?, .ctx = ctx };
+    h.stream_inputs.append(h.allocator, .{
+        .name = name_copy,
+        .length = len,
+        .read_at = cStreamReadAt,
+        .ctx = cctx,
+    }) catch return .out_of_memory;
+    h.owned_stream_ctxs.append(h.allocator, .{ .ptr = cctx, .freeFn = freeCStreamCtx }) catch return .out_of_memory;
+    h.owned_stream_names.append(h.allocator, name_copy) catch return .out_of_memory;
     h.memory_inputs = true;
     return .ok;
 }
@@ -697,27 +822,84 @@ pub export fn par2_verify_add_stream(handle: ?*Par2VerifyHandle, name: ?[*:0]con
 pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
     if (handle == null) return .invalid_argument;
     var h = castVerify(handle.?);
-    var par2_path = h.par2_path;
-    if (par2_path == null and h.par2_data != null) {
-        const temp_dir = ensureTempDir(h.allocator, &h.temp_dir) catch |e| {
-            setLastError(h.allocator, &h.last_error, "temp dir creation failed");
+    const use_streams = h.memory_inputs or h.par2_data != null;
+    if (use_streams) {
+        var par2_bytes: ?[]const u8 = null;
+        var par2_alloc: ?[]u8 = null;
+        if (h.par2_data) |data| {
+            par2_bytes = data;
+        } else if (h.par2_path) |path| {
+            const info = std.fs.cwd().statFile(path) catch |e| {
+                setLastError(h.allocator, &h.last_error, "par2 stat failed");
+                return errorCodeFrom(e);
+            };
+            const max_len = std.math.cast(usize, info.size) orelse return .invalid_argument;
+            const buf = std.fs.cwd().readFileAlloc(h.allocator, path, max_len) catch |e| {
+                setLastError(h.allocator, &h.last_error, "par2 read failed");
+                return errorCodeFrom(e);
+            };
+            par2_alloc = buf;
+            par2_bytes = buf;
+        }
+        if (par2_bytes == null) {
+            setLastError(h.allocator, &h.last_error, "missing par2 path");
+            return .invalid_argument;
+        }
+        var arena = std.heap.ArenaAllocator.init(h.allocator);
+        defer arena.deinit();
+        var inputs = std.ArrayList(ops.StreamInput).empty;
+        defer inputs.deinit(arena.allocator());
+        var inputs_items: []const ops.StreamInput = &.{};
+        if (h.memory_inputs) {
+            inputs_items = h.stream_inputs.items;
+        } else {
+            for (h.data_paths.items) |path| {
+                const info = std.fs.cwd().statFile(path) catch |e| {
+                    setLastError(h.allocator, &h.last_error, "input stat failed");
+                    if (par2_alloc) |buf| h.allocator.free(buf);
+                    return errorCodeFrom(e);
+                };
+                const ctx = arena.allocator().create(FileStreamCtx) catch {
+                    if (par2_alloc) |buf| h.allocator.free(buf);
+                    return .out_of_memory;
+                };
+                ctx.* = .{ .path = path, .length = info.size };
+                inputs.append(arena.allocator(), .{
+                    .name = path,
+                    .length = info.size,
+                    .read_at = fileReadAt,
+                    .ctx = ctx,
+                }) catch {
+                    if (par2_alloc) |buf| h.allocator.free(buf);
+                    return .out_of_memory;
+                };
+            }
+            inputs_items = inputs.items;
+        }
+        const opts = ops.VerifyOptions{
+            .par2_path = "",
+            .data_paths = &.{},
+            .basepath = h.basepath,
+            .verbosity = 0,
+            .memory_mb = h.options.memory_mb,
+        };
+        ops.verifyStreams(h.allocator, par2_bytes.?, opts, inputs_items) catch |e| {
+            setLastError(h.allocator, &h.last_error, @errorName(e));
+            if (par2_alloc) |buf| h.allocator.free(buf);
             return errorCodeFrom(e);
         };
-        const temp_path = writeTempFile(h.allocator, temp_dir, "input.par2", h.par2_data.?) catch |e| {
-            setLastError(h.allocator, &h.last_error, "temp file write failed");
-            return errorCodeFrom(e);
-        };
-        par2_path = temp_path;
+        if (par2_alloc) |buf| h.allocator.free(buf);
+        return .ok;
     }
-    if (par2_path == null) {
+
+    if (h.par2_path == null) {
         setLastError(h.allocator, &h.last_error, "missing par2 path");
         return .invalid_argument;
     }
-    const basepath = if (h.memory_inputs) h.temp_dir else h.basepath;
     const opts = ops.VerifyOptions{
-        .par2_path = par2_path.?,
+        .par2_path = h.par2_path.?,
         .data_paths = h.data_paths.items,
-        .basepath = basepath,
+        .basepath = h.basepath,
         .verbosity = 0,
         .memory_mb = h.options.memory_mb,
     };
@@ -757,6 +939,9 @@ pub export fn par2_recover_new(opts: ?*const Par2RecoverOptions, out_handle: ?*?
             .output_open = null,
         },
         .data_paths = std.ArrayList([]const u8).empty,
+        .stream_inputs = std.ArrayList(ops.StreamInput).empty,
+        .owned_stream_ctxs = std.ArrayList(OwnedStreamCtx).empty,
+        .owned_stream_names = std.ArrayList([]const u8).empty,
         .par2_path = null,
         .basepath = null,
         .par2_data = null,
@@ -783,6 +968,8 @@ pub export fn par2_recover_destroy(handle: ?*Par2RecoverHandle) void {
     const allocator = h.allocator;
     if (h.last_error) |msg| allocator.free(msg);
     for (h.data_paths.items) |p| allocator.free(p);
+    for (h.owned_stream_names.items) |name| allocator.free(name);
+    for (h.owned_stream_ctxs.items) |owned| owned.freeFn(allocator, owned.ptr);
     if (h.temp_dir) |d| {
         _ = std.fs.cwd().deleteTree(d) catch {};
         allocator.free(d);
@@ -790,6 +977,9 @@ pub export fn par2_recover_destroy(handle: ?*Par2RecoverHandle) void {
     if (h.basepath) |bp| allocator.free(bp);
     if (h.output_dir) |d| allocator.free(d);
     h.data_paths.deinit(allocator);
+    h.stream_inputs.deinit(allocator);
+    h.owned_stream_ctxs.deinit(allocator);
+    h.owned_stream_names.deinit(allocator);
     h.temp_paths.deinit(allocator);
     freeHandle(RecoverHandle, &h.alloc_state, h);
 }
@@ -830,17 +1020,18 @@ pub export fn par2_recover_add_memory(handle: ?*Par2RecoverHandle, name: ?[*:0]c
         setLastError(h.allocator, &h.last_error, "cannot mix path and memory inputs");
         return .invalid_argument;
     }
-    const temp_dir = ensureTempDir(h.allocator, &h.temp_dir) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp dir creation failed");
-        return errorCodeFrom(e);
-    };
     const name_slice = std.mem.span(name.?);
-    const data_slice = data.?[0..len];
-    const temp_path = writeTempFile(h.allocator, temp_dir, name_slice, data_slice) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp file write failed");
-        return errorCodeFrom(e);
-    };
-    h.data_paths.append(h.allocator, temp_path) catch return .out_of_memory;
+    const name_copy = h.allocator.dupe(u8, name_slice) catch return .out_of_memory;
+    const ctx_ptr = h.allocator.create(MemStreamCtx) catch return .out_of_memory;
+    ctx_ptr.* = .{ .data = data.?[0..len] };
+    h.stream_inputs.append(h.allocator, .{
+        .name = name_copy,
+        .length = len,
+        .read_at = memReadAt,
+        .ctx = ctx_ptr,
+    }) catch return .out_of_memory;
+    h.owned_stream_ctxs.append(h.allocator, .{ .ptr = ctx_ptr, .freeFn = freeMemStreamCtx }) catch return .out_of_memory;
+    h.owned_stream_names.append(h.allocator, name_copy) catch return .out_of_memory;
     h.memory_inputs = true;
     return .ok;
 }
@@ -852,16 +1043,18 @@ pub export fn par2_recover_add_stream(handle: ?*Par2RecoverHandle, name: ?[*:0]c
         setLastError(h.allocator, &h.last_error, "cannot mix path and memory inputs");
         return .invalid_argument;
     }
-    const temp_dir = ensureTempDir(h.allocator, &h.temp_dir) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp dir creation failed");
-        return errorCodeFrom(e);
-    };
     const name_slice = std.mem.span(name.?);
-    const temp_path = writeTempFileFromStream(h.allocator, temp_dir, name_slice, len, read_at.?, ctx) catch |e| {
-        setLastError(h.allocator, &h.last_error, "temp file write failed");
-        return errorCodeFrom(e);
-    };
-    h.data_paths.append(h.allocator, temp_path) catch return .out_of_memory;
+    const name_copy = h.allocator.dupe(u8, name_slice) catch return .out_of_memory;
+    const cctx = h.allocator.create(CStreamCtx) catch return .out_of_memory;
+    cctx.* = .{ .read_at = read_at.?, .ctx = ctx };
+    h.stream_inputs.append(h.allocator, .{
+        .name = name_copy,
+        .length = len,
+        .read_at = cStreamReadAt,
+        .ctx = cctx,
+    }) catch return .out_of_memory;
+    h.owned_stream_ctxs.append(h.allocator, .{ .ptr = cctx, .freeFn = freeCStreamCtx }) catch return .out_of_memory;
+    h.owned_stream_names.append(h.allocator, name_copy) catch return .out_of_memory;
     h.memory_inputs = true;
     return .ok;
 }
@@ -891,31 +1084,111 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
         open_ctx = .{ .open_fn = open_fn, .ctx = h.output_ctx, .allocator = h.allocator };
         output_open = .{ .ctx = &open_ctx, .openFn = openOutputC };
     }
-    var par2_path = h.par2_path;
-    if (par2_path == null and h.par2_data != null) {
-        const temp_dir = ensureTempDir(h.allocator, &h.temp_dir) catch |e| {
-            setLastError(h.allocator, &h.last_error, "temp dir creation failed");
+    const use_streams = h.memory_inputs or h.par2_data != null;
+    if (use_streams) {
+        var par2_bytes: ?[]const u8 = null;
+        var par2_alloc: ?[]u8 = null;
+        if (h.par2_data) |data| {
+            par2_bytes = data;
+        } else if (h.par2_path) |path| {
+            const info = std.fs.cwd().statFile(path) catch |e| {
+                setLastError(h.allocator, &h.last_error, "par2 stat failed");
+                return errorCodeFrom(e);
+            };
+            const max_len = std.math.cast(usize, info.size) orelse return .invalid_argument;
+            const buf = std.fs.cwd().readFileAlloc(h.allocator, path, max_len) catch |e| {
+                setLastError(h.allocator, &h.last_error, "par2 read failed");
+                return errorCodeFrom(e);
+            };
+            par2_alloc = buf;
+            par2_bytes = buf;
+        }
+        if (par2_bytes == null) {
+            setLastError(h.allocator, &h.last_error, "missing par2 path");
+            return .invalid_argument;
+        }
+        var volumes: [][]u8 = &.{};
+        if (h.par2_path) |path| {
+            volumes = loadVolumeBytes(h.allocator, path) catch |e| {
+                setLastError(h.allocator, &h.last_error, "volume read failed");
+                if (par2_alloc) |buf| h.allocator.free(buf);
+                return errorCodeFrom(e);
+            };
+        }
+        defer {
+            for (volumes) |v| h.allocator.free(v);
+            if (volumes.len > 0) h.allocator.free(volumes);
+        }
+
+        var arena = std.heap.ArenaAllocator.init(h.allocator);
+        defer arena.deinit();
+        var inputs = std.ArrayList(ops.StreamInput).empty;
+        defer inputs.deinit(arena.allocator());
+        var inputs_items: []const ops.StreamInput = &.{};
+        if (h.memory_inputs) {
+            inputs_items = h.stream_inputs.items;
+        } else {
+            for (h.data_paths.items) |path| {
+                const info = std.fs.cwd().statFile(path) catch |e| {
+                    setLastError(h.allocator, &h.last_error, "input stat failed");
+                    if (par2_alloc) |buf| h.allocator.free(buf);
+                    return errorCodeFrom(e);
+                };
+                const ctx = arena.allocator().create(FileStreamCtx) catch {
+                    if (par2_alloc) |buf| h.allocator.free(buf);
+                    return .out_of_memory;
+                };
+                ctx.* = .{ .path = path, .length = info.size };
+                inputs.append(arena.allocator(), .{
+                    .name = path,
+                    .length = info.size,
+                    .read_at = fileReadAt,
+                    .ctx = ctx,
+                }) catch {
+                    if (par2_alloc) |buf| h.allocator.free(buf);
+                    return .out_of_memory;
+                };
+            }
+            inputs_items = inputs.items;
+        }
+        const out_dir = if (h.output_dir) |d| d else blk: {
+            if (h.par2_path) |path| {
+                if (std.fs.path.dirname(path)) |dir| break :blk dir;
+            }
+            break :blk ".";
+        };
+        const opts = ops.RecoverOptions{
+            .stdout_only = false,
+            .out_dir = out_dir,
+            .par2_path = h.par2_path orelse "",
+            .data_paths = &.{},
+            .allow_unsafe_paths = h.options.allow_unsafe_paths,
+            .basepath = h.basepath,
+            .verbosity = h.options.verbosity,
+            .memory_mb = h.options.memory_mb,
+            .output_open = output_open,
+        };
+        ops.recoverStreams(h.allocator, h.allocator, par2_bytes.?, volumes, opts, inputs_items) catch |e| {
+            setLastError(h.allocator, &h.last_error, @errorName(e));
+            if (par2_alloc) |buf| h.allocator.free(buf);
             return errorCodeFrom(e);
         };
-        const temp_path = writeTempFile(h.allocator, temp_dir, "input.par2", h.par2_data.?) catch |e| {
-            setLastError(h.allocator, &h.last_error, "temp file write failed");
-            return errorCodeFrom(e);
-        };
-        par2_path = temp_path;
+        if (par2_alloc) |buf| h.allocator.free(buf);
+        return .ok;
     }
-    if (par2_path == null) return .invalid_argument;
-    const basepath = if (h.memory_inputs) h.temp_dir else h.basepath;
+
+    if (h.par2_path == null) return .invalid_argument;
     const out_dir = if (h.output_dir) |d| d else blk: {
-        if (std.fs.path.dirname(par2_path.?)) |dir| break :blk dir;
+        if (std.fs.path.dirname(h.par2_path.?)) |dir| break :blk dir;
         break :blk ".";
     };
     const opts = ops.RecoverOptions{
         .stdout_only = false,
         .out_dir = out_dir,
-        .par2_path = par2_path.?,
+        .par2_path = h.par2_path.?,
         .data_paths = h.data_paths.items,
         .allow_unsafe_paths = h.options.allow_unsafe_paths,
-        .basepath = basepath,
+        .basepath = h.basepath,
         .verbosity = h.options.verbosity,
         .memory_mb = h.options.memory_mb,
         .output_open = output_open,

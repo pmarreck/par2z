@@ -125,6 +125,16 @@ fn outOpen(ctx: *anyopaque, path: []const u8) anyerror!ops.OutputTarget {
 	return .{ .ctx = buf, .writeFn = outWrite, .closeFn = outClose };
 }
 
+fn capiReadAt(ctx: ?*anyopaque, offset: u64, out: [*]u8, len: usize) callconv(.c) usize {
+	if (ctx == null) return 0;
+	const mem: *StreamMemCtx = @ptrCast(@alignCast(ctx.?));
+	if (offset >= mem.data.len) return 0;
+	const avail = mem.data.len - @as(usize, @intCast(offset));
+	const n = @min(avail, len);
+	@memcpy(out[0..n], mem.data[@as(usize, @intCast(offset)) .. @as(usize, @intCast(offset)) + n]);
+	return n;
+}
+
 test "ops streaming create/verify/recover" {
 	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
 	defer arena.deinit();
@@ -2270,6 +2280,35 @@ test "c api create/verify with memory input" {
     defer par2.par2_verify_destroy(verify_handle);
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_set_par2_path(verify_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_memory(verify_handle, "mem.bin", payload, payload.len));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_run(verify_handle));
+}
+
+test "c api create/verify with stream input" {
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "stream.par2" });
+
+    var create_handle: ?*par2.Par2CreateHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(null, &create_handle));
+    defer par2.par2_create_destroy(create_handle);
+    const payload = "0123456789abcdef";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_stream(create_handle, "stream.bin", payload.len, capiReadAt, &mem_ctx));
+    const par2_path_z = try allocator.dupeZ(u8, par2_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
+
+    var verify_handle: ?*par2.Par2VerifyHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &verify_handle));
+    defer par2.par2_verify_destroy(verify_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_set_par2_path(verify_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_stream(verify_handle, "stream.bin", payload.len, capiReadAt, &mem_ctx));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_run(verify_handle));
 }
 
