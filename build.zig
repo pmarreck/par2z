@@ -37,6 +37,14 @@ pub fn build(b: *std.Build) void {
     });
     lib.installHeadersDirectory(b.path("include"), "", .{});
     b.installArtifact(lib);
+    const lib_shared = b.addLibrary(.{
+        .name = "par2",
+        .root_module = lib_mod,
+        .linkage = .dynamic,
+    });
+    lib_shared.installHeadersDirectory(b.path("include"), "", .{});
+    const install_shared = b.addInstallArtifact(lib_shared, .{});
+    b.getInstallStep().dependOn(&install_shared.step);
 
     const cli_mod = b.createModule(.{
         .root_source_file = b.path("src/cli.zig"),
@@ -90,6 +98,7 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&install_cli.step);
     test_step.dependOn(&install_prng.step);
+    test_step.dependOn(&install_shared.step);
     test_step.dependOn(&run_tests.step);
 
     const test_compile_step = b.step("test-compile", "Compile unit tests without running");
@@ -100,6 +109,7 @@ pub fn build(b: *std.Build) void {
     run_tests_direct.step.dependOn(&install_tests.step);
     run_tests_direct.step.dependOn(&install_cli.step);
     run_tests_direct.step.dependOn(&install_prng.step);
+    run_tests_direct.step.dependOn(&install_shared.step);
 
     const test_direct_step = b.step("test-direct", "Run unit tests directly (no zig --listen)");
     test_direct_step.dependOn(&run_tests_direct.step);

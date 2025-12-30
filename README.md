@@ -74,6 +74,54 @@ par2_recover_run(recover);
 par2_recover_destroy(recover);
 ```
 
+### Swift (FFI)
+Minimal Swift usage with `dlopen` (or link against a built dylib):
+```swift
+import Foundation
+
+typealias Par2CreateHandle = OpaquePointer
+typealias Par2Error = Int32
+
+@_silgen_name("par2_create_new") func par2_create_new(_ opts: UnsafeRawPointer?, _ out: UnsafeMutablePointer<Par2CreateHandle?>) -> Par2Error
+@_silgen_name("par2_create_add_memory") func par2_create_add_memory(_ h: Par2CreateHandle?, _ name: UnsafePointer<CChar>, _ data: UnsafePointer<UInt8>, _ len: Int) -> Par2Error
+@_silgen_name("par2_create_set_output_path") func par2_create_set_output_path(_ h: Par2CreateHandle?, _ path: UnsafePointer<CChar>) -> Par2Error
+@_silgen_name("par2_create_run") func par2_create_run(_ h: Par2CreateHandle?) -> Par2Error
+@_silgen_name("par2_create_destroy") func par2_create_destroy(_ h: Par2CreateHandle?)
+
+let payload: [UInt8] = [0,1,2,3,4,5,6,7]
+var handle: Par2CreateHandle?
+_ = par2_create_new(nil, &handle)
+payload.withUnsafeBytes { buf in
+	_ = par2_create_add_memory(handle, "data.bin", buf.bindMemory(to: UInt8.self).baseAddress!, buf.count)
+}
+_ = par2_create_set_output_path(handle, "set.par2")
+_ = par2_create_run(handle)
+par2_create_destroy(handle)
+```
+
+### LuaJIT (FFI)
+```lua
+local ffi = require("ffi")
+ffi.cdef[[
+typedef struct Par2CreateHandle Par2CreateHandle;
+typedef int Par2Error;
+Par2Error par2_create_new(const void *opts, Par2CreateHandle **out_handle);
+Par2Error par2_create_add_memory(Par2CreateHandle *h, const char *name, const uint8_t *data, size_t len);
+Par2Error par2_create_set_output_path(Par2CreateHandle *h, const char *par2_path);
+Par2Error par2_create_run(Par2CreateHandle *h);
+void par2_create_destroy(Par2CreateHandle *h);
+]]
+
+local lib = ffi.load("par2") -- or full path to libpar2.dylib/.so
+local data = ffi.new("uint8_t[8]", {0,1,2,3,4,5,6,7})
+local handle = ffi.new("Par2CreateHandle*[1]")
+lib.par2_create_new(nil, handle)
+lib.par2_create_add_memory(handle[0], "data.bin", data, 8)
+lib.par2_create_set_output_path(handle[0], "set.par2")
+lib.par2_create_run(handle[0])
+lib.par2_create_destroy(handle[0])
+```
+
 ## CLI
 - Verify: `par2-cli verify [options] <par2 file> [data files...]`
 - Recover: `par2-cli recover [options] <par2 file> [data files...]`

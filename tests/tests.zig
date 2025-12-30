@@ -125,6 +125,56 @@ fn outOpen(ctx: *anyopaque, path: []const u8) anyerror!ops.OutputTarget {
 	return .{ .ctx = buf, .writeFn = outWrite, .closeFn = outClose };
 }
 
+fn commandAvailable(allocator: std.mem.Allocator, name: []const u8) bool {
+	const res = std.process.Child.run(.{
+		.allocator = allocator,
+		.argv = &.{ "which", name },
+	}) catch return false;
+	defer allocator.free(res.stdout);
+	defer allocator.free(res.stderr);
+	return switch (res.term) {
+		.Exited => |code| code == 0,
+		else => false,
+	};
+}
+
+fn sharedLibPath(allocator: std.mem.Allocator) ![]const u8 {
+	const builtin = @import("builtin");
+	const ext = switch (builtin.os.tag) {
+		.macos => "dylib",
+		else => "so",
+	};
+	const rel = try std.fmt.allocPrint(allocator, "zig-out/lib/libpar2.{s}", .{ext});
+	defer allocator.free(rel);
+	return try std.fs.cwd().realpathAlloc(allocator, rel);
+}
+
+fn runCommandExpectOk(allocator: std.mem.Allocator, argv: []const []const u8, env: ?*std.process.EnvMap, cwd: ?[]const u8) !void {
+	const res = try std.process.Child.run(.{
+		.allocator = allocator,
+		.argv = argv,
+		.env_map = env,
+		.cwd = cwd,
+	});
+	defer allocator.free(res.stdout);
+	defer allocator.free(res.stderr);
+	switch (res.term) {
+		.Exited => |code| {
+			if (code != 0) {
+				if (res.stdout.len > 0) std.debug.print("stdout:\n{s}\n", .{res.stdout});
+				if (res.stderr.len > 0) std.debug.print("stderr:\n{s}\n", .{res.stderr});
+			}
+			try std.testing.expectEqual(@as(u8, 0), code);
+		},
+		else => return error.UnexpectedTerm,
+	}
+}
+
+fn libPathEnvName() []const u8 {
+	const builtin = @import("builtin");
+	return if (builtin.os.tag == .macos) "DYLD_LIBRARY_PATH" else "LD_LIBRARY_PATH";
+}
+
 fn capiReadAt(ctx: ?*anyopaque, offset: u64, out: [*]u8, len: usize) callconv(.c) usize {
 	if (ctx == null) return 0;
 	const mem: *StreamMemCtx = @ptrCast(@alignCast(ctx.?));
@@ -2310,6 +2360,123 @@ test "c api create/verify with stream input" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_set_par2_path(verify_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_stream(verify_handle, "stream.bin", payload.len, capiReadAt, &mem_ctx));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_run(verify_handle));
+}
+
+test "ffi swift example (optional)" {
+	if (!commandAvailable(std.testing.allocator, "swiftc")) return;
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+
+	const lib_path = try sharedLibPath(allocator);
+	std.fs.cwd().access(lib_path, .{}) catch return error.FileNotFound;
+	const lib_dir = std.fs.path.dirname(lib_path) orelse ".";
+
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+	const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+	const out_path = try std.fs.path.join(allocator, &.{ tmp_path, "swift.par2" });
+	const swift_path = try std.fs.path.join(allocator, &.{ tmp_path, "main.swift" });
+	const bin_path = try std.fs.path.join(allocator, &.{ tmp_path, "swift-ffi-test" });
+
+	var src = std.ArrayList(u8).empty;
+	defer src.deinit(allocator);
+	try src.appendSlice(allocator, "import Foundation\n");
+	try src.appendSlice(allocator, "typealias Par2CreateHandle = OpaquePointer\n");
+	try src.appendSlice(allocator, "typealias Par2Error = Int32\n");
+	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_new\") func par2_create_new(_ opts: UnsafeRawPointer?, _ out: UnsafeMutablePointer<Par2CreateHandle?>) -> Par2Error\n");
+	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_add_memory\") func par2_create_add_memory(_ h: Par2CreateHandle?, _ name: UnsafePointer<CChar>, _ data: UnsafePointer<UInt8>, _ len: Int) -> Par2Error\n");
+	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_set_output_path\") func par2_create_set_output_path(_ h: Par2CreateHandle?, _ path: UnsafePointer<CChar>) -> Par2Error\n");
+	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_run\") func par2_create_run(_ h: Par2CreateHandle?) -> Par2Error\n");
+	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_destroy\") func par2_create_destroy(_ h: Par2CreateHandle?)\n");
+	try src.appendSlice(allocator, "func check(_ rc: Par2Error) {\n");
+	try src.appendSlice(allocator, "    if rc != 0 { exit(1) }\n");
+	try src.appendSlice(allocator, "}\n");
+	try src.appendSlice(allocator, "let payload: [UInt8] = [0,1,2,3,4,5,6,7]\n");
+	try src.appendSlice(allocator, "var handle: Par2CreateHandle?\n");
+	try src.appendSlice(allocator, "check(par2_create_new(nil, &handle))\n");
+	try src.appendSlice(allocator, "payload.withUnsafeBytes { buf in\n");
+	try src.appendSlice(allocator, "    \"data.bin\".withCString { name in\n");
+	try src.appendSlice(allocator, "        check(par2_create_add_memory(handle, name, buf.bindMemory(to: UInt8.self).baseAddress!, buf.count))\n");
+	try src.appendSlice(allocator, "    }\n");
+	try src.appendSlice(allocator, "}\n");
+	const out_line = try std.fmt.allocPrint(allocator, "\"{s}\".withCString {{ path in check(par2_create_set_output_path(handle, path)) }}\n", .{out_path});
+	defer allocator.free(out_line);
+	try src.appendSlice(allocator, out_line);
+	try src.appendSlice(allocator, "check(par2_create_run(handle))\n");
+	try src.appendSlice(allocator, "par2_create_destroy(handle)\n");
+	try src.appendSlice(allocator, "exit(0)\n");
+	try tmp.dir.writeFile(.{ .sub_path = "main.swift", .data = src.items });
+
+	const compile = try std.process.Child.run(.{
+		.allocator = allocator,
+		.argv = &.{ "swiftc", swift_path, "-L", lib_dir, "-lpar2", "-o", bin_path },
+		.cwd = tmp_path,
+	});
+	defer allocator.free(compile.stdout);
+	defer allocator.free(compile.stderr);
+	switch (compile.term) {
+		.Exited => |code| if (code != 0) return,
+		else => return,
+	}
+
+	var env = std.process.EnvMap.init(allocator);
+	defer env.deinit();
+	try env.put(libPathEnvName(), lib_dir);
+	try runCommandExpectOk(allocator, &.{ bin_path }, &env, tmp_path);
+
+	_ = try std.fs.cwd().statFile(out_path);
+}
+
+test "ffi luajit example (optional)" {
+	if (!commandAvailable(std.testing.allocator, "luajit")) return;
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+
+	const lib_path = try sharedLibPath(allocator);
+	std.fs.cwd().access(lib_path, .{}) catch return error.FileNotFound;
+	const lib_dir = std.fs.path.dirname(lib_path) orelse ".";
+
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+	const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+	const out_path = try std.fs.path.join(allocator, &.{ tmp_path, "lua.par2" });
+	const script_path = try std.fs.path.join(allocator, &.{ tmp_path, "ffi.lua" });
+
+	var src = std.ArrayList(u8).empty;
+	defer src.deinit(allocator);
+	try src.appendSlice(allocator, "local ffi = require(\"ffi\")\n");
+	try src.appendSlice(allocator, "ffi.cdef[[\n");
+	try src.appendSlice(allocator, "typedef struct Par2CreateHandle Par2CreateHandle;\n");
+	try src.appendSlice(allocator, "typedef int Par2Error;\n");
+	try src.appendSlice(allocator, "Par2Error par2_create_new(const void *opts, Par2CreateHandle **out_handle);\n");
+	try src.appendSlice(allocator, "Par2Error par2_create_add_memory(Par2CreateHandle *h, const char *name, const uint8_t *data, size_t len);\n");
+	try src.appendSlice(allocator, "Par2Error par2_create_set_output_path(Par2CreateHandle *h, const char *par2_path);\n");
+	try src.appendSlice(allocator, "Par2Error par2_create_run(Par2CreateHandle *h);\n");
+	try src.appendSlice(allocator, "void par2_create_destroy(Par2CreateHandle *h);\n");
+	try src.appendSlice(allocator, "]]\n");
+	const lib_line = try std.fmt.allocPrint(allocator, "local lib = ffi.load(\"{s}\")\n", .{lib_path});
+	defer allocator.free(lib_line);
+	try src.appendSlice(allocator, lib_line);
+	try src.appendSlice(allocator, "local data = ffi.new(\"uint8_t[8]\", {0,1,2,3,4,5,6,7})\n");
+	try src.appendSlice(allocator, "local handle = ffi.new(\"Par2CreateHandle*[1]\")\n");
+	try src.appendSlice(allocator, "if lib.par2_create_new(nil, handle) ~= 0 then os.exit(1) end\n");
+	try src.appendSlice(allocator, "if lib.par2_create_add_memory(handle[0], \"data.bin\", data, 8) ~= 0 then os.exit(1) end\n");
+	const out_line = try std.fmt.allocPrint(allocator, "if lib.par2_create_set_output_path(handle[0], \"{s}\") ~= 0 then os.exit(1) end\n", .{out_path});
+	defer allocator.free(out_line);
+	try src.appendSlice(allocator, out_line);
+	try src.appendSlice(allocator, "if lib.par2_create_run(handle[0]) ~= 0 then os.exit(1) end\n");
+	try src.appendSlice(allocator, "lib.par2_create_destroy(handle[0])\n");
+	try src.appendSlice(allocator, "os.exit(0)\n");
+	try tmp.dir.writeFile(.{ .sub_path = "ffi.lua", .data = src.items });
+
+	var env = std.process.EnvMap.init(allocator);
+	defer env.deinit();
+	try env.put(libPathEnvName(), lib_dir);
+	try runCommandExpectOk(allocator, &.{ "luajit", script_path }, &env, tmp_path);
+
+	_ = try std.fs.cwd().statFile(out_path);
 }
 
 const CapiBuffer = struct {
