@@ -297,7 +297,7 @@ pub fn create(allocator: std.mem.Allocator, opts: CreateOptions) !void {
     var recovery_set_id: [16]u8 = undefined;
     try core.md5.md5Digest(main_body, &recovery_set_id);
 
-    const creator_text = "par2-cleanroom 0.1.0";
+    const creator_text = "par2z 0.1.0";
     const creator_pkt = try core.create_packets.buildCreatorPacket(arena_alloc, recovery_set_id, creator_text);
     const main_pkt = try core.create_packets.buildMainPacket(arena_alloc, recovery_set_id, main_body);
 
@@ -929,7 +929,7 @@ pub fn createStreams(
 	var recovery_set_id: [16]u8 = undefined;
 	try core.md5.md5Digest(main_body, &recovery_set_id);
 
-	const creator_text = "par2-cleanroom 0.1.0";
+	const creator_text = "par2z 0.1.0";
 	const creator_pkt = try core.create_packets.buildCreatorPacket(arena_alloc, recovery_set_id, creator_text);
 	const main_pkt = try core.create_packets.buildMainPacket(arena_alloc, recovery_set_id, main_body);
 

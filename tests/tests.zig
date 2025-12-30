@@ -7,7 +7,7 @@ const c_std = @cImport({
 const ops = @import("ops");
 
 fn cliPath(allocator: std.mem.Allocator) ![]const u8 {
-    return try std.fs.cwd().realpathAlloc(allocator, "zig-out/bin/par2-cli");
+    return try std.fs.cwd().realpathAlloc(allocator, "zig-out/bin/par2z-cli");
 }
 
 fn prngPath(allocator: std.mem.Allocator) ![]const u8 {
@@ -15,7 +15,7 @@ fn prngPath(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 test "version string" {
-    try std.testing.expectEqualStrings("par2-cleanroom 0.1.0", lib.zigVersion());
+    try std.testing.expectEqualStrings("par2z 0.1.0", lib.zigVersion());
 }
 
 test "readU32Le reads little-endian" {

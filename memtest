@@ -5,7 +5,7 @@ source "$HOME/dotfiles/bin/src/capture.bash"
 
 root_dir="$(pwd)"
 
-par2_cli="${PAR2_CLI_BIN:-$root_dir/zig-out/bin/par2-cli}"
+par2_cli="${PAR2_CLI_BIN:-$root_dir/zig-out/bin/par2z-cli}"
 other_cli="${PAR2_OTHER_BIN:-par2}"
 mem_log="${PAR2_MEM_LOG:-mem-results.tsv}"
 prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
@@ -112,7 +112,7 @@ while [ "$iter" -le "$iters" ]; do
 	cp "$data" "$tmpdir/orig-$iter.bin"
 	time_cmd "par2cmdline" "create" "$other_cli" create "-q" "-s$block_size" "-r$redundancy" "$tmpdir/data-$iter.par2" "$tmpdir/data-$iter.bin"
 	time_cmd "par2cmdline" "verify" "$other_cli" verify "-q" "$tmpdir/data-$iter.par2" "$tmpdir/data-$iter.bin"
-	time_cmd "par2-cli" "create" "$par2_cli" create --block-size "$block_size" --redundancy-percent "$redundancy" "$tmpdir/ours-$iter.par2" "$tmpdir/orig-$iter.bin"
-	time_cmd "par2-cli" "verify" "$par2_cli" verify "$tmpdir/ours-$iter.par2" "$tmpdir/orig-$iter.bin"
+	time_cmd "par2z-cli" "create" "$par2_cli" create --block-size "$block_size" --redundancy-percent "$redundancy" "$tmpdir/ours-$iter.par2" "$tmpdir/orig-$iter.bin"
+	time_cmd "par2z-cli" "verify" "$par2_cli" verify "$tmpdir/ours-$iter.par2" "$tmpdir/orig-$iter.bin"
 	iter=$((iter + 1))
 done

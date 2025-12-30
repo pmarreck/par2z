@@ -15,7 +15,7 @@ seq=1
 if command -v mktmp >/dev/null 2>&1; then
 	tmpdir="$(mktmp --tmpdir)"
 else
-	tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/par2-cleanroom.XXXXXX")"
+tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/par2z.XXXXXX")"
 	echo "warning: mktmp not found; using mktemp" >&2
 fi
 cleanup() {
@@ -97,9 +97,9 @@ fi
 cp "$tmpdir/data.bin" "$tmpdir/orig.bin"
 rm "$tmpdir/data.bin"
 
-capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/out\" data.par2"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2z-cli\" recover -o \"$tmpdir/out\" data.par2"
 if [ "$rc" -ne 0 ]; then
-	echo "par2-cli recover failed: $err" >&2
+	echo "par2z-cli recover failed: $err" >&2
 	exit 1
 fi
 
@@ -127,9 +127,9 @@ fi
 cp "$tmpdir/data2.bin" "$tmpdir/orig2.bin"
 corrupt_bytes "$tmpdir/data2.bin" 4096 4096
 corrupt_bytes "$tmpdir/data2.bin" 4096 16384
-capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/out2\" data2.par2 data2.bin"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2z-cli\" recover -o \"$tmpdir/out2\" data2.par2 data2.bin"
 if [ "$rc" -ne 0 ]; then
-	echo "par2-cli recover failed: $err" >&2
+	echo "par2z-cli recover failed: $err" >&2
 	exit 1
 fi
 orig2_hash="$(openssl dgst -sha256 "$tmpdir/orig2.bin" | awk '{print $NF}')"
@@ -148,9 +148,9 @@ fi
 # Create via our CLI and verify with par2 (and repair)
 gen_data "$tmpdir/data3.bin" 32768
 cp "$tmpdir/data3.bin" "$tmpdir/orig3.bin"
-capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create --block-size 4096 --redundancy-percent 10 data3.par2 data3.bin"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2z-cli\" create --block-size 4096 --redundancy-percent 10 data3.par2 data3.bin"
 if [ "$rc" -ne 0 ]; then
-	echo "par2-cli create failed: $err" >&2
+	echo "par2z-cli create failed: $err" >&2
 	exit 1
 fi
 capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify data3.par2 data3.bin"
@@ -174,9 +174,9 @@ fi
 # Create with optional packets and verify with par2
 gen_data "$tmpdir/data4.bin" 16384
 cp "$tmpdir/data4.bin" "$tmpdir/orig4.bin"
-capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create --block-size 4096 --redundancy-percent 10 --include-input-slices --emit-packed data4.par2 data4.bin"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2z-cli\" create --block-size 4096 --redundancy-percent 10 --include-input-slices --emit-packed data4.par2 data4.bin"
 if [ "$rc" -ne 0 ]; then
-	echo "par2-cli create failed: $err" >&2
+	echo "par2z-cli create failed: $err" >&2
 	exit 1
 fi
 capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify data4.par2 data4.bin"
@@ -209,9 +209,9 @@ if [ "$rc" -ne 0 ]; then
 fi
 rm "$tmpdir/multi-b.bin"
 corrupt_bytes "$tmpdir/multi-a.bin" 4096 8192
-capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/multi-out\" multi.par2 multi-a.bin"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2z-cli\" recover -o \"$tmpdir/multi-out\" multi.par2 multi-a.bin"
 if [ "$rc" -ne 0 ]; then
-	echo "par2-cli recover failed for multi-file" >&2
+	echo "par2z-cli recover failed for multi-file" >&2
 	exit 1
 fi
 multi_a_hash="$(openssl dgst -sha256 "$tmpdir/multi-a.orig" | awk '{print $NF}')"
@@ -238,9 +238,9 @@ if [ -z "$vol_file" ]; then
 	echo "missing volume file for volume-only case" >&2
 	exit 1
 fi
-capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" recover -o \"$tmpdir/volonly-out\" \"$vol_file\""
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2z-cli\" recover -o \"$tmpdir/volonly-out\" \"$vol_file\""
 if [ "$rc" -ne 0 ]; then
-	echo "par2-cli recover failed for volume-only case" >&2
+	echo "par2z-cli recover failed for volume-only case" >&2
 	exit 1
 fi
 vol_hash="$(openssl dgst -sha256 "$tmpdir/volonly.orig" | awk '{print $NF}')"
@@ -253,9 +253,9 @@ fi
 # Create via our CLI without RFSC, verify with par2
 gen_data "$tmpdir/norfsc.bin" 32768
 cp "$tmpdir/norfsc.bin" "$tmpdir/norfsc.orig"
-capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create --block-size 4096 --redundancy-percent 10 --no-rfsc norfsc.par2 norfsc.bin"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2z-cli\" create --block-size 4096 --redundancy-percent 10 --no-rfsc norfsc.par2 norfsc.bin"
 if [ "$rc" -ne 0 ]; then
-	echo "par2-cli create failed for no-rfsc" >&2
+	echo "par2z-cli create failed for no-rfsc" >&2
 	exit 1
 fi
 capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify norfsc.par2 norfsc.bin"
@@ -268,9 +268,9 @@ fi
 mkdir -p "$tmpdir/base/sub"
 gen_data "$tmpdir/base/sub/base.bin" 2048
 gen_data "$tmpdir/outside.bin" 1024
-capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2-cli\" create -s512 -c4 -R -B base base.par2 base outside.bin"
+capture -- /bin/bash -c "cd \"$tmpdir\" && \"$root_dir/zig-out/bin/par2z-cli\" create -s512 -c4 -R -B base base.par2 base outside.bin"
 if [ "$rc" -ne 0 ]; then
-	echo "par2-cli create failed for basepath/recurse" >&2
+	echo "par2z-cli create failed for basepath/recurse" >&2
 	exit 1
 fi
 capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify -B base base.par2"
@@ -300,9 +300,9 @@ run_par2_create() {
 run_ours_create() {
 	local dir="$1"
 	shift
-	capture -- /bin/bash -c "cd \"$dir\" && \"$root_dir/zig-out/bin/par2-cli\" create -s4 -c20 $* test.par2 vol-data.bin"
+	capture -- /bin/bash -c "cd \"$dir\" && \"$root_dir/zig-out/bin/par2z-cli\" create -s4 -c20 $* test.par2 vol-data.bin"
 	if [ "$rc" -ne 0 ]; then
-		echo "par2-cli create failed for volume layout ($*)" >&2
+		echo "par2z-cli create failed for volume layout ($*)" >&2
 		exit 1
 	fi
 }

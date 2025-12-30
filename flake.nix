@@ -1,5 +1,5 @@
 {
-	description = "par2-cleanroom dev shell";
+	description = "par2z dev shell";
 
 	inputs = {
 		nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -47,7 +47,7 @@
 						] ++ linuxOnly ++ pkgs.lib.optional (valgrindPkg != null) valgrindPkg;
 
 						shellHook = ''
-							echo "par2-cleanroom dev shell: zig/zls/afl++/par2cmdline"
+							echo "par2z dev shell: zig/zls/afl++/par2cmdline"
 						'';
 					};
 				});

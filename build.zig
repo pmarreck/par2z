@@ -57,7 +57,7 @@ pub fn build(b: *std.Build) void {
         },
     });
     const cli = b.addExecutable(.{
-        .name = "par2-cli",
+        .name = "par2z-cli",
         .root_module = cli_mod,
     });
     cli.linkLibrary(lib);

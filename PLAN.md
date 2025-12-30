@@ -66,7 +66,7 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 - [x] Remove 1 GiB cap in par2 file load (read exact file size).
 
 ## Review Findings (2025-12-27)
-- [x] `par2-cli verify` maps inputs by FileDesc name (order-independent) with CLI tests for reversed input order. (`src/cli.zig`, `tests/tests.zig`)
+- [x] `par2z-cli verify` maps inputs by FileDesc name (order-independent) with CLI tests for reversed input order. (`src/cli.zig`, `tests/tests.zig`)
 - [x] Buffer FileDesc/IFSC packets received before Main; attach after Main/PkdMain. (`src/core/api.zig`, `tests/tests.zig`)
 - [x] Accept space-separated short flags (`-s 4096`, `-r 10`, etc.) in create parsing. (`src/cli.zig`, `tests/tests.zig`)
 - [x] Sanitize absolute paths in FileDesc by storing basename; verify on-disk packets. (`src/cli.zig`, `tests/tests.zig`)

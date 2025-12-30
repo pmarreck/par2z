@@ -1,4 +1,4 @@
-# par2-cleanroom
+# par2z
 
 ## Overview
 Cleanroom PAR2 implementation with a Zig core, C ABI for FFI (Swift/LuaJIT), and a CLI for testing.
@@ -123,10 +123,10 @@ lib.par2_create_destroy(handle[0])
 ```
 
 ## CLI
-- Verify: `par2-cli verify [options] <par2 file> [data files...]`
-- Recover: `par2-cli recover [options] <par2 file> [data files...]`
-- Recover to stdout: `par2-cli recover --stdout [options] <par2 file> [data files...]`
-- Create: `par2-cli create [options] <par2 file> <data files...>`
+- Verify: `par2z-cli verify [options] <par2 file> [data files...]`
+- Recover: `par2z-cli recover [options] <par2 file> [data files...]`
+- Recover to stdout: `par2z-cli recover --stdout [options] <par2 file> [data files...]`
+- Create: `par2z-cli create [options] <par2 file> <data files...>`
 
 Behavior notes:
 - `verify`/`recover` match inputs by exact path when possible, then by basename. Ambiguous basenames cause an error unless exact paths are used.
@@ -188,7 +188,7 @@ This avoids shipping GPL components and keeps the core algorithm independent of 
 Run `bench` to compare our CLI against another PAR2 implementation (defaults to `par2cmdline-turbo` if `par2` is in PATH).
 
 Env vars:
-- `PAR2_CLI_BIN` path to our CLI (default `zig-out/bin/par2-cli`)
+- `PAR2_CLI_BIN` path to our CLI (default `zig-out/bin/par2z-cli`)
 - `PAR2_OTHER_BIN` path to other PAR2 CLI (default `par2`)
 - `PAR2_BENCH_SIZE` bytes (default 67108864)
 - `PAR2_BENCH_BLOCK_SIZE` bytes (default 4096)
@@ -198,8 +198,11 @@ Env vars:
 - `PAR2_PRNG_GEN` path to deterministic generator (default `zig-out/bin/prng-gen`)
 - `PAR2_BENCH_SEED` seed for deterministic data (default 1)
 - `PAR2_BENCH_SEQ` stream selector for deterministic data (default 1)
+
+## License
+Apache-2.0. See `LICENSE`.
 - `PAR2_BENCH_OPTIMIZE` Zig optimize mode (default ReleaseFast)
-- `PAR2_BENCH_BUILD` rebuild par2-cli before running (default 1; set 0 to skip)
+- `PAR2_BENCH_BUILD` rebuild par2z-cli before running (default 1; set 0 to skip)
 - `PAR2_BENCH_LOG` path to bench log (default `bench-results.tsv`)
 
 Example:

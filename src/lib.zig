@@ -1,7 +1,7 @@
 const std = @import("std");
 const ops = @import("ops");
 
-pub const version_string: []const u8 = "par2-cleanroom 0.1.0";
+pub const version_string: []const u8 = "par2z 0.1.0";
 
 pub const Par2Error = enum(c_int) {
     ok = 0,
@@ -301,7 +301,7 @@ pub fn zigVersion() []const u8 {
 }
 
 pub export fn par2_version() [*:0]const u8 {
-    return "par2-cleanroom 0.1.0";
+    return "par2z 0.1.0";
 }
 
 fn hasCallbacks(alloc: Par2Allocator) bool {

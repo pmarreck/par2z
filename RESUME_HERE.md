@@ -124,7 +124,7 @@ Other cases remain: full-missing, partial corruption, optional packets.
 - Updated `include/par2.h` with full API surface.
 - `ops.create` now takes an allocator param; CLI updated to call `ops.create(allocator, ...)`.
 - `ops.CreateOptions` gained `thread_count` (CLI currently sets null).
-- Removed `ops` → `par2` import loop; creator text is now literal `"par2-cleanroom 0.1.0"`.
+- Removed `ops` → `par2` import loop; creator text is now literal `"par2z 0.1.0"`.
 - Added tests in `tests/tests.zig`:
   - `c api create/verify with memory input` passes.
   - `c api recover writes to output dir` fails with `Par2Error.invalid_argument`.
@@ -152,7 +152,7 @@ Other cases remain: full-missing, partial corruption, optional packets.
 
 ## 2025-12-29 Update (Test Runner/CLI Build Changes)
 - Removed `zig build` invocations from unit tests; now use `cliPath()` / `prngPath()` helpers.
-- `build.zig` now installs `par2-cli` and `prng-gen` for the test step and adds `-Dtest-filter` support via compile-time filters.
+- `build.zig` now installs `par2z-cli` and `prng-gen` for the test step and adds `-Dtest-filter` support via compile-time filters.
 - C API default verbosity set to `-1` (silent by default) to avoid library output on stdout.
 
 ### Tests
