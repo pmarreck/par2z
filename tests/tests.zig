@@ -171,8 +171,123 @@ fn runCommandExpectOk(allocator: std.mem.Allocator, argv: []const []const u8, en
 }
 
 fn libPathEnvName() []const u8 {
-	const builtin = @import("builtin");
-	return if (builtin.os.tag == .macos) "DYLD_LIBRARY_PATH" else "LD_LIBRARY_PATH";
+    const builtin = @import("builtin");
+    return if (builtin.os.tag == .macos) "DYLD_LIBRARY_PATH" else "LD_LIBRARY_PATH";
+}
+
+fn swiftSdkRootFromXcrun(allocator: std.mem.Allocator) !?[]const u8 {
+	var env = try std.process.getEnvMap(allocator);
+	defer env.deinit();
+	_ = env.remove("SDKROOT");
+	_ = env.remove("DEVELOPER_DIR");
+	_ = env.remove("TOOLCHAINS");
+	const xcrun_path = if (std.fs.accessAbsolute("/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
+	const res = try std.process.Child.run(.{
+		.allocator = allocator,
+		.argv = &.{ xcrun_path, "--sdk", "macosx", "--show-sdk-path" },
+		.env_map = &env,
+	});
+	defer allocator.free(res.stdout);
+	defer allocator.free(res.stderr);
+	switch (res.term) {
+		.Exited => |code| {
+			if (code != 0 or res.stdout.len == 0) return null;
+			const trimmed = std.mem.trimRight(u8, res.stdout, "\r\n");
+			return try allocator.dupe(u8, trimmed);
+		},
+		else => return null,
+	}
+}
+
+fn xcodeSelectPath(allocator: std.mem.Allocator) ?[]const u8 {
+	if (!commandAvailable(allocator, "xcode-select")) return null;
+	const res = std.process.Child.run(.{
+		.allocator = allocator,
+		.argv = &.{ "xcode-select", "-p" },
+	}) catch return null;
+	defer allocator.free(res.stdout);
+	defer allocator.free(res.stderr);
+	switch (res.term) {
+		.Exited => |code| {
+			if (code != 0 or res.stdout.len == 0) return null;
+			const trimmed = std.mem.trimRight(u8, res.stdout, "\r\n");
+			return allocator.dupe(u8, trimmed) catch null;
+		},
+		else => return null,
+	}
+}
+
+fn swiftCompileArgv(allocator: std.mem.Allocator, swift_path: []const u8, lib_dir: []const u8, bin_path: []const u8, sdk_path: ?[]const u8) ![]const []const u8 {
+	if (xcodeSelectPath(allocator)) |dev| {
+		defer allocator.free(dev);
+		const swiftc_path = try std.fmt.allocPrint(allocator, "{s}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc", .{dev});
+		if (std.fs.accessAbsolute(swiftc_path, .{})) |_| {
+			const use_sdk = sdk_path != null;
+			const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
+			argv[0] = swiftc_path;
+			argv[1] = swift_path;
+			argv[2] = "-L";
+			argv[3] = lib_dir;
+			argv[4] = "-lpar2";
+			argv[5] = "-o";
+			argv[6] = bin_path;
+			if (use_sdk) {
+				argv[7] = "-sdk";
+				argv[8] = sdk_path.?;
+			}
+			return argv;
+		} else |_| {}
+	}
+	if (std.fs.accessAbsolute("/usr/bin/swiftc", .{})) |_| {
+		const use_sdk = sdk_path != null;
+		const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
+		argv[0] = "/usr/bin/swiftc";
+		argv[1] = swift_path;
+		argv[2] = "-L";
+		argv[3] = lib_dir;
+		argv[4] = "-lpar2";
+		argv[5] = "-o";
+		argv[6] = bin_path;
+		if (use_sdk) {
+			argv[7] = "-sdk";
+			argv[8] = sdk_path.?;
+		}
+		return argv;
+	} else |_| {}
+	if (commandAvailable(allocator, "xcrun")) {
+		const xcrun_path = if (std.fs.accessAbsolute("/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
+		const use_sdk = sdk_path != null;
+		const argv = try allocator.alloc([]const u8, if (use_sdk) 12 else 10);
+		argv[0] = xcrun_path;
+		argv[1] = "--sdk";
+		argv[2] = "macosx";
+		argv[3] = "swiftc";
+		argv[4] = swift_path;
+		argv[5] = "-L";
+		argv[6] = lib_dir;
+		argv[7] = "-lpar2";
+		argv[8] = "-o";
+		argv[9] = bin_path;
+		if (use_sdk) {
+			argv[10] = "-sdk";
+			argv[11] = sdk_path.?;
+		}
+		return argv;
+	}
+	const use_sdk = sdk_path != null;
+	const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
+	argv[0] = "swiftc";
+	argv[1] = swift_path;
+	argv[2] = "-L";
+	argv[3] = lib_dir;
+	argv[4] = "-lpar2";
+	argv[5] = "-o";
+	argv[6] = bin_path;
+	if (use_sdk) {
+		argv[7] = "-sdk";
+		argv[8] = sdk_path.?;
+	}
+	return argv;
 }
 
 fn capiReadAt(ctx: ?*anyopaque, offset: u64, out: [*]u8, len: usize) callconv(.c) usize {
@@ -2408,16 +2523,50 @@ test "ffi swift example (optional)" {
 	try src.appendSlice(allocator, "exit(0)\n");
 	try tmp.dir.writeFile(.{ .sub_path = "main.swift", .data = src.items });
 
+	var compile_env = std.process.EnvMap.init(allocator);
+	defer compile_env.deinit();
+	try compile_env.put("PATH", "/usr/bin:/bin");
+	if (std.process.getEnvVarOwned(allocator, "HOME")) |home| {
+		defer allocator.free(home);
+		try compile_env.put("HOME", home);
+	} else |_| {}
+	if (std.process.getEnvVarOwned(allocator, "TMPDIR")) |tmpdir| {
+		defer allocator.free(tmpdir);
+		try compile_env.put("TMPDIR", tmpdir);
+	} else |_| {}
+	if (commandAvailable(allocator, "xcrun")) {
+		if (xcodeSelectPath(allocator)) |dev| {
+			defer allocator.free(dev);
+			try compile_env.put("DEVELOPER_DIR", dev);
+		}
+		try compile_env.put("TOOLCHAINS", "com.apple.dt.toolchain.XcodeDefault");
+	}
+	var sdk_path: ?[]const u8 = null;
+	const sdk = swiftSdkRootFromXcrun(allocator) catch null;
+	if (sdk) |path| {
+		sdk_path = path;
+		try compile_env.put("SDKROOT", path);
+	}
+	defer if (sdk_path) |path| allocator.free(path);
+	const compile_argv = try swiftCompileArgv(allocator, swift_path, lib_dir, bin_path, sdk_path);
+	defer allocator.free(compile_argv);
 	const compile = try std.process.Child.run(.{
 		.allocator = allocator,
-		.argv = &.{ "swiftc", swift_path, "-L", lib_dir, "-lpar2", "-o", bin_path },
+		.argv = compile_argv,
+		.env_map = &compile_env,
 		.cwd = tmp_path,
 	});
 	defer allocator.free(compile.stdout);
 	defer allocator.free(compile.stderr);
 	switch (compile.term) {
-		.Exited => |code| if (code != 0) return,
-		else => return,
+		.Exited => |code| {
+			if (code != 0) {
+				if (compile.stdout.len > 0) std.debug.print("swiftc stdout:\n{s}\n", .{compile.stdout});
+				if (compile.stderr.len > 0) std.debug.print("swiftc stderr:\n{s}\n", .{compile.stderr});
+				return error.UnexpectedTerm;
+			}
+		},
+		else => return error.UnexpectedTerm,
 	}
 
 	var env = std.process.EnvMap.init(allocator);
