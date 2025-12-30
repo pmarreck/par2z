@@ -89,12 +89,12 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 - [x] Use a persistent `std.Thread.Pool` instead of per-chunk thread spawn/join.
 
 ### Medium Priority (Architecture / Maintainability)
-- [ ] Split `src/ops.zig` into `create.zig`, `verify.zig`, `recover.zig`, `common.zig`.
-- [ ] Consolidate duplicated `verify*Store` and `computeRecoverySlices*` functions (generic/store interface).
+- [x] Split `src/ops.zig` into `create.zig`, `verify.zig`, `recover.zig`, `common.zig`.
+- [x] Consolidate duplicated `verify*Store` and `computeRecoverySlices*` functions (generic/store interface).
 - [ ] Normalize error naming across modules for validation failures.
-- [ ] Either remove `checked.zig` or standardize on checked wrappers across codebase.
-- [ ] Reduce temp allocations in `findMismatchedSlices` (two-pass or exact-size allocation).
-- [ ] Remove empty `src/ffi/` dir or implement it (decide).
+- [x] Either remove `checked.zig` or standardize on checked wrappers across codebase.
+- [x] Reduce temp allocations in `findMismatchedSlices` (two-pass or exact-size allocation).
+- [x] Remove empty `src/ffi/` dir or implement it (decide).
 
 ### Test Coverage Gaps
 - [ ] Add tests for `LimitedAllocator` edge cases (cap exhaustion, resize).

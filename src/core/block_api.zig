@@ -65,7 +65,7 @@ pub fn computeRecoverySlicesFileStoreBatchParallel(
 	slice_size: usize,
 	exponents: []const u32,
 ) BlockError![][]u8 {
-	return computeRecoverySlicesBatchStreamFile(allocator, store, files, slice_size, exponents);
+	return computeRecoverySlicesFileStoreBatch(allocator, store, files, slice_size, exponents);
 }
 
 pub fn computeRecoverySlicesStreamStoreBatch(
@@ -85,7 +85,7 @@ pub fn computeRecoverySlicesStreamStoreBatchParallel(
 	slice_size: usize,
 	exponents: []const u32,
 ) BlockError![][]u8 {
-	return computeRecoverySlicesBatchStreamStore(allocator, store, files, slice_size, exponents);
+	return computeRecoverySlicesStreamStoreBatch(allocator, store, files, slice_size, exponents);
 }
 
 const Shared = struct {

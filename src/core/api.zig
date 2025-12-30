@@ -110,29 +110,14 @@ pub fn verifyStore(allocator: std.mem.Allocator, ctx: *Par2Context, store: stora
 }
 
 pub fn verifyStoreFile(allocator: std.mem.Allocator, ctx: *Par2Context, store: storage.FileStore) ApiError!void {
-	if (ctx.main == null or ctx.recovery_set == null) return error.InvalidInput;
-	const rs_set = ctx.recovery_set.?;
-	const slice_size = @as(usize, @intCast(rs_set.slice_size));
-	var file_i: usize = 0;
-	while (file_i < rs_set.recovery_files.len) : (file_i += 1) {
-		const entry = rs_set.recovery_files[file_i];
-		if (entry.ifsc) |ifsc| {
-			const expected = ifsc.entries;
-			if (expected.len == 0) continue;
-			var slice_i: usize = 0;
-			while (slice_i < expected.len) : (slice_i += 1) {
-				const slice = store.readSlice(allocator, file_i, slice_size, slice_i) catch return error.SliceError;
-				defer allocator.free(slice);
-				var computed: types.IfscEntry = undefined;
-				slices.computeIfscEntry(slice, &computed) catch return error.SliceError;
-				if (!std.mem.eql(u8, &computed.md5, &expected[slice_i].md5)) return error.SliceError;
-				if (computed.crc32 != expected[slice_i].crc32) return error.SliceError;
-			}
-		}
-	}
+	return verifyStoreSlices(allocator, ctx, store);
 }
 
 pub fn verifyStoreStream(allocator: std.mem.Allocator, ctx: *Par2Context, store: storage.StreamStore) ApiError!void {
+	return verifyStoreSlices(allocator, ctx, store);
+}
+
+fn verifyStoreSlices(allocator: std.mem.Allocator, ctx: *Par2Context, store: anytype) ApiError!void {
 	if (ctx.main == null or ctx.recovery_set == null) return error.InvalidInput;
 	const rs_set = ctx.recovery_set.?;
 	const slice_size = @as(usize, @intCast(rs_set.slice_size));

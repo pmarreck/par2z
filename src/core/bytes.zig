@@ -1,5 +1,3 @@
-const checked = @import("checked.zig");
-
 pub const BytesError = error{
 	OutOfBounds,
 	Overflow,
@@ -28,11 +26,17 @@ pub fn readU64Le(buf: []const u8, offset: usize) BytesError!u64 {
 
 pub fn readBytes(buf: []const u8, offset: usize, len: usize) BytesError![]const u8 {
 	try ensureRange(buf.len, offset, len);
-	const end = checked.add(offset, len) catch return error.Overflow;
+	const end = addChecked(offset, len) catch return error.Overflow;
 	return buf[offset..end];
 }
 
 fn ensureRange(buf_len: usize, offset: usize, len: usize) BytesError!void {
-	const end = checked.add(offset, len) catch return error.Overflow;
+	const end = addChecked(offset, len) catch return error.Overflow;
 	if (end > buf_len) return error.OutOfBounds;
+}
+
+fn addChecked(a: usize, b: usize) BytesError!usize {
+	const res = @addWithOverflow(a, b);
+	if (res[1] != 0) return error.Overflow;
+	return res[0];
 }

@@ -56,14 +56,21 @@ pub fn verifyIfsc(computed: []const types.IfscEntry, expected: []const types.Ifs
 
 pub fn findMismatchedSlices(allocator: std.mem.Allocator, computed: []const types.IfscEntry, expected: []const types.IfscEntry) SliceError![]usize {
 	if (computed.len != expected.len) return error.Mismatch;
-	var out = try allocator.alloc(usize, computed.len);
 	var count: usize = 0;
 	var i: usize = 0;
 	while (i < computed.len) : (i += 1) {
 		if (!std.mem.eql(u8, &computed[i].md5, &expected[i].md5) or computed[i].crc32 != expected[i].crc32) {
-			out[count] = i;
 			count += 1;
 		}
 	}
-	return out[0..count];
+	var out = try allocator.alloc(usize, count);
+	var idx: usize = 0;
+	i = 0;
+	while (i < computed.len) : (i += 1) {
+		if (!std.mem.eql(u8, &computed[i].md5, &expected[i].md5) or computed[i].crc32 != expected[i].crc32) {
+			out[idx] = i;
+			idx += 1;
+		}
+	}
+	return out;
 }
