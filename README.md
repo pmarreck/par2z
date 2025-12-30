@@ -9,6 +9,71 @@ Cleanroom PAR2 implementation with a Zig core, C ABI for FFI (Swift/LuaJIT), and
 - Storage adapters in `src/core/storage.zig` (memory-backed and file-backed) so recovery can run without loading whole files up front.
 - CLI operations moved into `src/ops.zig` (callable from Zig and suitable for C/Swift wrappers). `src/cli.zig` is now a thin CLI parser + I/O shim.
 
+## C API Examples
+The C ABI is declared in `include/par2.h`. Memory and stream inputs do not touch disk.
+
+Create from memory (no temp files), write `.par2` to a path:
+```c
+#include "par2.h"
+
+const uint8_t data[] = {0,1,2,3,4,5,6,7};
+Par2CreateHandle *create = NULL;
+par2_create_new(NULL, &create);
+par2_create_add_memory(create, "data.bin", data, sizeof(data));
+par2_create_set_output_path(create, "set.par2");
+par2_create_run(create);
+par2_create_destroy(create);
+```
+
+Verify from in-memory PAR2 bytes and a stream input:
+```c
+#include "par2.h"
+
+struct MemCtx { const uint8_t *data; size_t len; };
+static size_t read_at(void *ctx, uint64_t off, uint8_t *out, size_t len) {
+	struct MemCtx *m = (struct MemCtx *)ctx;
+	if (off >= m->len) return 0;
+	size_t avail = m->len - (size_t)off;
+	size_t n = (avail < len) ? avail : len;
+	memcpy(out, m->data + off, n);
+	return n;
+}
+
+Par2VerifyHandle *verify = NULL;
+par2_verify_new(NULL, &verify);
+par2_verify_set_par2_data(verify, par2_bytes, par2_len);
+par2_verify_add_stream(verify, "data.bin", data_len, read_at, &mem_ctx);
+par2_verify_run(verify);
+par2_verify_destroy(verify);
+```
+
+Recover with output callback (no disk output):
+```c
+#include "par2.h"
+
+static size_t write_out(void *ctx, const uint8_t *data, size_t len) {
+	(void)ctx;
+	/* append to a buffer */
+	return len;
+}
+
+static Par2Error open_out(void *ctx, const char *path, Par2Output *out) {
+	(void)path;
+	out->ctx = ctx;
+	out->write = write_out;
+	out->close = NULL;
+	return PAR2_OK;
+}
+
+Par2RecoverHandle *recover = NULL;
+par2_recover_new(NULL, &recover);
+par2_recover_set_par2_path(recover, "set.par2");
+par2_recover_add_path(recover, "data.bin");
+par2_recover_set_output_open(recover, open_out, NULL);
+par2_recover_run(recover);
+par2_recover_destroy(recover);
+```
+
 ## CLI
 - Verify: `par2-cli verify [options] <par2 file> [data files...]`
 - Recover: `par2-cli recover [options] <par2 file> [data files...]`
