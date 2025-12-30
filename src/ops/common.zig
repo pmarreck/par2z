@@ -270,6 +270,43 @@ pub fn safeFileName(path: []const u8) ![]const u8 {
     return path;
 }
 
+pub const NormalizedPath = struct {
+    path: []const u8,
+    owned: bool,
+};
+
+pub fn normalizeRelativePath(allocator: std.mem.Allocator, path: []const u8) !NormalizedPath {
+    if (std.fs.path.isAbsolute(path)) return error.InvalidInput;
+    if (hasWindowsDrivePrefix(path)) return error.InvalidInput;
+    var out = std.ArrayList(u8).empty;
+    defer out.deinit(allocator);
+    var changed = false;
+    var seg_start: usize = 0;
+    var i: usize = 0;
+    while (i <= path.len) : (i += 1) {
+        if (i == path.len or path[i] == '/' or path[i] == '\\') {
+            const seg = path[seg_start..i];
+            if (seg.len == 0 or (seg.len == 1 and seg[0] == '.')) {
+                if (seg.len != 0 or (i < path.len and (path[i] == '/' or path[i] == '\\'))) {
+                    changed = true;
+                }
+            } else if (seg.len == 2 and seg[0] == '.' and seg[1] == '.') {
+                return error.InvalidInput;
+            } else {
+                if (out.items.len != 0) {
+                    try out.append(allocator, '/');
+                }
+                try out.appendSlice(allocator, seg);
+                if (i < path.len and path[i] == '\\') changed = true;
+            }
+            seg_start = i + 1;
+        }
+    }
+    if (out.items.len == 0) return error.InvalidInput;
+    if (!changed) return .{ .path = path, .owned = false };
+    return .{ .path = try out.toOwnedSlice(allocator), .owned = true };
+}
+
 pub fn hasTraversalSegment(path: []const u8) bool {
     if (path.len == 0) return false;
     var start: usize = 0;

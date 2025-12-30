@@ -234,13 +234,15 @@ pub fn recover(
         } else if (opts.output_open != null) {
             const target_dir = opts.out_dir orelse opts.basepath;
             const out_path = try outputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths);
-            var out = try common.openOutput(allocator, out_path, opts.output_open);
+            defer if (out_path.owned) allocator.free(out_path.path);
+            var out = try common.openOutput(allocator, out_path.path, opts.output_open);
             defer out.close();
             computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, &out);
         } else {
             const target_dir = opts.out_dir orelse opts.basepath;
             const out_path = try outputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths);
-            computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path);
+            defer if (out_path.owned) allocator.free(out_path.path);
+            computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path.path);
         }
         if (!std.mem.eql(u8, &computed, &desc.file_hash)) return error.InvalidInput;
     }
@@ -469,13 +471,15 @@ pub fn recoverStreams(
         } else if (opts.output_open != null) {
             const target_dir = opts.out_dir orelse opts.basepath;
             const out_path = try outputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths);
-            var out = try common.openOutput(allocator, out_path, opts.output_open);
+            defer if (out_path.owned) allocator.free(out_path.path);
+            var out = try common.openOutput(allocator, out_path.path, opts.output_open);
             defer out.close();
             computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, &out);
         } else {
             const target_dir = opts.out_dir orelse opts.basepath;
             const out_path = try outputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths);
-            computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path);
+            defer if (out_path.owned) allocator.free(out_path.path);
+            computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path.path);
         }
         if (!std.mem.eql(u8, &computed, &desc.file_hash)) return error.InvalidInput;
     }
@@ -584,14 +588,16 @@ fn writeRecoveredFilePathWithHash(
     return writeRecoveredFileSlicesWithHash(scratch, store, order, recovered_for, recovered, file_index, slice_size, file);
 }
 
-fn outputPath(allocator: std.mem.Allocator, out_dir: ?[]const u8, file_name: []const u8, allow_unsafe_paths: bool) ![]const u8 {
-    if (!allow_unsafe_paths) {
-        if (std.fs.path.isAbsolute(file_name)) return error.InvalidInput;
-        if (common.hasTraversalSegment(file_name)) return error.InvalidInput;
-        if (common.hasWindowsDrivePrefix(file_name)) return error.InvalidInput;
+fn outputPath(allocator: std.mem.Allocator, out_dir: ?[]const u8, file_name: []const u8, allow_unsafe_paths: bool) !common.NormalizedPath {
+    if (allow_unsafe_paths) {
+        if (out_dir == null) return .{ .path = file_name, .owned = false };
+        return .{ .path = try path_util.join(allocator, out_dir.?, file_name), .owned = true };
     }
-    if (out_dir == null) return file_name;
-    return try path_util.join(allocator, out_dir.?, file_name);
+    const norm = try common.normalizeRelativePath(allocator, file_name);
+    if (out_dir == null) return norm;
+    const joined = try path_util.join(allocator, out_dir.?, norm.path);
+    if (norm.owned) allocator.free(norm.path);
+    return .{ .path = joined, .owned = true };
 }
 
 const SliceOverrideStore = struct {
@@ -674,12 +680,30 @@ test "outputPath allows unsafe when flag set" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const out = try outputPath(arena.allocator(), "/tmp/out", "/var/tmp/file.bin", true);
-    try std.testing.expectEqualStrings("/tmp/out/var/tmp/file.bin", out);
+    defer if (out.owned) arena.allocator().free(out.path);
+    try std.testing.expectEqualStrings("/tmp/out/var/tmp/file.bin", out.path);
 }
 
 test "outputPath accepts unicode names" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const out = try outputPath(arena.allocator(), "/tmp/out", "café.txt", false);
-    try std.testing.expectEqualStrings("/tmp/out/café.txt", out);
+    defer if (out.owned) arena.allocator().free(out.path);
+    try std.testing.expectEqualStrings("/tmp/out/café.txt", out.path);
+}
+
+test "outputPath normalizes relative paths" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const out = try outputPath(arena.allocator(), "/tmp/out", "./a//b\\c.txt", false);
+    defer if (out.owned) arena.allocator().free(out.path);
+    try std.testing.expectEqualStrings("/tmp/out/a/b/c.txt", out.path);
+}
+
+test "outputPath normalizes dotted segments" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const out = try outputPath(arena.allocator(), null, "a/./b/./c.txt", false);
+    defer if (out.owned) arena.allocator().free(out.path);
+    try std.testing.expectEqualStrings("a/b/c.txt", out.path);
 }

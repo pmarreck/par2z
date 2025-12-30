@@ -57,24 +57,24 @@ Curiosity poke: Are we skipping the correct exponents and using the right genera
 Curiosity poke: What is the numerical stability or performance risk for large sets?
 
 ## Phase 7: Reconstruction
-- [ ] Rebuild missing slices into files
-- [ ] Verify FileDesc MD5
+- [x] Rebuild missing slices into files
+- [x] Verify FileDesc MD5
 
 Curiosity poke: How do we handle partial last slice and file size truncation?
 
 ## TODOs (Tracking)
 - [ ] Split recovery allocators (temp slices vs recovered output) to reduce peak memory
-- [ ] Add create-side parameters (blocksize/slice size, redundancy count/percentage) for par2 compatibility
+- [x] Add create-side parameters (blocksize/slice size, redundancy count/percentage) for par2 compatibility
 - [ ] Normalize output paths (strip leading ./, collapse separators) before safety checks
 - [x] Consider Bitrot Guard heuristics for default block size (double exponential decay vs file size)
-- [ ] Create: stream hashing + slice generation (avoid reading whole files)
+- [x] Create: stream hashing + slice generation (avoid reading whole files)
 - [x] Create: split recovery slices across multiple volume files (par2cmdline compatibility)
 
 ## Phase 8: Optional Packets
 - [x] Unicode file names/comments
-- [ ] File slice packets
-- [ ] Packed Main / Packed Recovery
-- [ ] Recovery slice checksums
+- [x] File slice packets
+- [x] Packed Main / Packed Recovery
+- [x] Recovery slice checksums
 
 Curiosity poke: Are optional packets required for compatibility with common tools?
 
