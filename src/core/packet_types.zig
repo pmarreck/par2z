@@ -4,8 +4,7 @@ const packet = @import("packet.zig");
 
 pub const PacketTypeError = error{
 	OutOfBounds,
-	InvalidType,
-	InvalidLength,
+	InvalidInput,
 	OutOfMemory,
 };
 
@@ -78,8 +77,8 @@ const pkdrecvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd'
 
 pub fn parseCreator(buf: []const u8) PacketTypeError!CreatorPacket {
 	const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
-	if (!std.mem.eql(u8, &hdr.packet_type, &creator_type)) return error.InvalidType;
-	if (hdr.length < 64) return error.InvalidLength;
+	if (!std.mem.eql(u8, &hdr.packet_type, &creator_type)) return error.InvalidInput;
+	if (hdr.length < 64) return error.InvalidInput;
 	const end: usize = @intCast(hdr.length);
 	var body = buf[64..end];
 	while (body.len > 0 and body[body.len - 1] == 0) {
@@ -90,18 +89,18 @@ pub fn parseCreator(buf: []const u8) PacketTypeError!CreatorPacket {
 
 pub fn parseMain(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!MainPacket {
 	const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
-	if (!std.mem.eql(u8, &hdr.packet_type, &main_type)) return error.InvalidType;
-	if (hdr.length < 64 + 12) return error.InvalidLength;
+	if (!std.mem.eql(u8, &hdr.packet_type, &main_type)) return error.InvalidInput;
+	if (hdr.length < 64 + 12) return error.InvalidInput;
 	const end: usize = @intCast(hdr.length);
 	const body = buf[64..end];
 	const slice_size = bytes.readU64Le(body, 0) catch return error.OutOfBounds;
 	const file_count = bytes.readU32Le(body, 8) catch return error.OutOfBounds;
 	const ids_offset: usize = 12;
 	const ids_bytes = body.len - ids_offset;
-	if ((ids_bytes % 16) != 0) return error.InvalidLength;
+	if ((ids_bytes % 16) != 0) return error.InvalidInput;
 	const total_ids = ids_bytes / 16;
 	const recovery_count = @as(usize, file_count);
-	if (total_ids < recovery_count) return error.InvalidLength;
+	if (total_ids < recovery_count) return error.InvalidInput;
 	var recovery_ids = try allocator.alloc([16]u8, recovery_count);
 	var non_recovery_ids = try allocator.alloc([16]u8, total_ids - recovery_count);
 	var i: usize = 0;
@@ -125,8 +124,8 @@ pub fn parseMain(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!
 
 pub fn parsePackedMain(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!MainPacket {
 	const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
-	if (!std.mem.eql(u8, &hdr.packet_type, &pkdmain_type)) return error.InvalidType;
-	if (hdr.length < 64 + 20) return error.InvalidLength;
+	if (!std.mem.eql(u8, &hdr.packet_type, &pkdmain_type)) return error.InvalidInput;
+	if (hdr.length < 64 + 20) return error.InvalidInput;
 	const end: usize = @intCast(hdr.length);
 	const body = buf[64..end];
 	const subslice_size = bytes.readU64Le(body, 0) catch return error.OutOfBounds;
@@ -134,10 +133,10 @@ pub fn parsePackedMain(buf: []const u8, allocator: std.mem.Allocator) PacketType
 	const file_count = bytes.readU32Le(body, 16) catch return error.OutOfBounds;
 	const ids_offset: usize = 20;
 	const ids_bytes = body.len - ids_offset;
-	if ((ids_bytes % 16) != 0) return error.InvalidLength;
+	if ((ids_bytes % 16) != 0) return error.InvalidInput;
 	const total_ids = ids_bytes / 16;
 	const recovery_count = @as(usize, file_count);
-	if (total_ids < recovery_count) return error.InvalidLength;
+	if (total_ids < recovery_count) return error.InvalidInput;
 	var recovery_ids = try allocator.alloc([16]u8, recovery_count);
 	var non_recovery_ids = try allocator.alloc([16]u8, total_ids - recovery_count);
 	var i: usize = 0;
@@ -161,8 +160,8 @@ pub fn parsePackedMain(buf: []const u8, allocator: std.mem.Allocator) PacketType
 
 pub fn parseFileDesc(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!FileDescPacket {
 	const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
-	if (!std.mem.eql(u8, &hdr.packet_type, &filedesc_type)) return error.InvalidType;
-	if (hdr.length < 64 + 56) return error.InvalidLength;
+	if (!std.mem.eql(u8, &hdr.packet_type, &filedesc_type)) return error.InvalidInput;
+	if (hdr.length < 64 + 56) return error.InvalidInput;
 	const end: usize = @intCast(hdr.length);
 	const body = buf[64..end];
 	var out: FileDescPacket = undefined;
@@ -182,14 +181,14 @@ pub fn parseFileDesc(buf: []const u8, allocator: std.mem.Allocator) PacketTypeEr
 
 pub fn parseIfsc(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!IfscPacket {
 	const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
-	if (!std.mem.eql(u8, &hdr.packet_type, &ifsc_type)) return error.InvalidType;
-	if (hdr.length < 64 + 16) return error.InvalidLength;
+	if (!std.mem.eql(u8, &hdr.packet_type, &ifsc_type)) return error.InvalidInput;
+	if (hdr.length < 64 + 16) return error.InvalidInput;
 	const end: usize = @intCast(hdr.length);
 	const body = buf[64..end];
 	var out: IfscPacket = undefined;
 	@memcpy(&out.file_id, body[0..16]);
 	const data = body[16..];
-	if (data.len % 20 != 0) return error.InvalidLength;
+	if (data.len % 20 != 0) return error.InvalidInput;
 	const count = data.len / 20;
 	var entries = try allocator.alloc(IfscEntry, count);
 	var i: usize = 0;
@@ -204,8 +203,8 @@ pub fn parseIfsc(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!
 
 pub fn parseRecvSlic(buf: []const u8) PacketTypeError!RecvSlicPacket {
 	const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
-	if (!std.mem.eql(u8, &hdr.packet_type, &recvslic_type)) return error.InvalidType;
-	if (hdr.length < 64 + 4) return error.InvalidLength;
+	if (!std.mem.eql(u8, &hdr.packet_type, &recvslic_type)) return error.InvalidInput;
+	if (hdr.length < 64 + 4) return error.InvalidInput;
 	const end: usize = @intCast(hdr.length);
 	const body = buf[64..end];
 	const exponent = bytes.readU32Le(body, 0) catch return error.OutOfBounds;
@@ -214,8 +213,8 @@ pub fn parseRecvSlic(buf: []const u8) PacketTypeError!RecvSlicPacket {
 
 pub fn parsePackedRecvSlic(buf: []const u8) PacketTypeError!PackedRecvSlicPacket {
 	const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
-	if (!std.mem.eql(u8, &hdr.packet_type, &pkdrecvs_type)) return error.InvalidType;
-	if (hdr.length < 64 + 4) return error.InvalidLength;
+	if (!std.mem.eql(u8, &hdr.packet_type, &pkdrecvs_type)) return error.InvalidInput;
+	if (hdr.length < 64 + 4) return error.InvalidInput;
 	const end: usize = @intCast(hdr.length);
 	const body = buf[64..end];
 	const exponent = bytes.readU32Le(body, 0) catch return error.OutOfBounds;
@@ -224,8 +223,8 @@ pub fn parsePackedRecvSlic(buf: []const u8) PacketTypeError!PackedRecvSlicPacket
 
 pub fn parseFileSlic(buf: []const u8) PacketTypeError!FileSlicPacket {
 	const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
-	if (!std.mem.eql(u8, &hdr.packet_type, &fileslic_type)) return error.InvalidType;
-	if (hdr.length < 64 + 24) return error.InvalidLength;
+	if (!std.mem.eql(u8, &hdr.packet_type, &fileslic_type)) return error.InvalidInput;
+	if (hdr.length < 64 + 24) return error.InvalidInput;
 	const end: usize = @intCast(hdr.length);
 	const body = buf[64..end];
 	var out: FileSlicPacket = undefined;
@@ -237,14 +236,14 @@ pub fn parseFileSlic(buf: []const u8) PacketTypeError!FileSlicPacket {
 
 pub fn parseRfsc(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!RfscPacket {
 	const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
-	if (!std.mem.eql(u8, &hdr.packet_type, &rfsc_type)) return error.InvalidType;
-	if (hdr.length < 64 + 16) return error.InvalidLength;
+	if (!std.mem.eql(u8, &hdr.packet_type, &rfsc_type)) return error.InvalidInput;
+	if (hdr.length < 64 + 16) return error.InvalidInput;
 	const end: usize = @intCast(hdr.length);
 	const body = buf[64..end];
 	var out: RfscPacket = undefined;
 	@memcpy(&out.file_id, body[0..16]);
 	const data = body[16..];
-	if ((data.len % 24) != 0) return error.InvalidLength;
+	if ((data.len % 24) != 0) return error.InvalidInput;
 	const count = data.len / 24;
 	var entries = try allocator.alloc(RfscEntry, count);
 	var i: usize = 0;

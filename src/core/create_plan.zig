@@ -61,7 +61,7 @@ pub fn splitRecoveryBlocksDefault(allocator: std.mem.Allocator, total: u64) ![]V
 
 pub fn splitRecoveryBlocksUniform(allocator: std.mem.Allocator, total: u64, file_count: u64) ![]VolumePlan {
 	if (total == 0) return allocator.alloc(VolumePlan, 0);
-	if (file_count == 0 or file_count > total) return error.InvalidCount;
+	if (file_count == 0 or file_count > total) return error.InvalidInput;
 	var list = std.ArrayList(VolumePlan).empty;
 	defer list.deinit(allocator);
 	const base = total / file_count;
@@ -104,8 +104,8 @@ pub fn splitRecoveryBlocksLimited(allocator: std.mem.Allocator, total: u64, limi
 
 pub fn splitRecoveryBlocksCounted(allocator: std.mem.Allocator, total: u64, file_count: u64) ![]VolumePlan {
 	if (total == 0) return allocator.alloc(VolumePlan, 0);
-	if (file_count == 0) return error.InvalidCount;
-	if (file_count > @as(u64, @intCast(defaultVolumeCount(total)))) return error.InvalidCount;
+	if (file_count == 0) return error.InvalidInput;
+	if (file_count > @as(u64, @intCast(defaultVolumeCount(total)))) return error.InvalidInput;
 	if (file_count == 1) {
 		var list = std.ArrayList(VolumePlan).empty;
 		defer list.deinit(allocator);
@@ -113,11 +113,11 @@ pub fn splitRecoveryBlocksCounted(allocator: std.mem.Allocator, total: u64, file
 		return list.toOwnedSlice(allocator);
 	}
 	const shift = file_count - 1;
-	if (shift >= 63) return error.InvalidCount;
+	if (shift >= 63) return error.InvalidInput;
 	const denom = (@as(u64, 1) << @intCast(shift)) - 1;
-	if (denom == 0) return error.InvalidCount;
+	if (denom == 0) return error.InvalidInput;
 	const max_start = total / denom;
-	if (max_start == 0) return error.InvalidCount;
+	if (max_start == 0) return error.InvalidInput;
 	var g: u64 = 1;
 	while ((g << 1) <= max_start) : (g <<= 1) {}
 	var list = std.ArrayList(VolumePlan).empty;

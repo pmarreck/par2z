@@ -3,11 +3,10 @@ const gf = @import("gf16.zig");
 const thread_pool = @import("thread_pool.zig");
 
 pub const RsError = error{
-	InvalidSliceSize,
+	InvalidInput,
 	OutOfMemory,
 	SingularMatrix,
 	TooManySlices,
-	InvalidSliceIndex,
 };
 
 pub const RecoverySlice = struct {
@@ -16,9 +15,9 @@ pub const RecoverySlice = struct {
 };
 
 pub fn accumulateRecoverySlice(out: []u8, data_slice: []const u8, factor: u16) RsError!void {
-	if (out.len == 0 or data_slice.len == 0) return error.InvalidSliceSize;
-	if (out.len != data_slice.len) return error.InvalidSliceSize;
-	if ((out.len % 2) != 0) return error.InvalidSliceSize;
+	if (out.len == 0 or data_slice.len == 0) return error.InvalidInput;
+	if (out.len != data_slice.len) return error.InvalidInput;
+	if ((out.len % 2) != 0) return error.InvalidInput;
 	if (factor == 0) return;
 	const word_count = out.len / 2;
 	var w: usize = 0;
@@ -38,14 +37,14 @@ pub fn encodeRecoverySliceSerial(allocator: std.mem.Allocator, out: []u8, data_s
 	if (data_slices.len == 0) return;
 	if (data_slices.len > gf.maxValidIndexCount()) return error.TooManySlices;
 	const slice_size = data_slices[0].len;
-	if (slice_size == 0 or (slice_size % 2) != 0) return error.InvalidSliceSize;
-	if (out.len != slice_size) return error.InvalidSliceSize;
+	if (slice_size == 0 or (slice_size % 2) != 0) return error.InvalidInput;
+	if (out.len != slice_size) return error.InvalidInput;
 	const factors = try allocator.alloc(u16, data_slices.len);
 	defer allocator.free(factors);
 	var i: usize = 0;
 	while (i < data_slices.len) : (i += 1) {
 		const slice = data_slices[i];
-		if (slice.len != slice_size) return error.InvalidSliceSize;
+		if (slice.len != slice_size) return error.InvalidInput;
 		const c = gf.constantForIndex(@as(u32, @intCast(i)));
 		factors[i] = gf.pow(c, exponent);
 	}
@@ -56,15 +55,15 @@ fn encodeRecoverySliceParallel(allocator: std.mem.Allocator, out: []u8, data_sli
 	if (data_slices.len == 0) return;
 	if (data_slices.len > gf.maxValidIndexCount()) return error.TooManySlices;
 	const slice_size = data_slices[0].len;
-	if (slice_size == 0 or (slice_size % 2) != 0) return error.InvalidSliceSize;
-	if (out.len != slice_size) return error.InvalidSliceSize;
+	if (slice_size == 0 or (slice_size % 2) != 0) return error.InvalidInput;
+	if (out.len != slice_size) return error.InvalidInput;
 	const word_count = slice_size / 2;
 	const factors = try allocator.alloc(u16, data_slices.len);
 	defer allocator.free(factors);
 	var i: usize = 0;
 	while (i < data_slices.len) : (i += 1) {
 		const slice = data_slices[i];
-		if (slice.len != slice_size) return error.InvalidSliceSize;
+		if (slice.len != slice_size) return error.InvalidInput;
 		const c = gf.constantForIndex(@as(u32, @intCast(i)));
 		factors[i] = gf.pow(c, exponent);
 	}
@@ -110,14 +109,14 @@ pub fn decodeMissingSlices(
 	const n = missing_indices.len;
 	if (n == 0) return allocator.alloc([]u8, 0);
 	if (recovery_slices.len != n) return error.SingularMatrix;
-	if (slice_size == 0 or (slice_size % 2) != 0) return error.InvalidSliceSize;
+	if (slice_size == 0 or (slice_size % 2) != 0) return error.InvalidInput;
 	if (data_slices.len > gf.maxValidIndexCount()) return error.TooManySlices;
 	for (missing_indices) |mi| {
-		if (mi >= data_slices.len) return error.InvalidSliceIndex;
+		if (mi >= data_slices.len) return error.InvalidInput;
 	}
 	for (data_slices) |s| {
 		if (s) |slice| {
-			if (slice.len != slice_size) return error.InvalidSliceSize;
+			if (slice.len != slice_size) return error.InvalidInput;
 		}
 	}
 

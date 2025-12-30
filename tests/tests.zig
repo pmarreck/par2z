@@ -407,7 +407,7 @@ test "sliceCount rounds up" {
 
 test "sliceCount rejects oversized length" {
     const max = std.math.maxInt(usize);
-    try std.testing.expectError(error.InvalidSliceSize, core.slices.sliceCount(max, 2));
+    try std.testing.expectError(error.InvalidInput, core.slices.sliceCount(max, 2));
 }
 
 test "buildSliceOrder orders by file then slice" {
@@ -1024,7 +1024,7 @@ test "parseHeader rejects bad magic" {
     var buf: [64]u8 = undefined;
     @memset(&buf, 0);
     buf[0] = 'B';
-    try std.testing.expectError(error.InvalidMagic, core.packet.parseHeader(&buf));
+    try std.testing.expectError(error.InvalidInput, core.packet.parseHeader(&buf));
 }
 
 test "parseHeader rejects invalid length" {
@@ -1039,7 +1039,7 @@ test "parseHeader rejects invalid length" {
     buf[6] = 'K';
     buf[7] = 'T';
     buf[8] = 1;
-    try std.testing.expectError(error.InvalidLength, core.packet.parseHeader(&buf));
+    try std.testing.expectError(error.InvalidInput, core.packet.parseHeader(&buf));
 }
 
 test "verifyPacketHash accepts correct hash" {
@@ -1102,7 +1102,7 @@ test "verifyPacketHash rejects mismatched hash" {
     buf[53] = '.';
     buf[54] = '0';
     buf[55] = 0;
-    try std.testing.expectError(error.InvalidHash, core.packet.verifyPacketHash(&buf));
+    try std.testing.expectError(error.InvalidInput, core.packet.verifyPacketHash(&buf));
 }
 
 test "parseCreator returns body text" {

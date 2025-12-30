@@ -1,8 +1,7 @@
 const std = @import("std");
 
 pub const StoreError = error{
-	InvalidIndex,
-	InvalidSliceSize,
+	InvalidInput,
 	OutOfBounds,
 	OutOfMemory,
 	Overflow,
@@ -21,8 +20,8 @@ pub const StreamStore = struct {
 	files: []const StreamEntry,
 
 	pub fn readSlice(self: StreamStore, allocator: std.mem.Allocator, file_index: usize, slice_size: usize, slice_index: usize) StoreError![]u8 {
-		if (slice_size == 0) return error.InvalidSliceSize;
-		if (file_index >= self.files.len) return error.InvalidIndex;
+		if (slice_size == 0) return error.InvalidInput;
+		if (file_index >= self.files.len) return error.InvalidInput;
 		const entry = self.files[file_index];
 		const file_len = std.math.cast(usize, entry.length) orelse return error.Overflow;
 		const mul = @mulWithOverflow(slice_index, slice_size);
@@ -47,8 +46,8 @@ pub const MemoryStore = struct {
 	files: []const []const u8,
 
 	pub fn readSlice(self: MemoryStore, allocator: std.mem.Allocator, file_index: usize, slice_size: usize, slice_index: usize) StoreError![]u8 {
-		if (slice_size == 0) return error.InvalidSliceSize;
-		if (file_index >= self.files.len) return error.InvalidIndex;
+		if (slice_size == 0) return error.InvalidInput;
+		if (file_index >= self.files.len) return error.InvalidInput;
 		const file = self.files[file_index];
 		const mul = @mulWithOverflow(slice_index, slice_size);
 		if (mul[1] != 0) return error.Overflow;
@@ -72,8 +71,8 @@ pub const FileStore = struct {
 	files: []const FileEntry,
 
 	pub fn readSlice(self: FileStore, allocator: std.mem.Allocator, file_index: usize, slice_size: usize, slice_index: usize) StoreError![]u8 {
-		if (slice_size == 0) return error.InvalidSliceSize;
-		if (file_index >= self.files.len) return error.InvalidIndex;
+		if (slice_size == 0) return error.InvalidInput;
+		if (file_index >= self.files.len) return error.InvalidInput;
 		const entry = self.files[file_index];
 		if (!entry.present) return error.OutOfBounds;
 		const file_len = std.math.cast(usize, entry.length) orelse return error.Overflow;

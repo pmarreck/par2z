@@ -91,7 +91,7 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 ### Medium Priority (Architecture / Maintainability)
 - [x] Split `src/ops.zig` into `create.zig`, `verify.zig`, `recover.zig`, `common.zig`.
 - [x] Consolidate duplicated `verify*Store` and `computeRecoverySlices*` functions (generic/store interface).
-- [ ] Normalize error naming across modules for validation failures.
+- [x] Normalize error naming across modules for validation failures.
 - [x] Either remove `checked.zig` or standardize on checked wrappers across codebase.
 - [x] Reduce temp allocations in `findMismatchedSlices` (two-pass or exact-size allocation).
 - [x] Remove empty `src/ffi/` dir or implement it (decide).

@@ -7,7 +7,7 @@ const slice_utils = @import("slices.zig");
 
 pub const BlockError = error{
 	OutOfMemory,
-	InvalidSliceSize,
+	InvalidInput,
 	StoreError,
 	RsError,
 	Overflow,
@@ -262,7 +262,7 @@ fn computeRecoverySlicesBatchStreamFile(
 	var total: usize = 0;
 	var file_i: usize = 0;
 	while (file_i < files.len) : (file_i += 1) {
-		const count = slice_utils.sliceCount(files[file_i].length, slice_size) catch return error.InvalidSliceSize;
+		const count = slice_utils.sliceCount(files[file_i].length, slice_size) catch return error.InvalidInput;
 		const add = @addWithOverflow(total, count);
 		if (add[1] != 0) return error.Overflow;
 		total = add[0];
@@ -292,7 +292,7 @@ fn computeRecoverySlicesBatchStreamFile(
 		defer file.close();
 		const info = file.stat() catch return error.StoreError;
 		if (info.size != files[file_i].length) return error.StoreError;
-		const slice_count = slice_utils.sliceCount(info.size, slice_size) catch return error.InvalidSliceSize;
+		const slice_count = slice_utils.sliceCount(info.size, slice_size) catch return error.InvalidInput;
 		var remaining = info.size;
 		var slice_index: usize = 0;
 		while (slice_index < slice_count) : (slice_index += 1) {
@@ -328,7 +328,7 @@ fn computeRecoverySlicesBatchStreamStore(
 	var total: usize = 0;
 	var file_i: usize = 0;
 	while (file_i < files.len) : (file_i += 1) {
-		const count = slice_utils.sliceCount(files[file_i].length, slice_size) catch return error.InvalidSliceSize;
+		const count = slice_utils.sliceCount(files[file_i].length, slice_size) catch return error.InvalidInput;
 		const add = @addWithOverflow(total, count);
 		if (add[1] != 0) return error.Overflow;
 		total = add[0];
@@ -355,7 +355,7 @@ fn computeRecoverySlicesBatchStreamStore(
 		const entry = store.files[file_i];
 		const file_len = entry.length;
 		if (file_len != files[file_i].length) return error.StoreError;
-		const slice_count = slice_utils.sliceCount(file_len, slice_size) catch return error.InvalidSliceSize;
+		const slice_count = slice_utils.sliceCount(file_len, slice_size) catch return error.InvalidInput;
 		var remaining = file_len;
 		var slice_index: usize = 0;
 		while (slice_index < slice_count) : (slice_index += 1) {

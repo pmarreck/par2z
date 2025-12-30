@@ -4,9 +4,7 @@ const std = @import("std");
 
 pub const PacketError = error{
 	OutOfBounds,
-	InvalidMagic,
-	InvalidLength,
-	InvalidHash,
+	InvalidInput,
 	CryptoUnavailable,
 };
 
@@ -22,9 +20,9 @@ const header_len: usize = 64;
 
 pub fn parseHeader(buf: []const u8) PacketError!PacketHeader {
 	if (buf.len < header_len) return error.OutOfBounds;
-	if (!std.mem.eql(u8, buf[0..8], &magic)) return error.InvalidMagic;
+	if (!std.mem.eql(u8, buf[0..8], &magic)) return error.InvalidInput;
 	const length = bytes.readU64Le(buf, 8) catch return error.OutOfBounds;
-	if (length < header_len) return error.InvalidLength;
+	if (length < header_len) return error.InvalidInput;
 	var h: PacketHeader = undefined;
 	h.length = length;
 	@memcpy(&h.hash, buf[16..32]);
@@ -39,5 +37,5 @@ pub fn verifyPacketHash(buf: []const u8) PacketError!void {
 	const end: usize = @intCast(h.length);
 	var digest: [16]u8 = undefined;
 	md5.md5Digest(buf[32..end], &digest) catch return error.CryptoUnavailable;
-	if (!std.mem.eql(u8, &h.hash, &digest)) return error.InvalidHash;
+	if (!std.mem.eql(u8, &h.hash, &digest)) return error.InvalidInput;
 }

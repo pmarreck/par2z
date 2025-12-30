@@ -6,20 +6,20 @@ const types = @import("packet_types.zig");
 pub const SliceError = error{
 	OutOfMemory,
 	CryptoUnavailable,
-	InvalidSliceSize,
+	InvalidInput,
 	Mismatch,
 };
 
 pub fn sliceCount(file_length: u64, slice_size: usize) SliceError!usize {
-	if (slice_size == 0) return error.InvalidSliceSize;
-	const len = std.math.cast(usize, file_length) orelse return error.InvalidSliceSize;
+	if (slice_size == 0) return error.InvalidInput;
+	const len = std.math.cast(usize, file_length) orelse return error.InvalidInput;
 	const add = @addWithOverflow(len, slice_size - 1);
-	if (add[1] != 0) return error.InvalidSliceSize;
+	if (add[1] != 0) return error.InvalidInput;
 	return add[0] / slice_size;
 }
 
 pub fn computeIfscEntries(allocator: std.mem.Allocator, data: []const u8, slice_size: usize) SliceError![]types.IfscEntry {
-	if (slice_size == 0) return error.InvalidSliceSize;
+	if (slice_size == 0) return error.InvalidInput;
 	const slice_count = (data.len + slice_size - 1) / slice_size;
 	var entries = try allocator.alloc(types.IfscEntry, slice_count);
 	var i: usize = 0;
