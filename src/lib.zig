@@ -1185,7 +1185,8 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
     }
 
     if (h.par2_path == null) return .invalid_argument;
-    const out_dir = if (h.output_dir) |d| d else blk: {
+    const out_dir: ?[]const u8 = if (h.output_dir) |d| d else blk: {
+        if (h.data_paths.items.len > 0) break :blk null;
         if (std.fs.path.dirname(h.par2_path.?)) |dir| break :blk dir;
         break :blk ".";
     };

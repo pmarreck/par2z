@@ -41,6 +41,7 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 - [x] File-backed store adapter for streaming disk access.
 - [x] Full-file recovery integration test with larger fixture vs par2.
 - [x] CLI tests using Zig 0.15 process API or bash harness.
+- [x] LuaJIT CLI wrapper (FFI against C ABI) with bash integration test.
 - [x] Optional packet support: parse FileSlic/RFSC/PkdMain/PkdRecvS; emit FileSlic (flag) and PkdMain/PkdRecvS (flag).
 - [x] Expanded integration interoperability tests (multi-file, volume-only, no-RFSC, seeded data).
 - [x] Streaming encode for file-backed store (avoid loading all slices in memory).

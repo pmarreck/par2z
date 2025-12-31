@@ -198,6 +198,39 @@ if [ "$orig4_hash" != "$recovered4_hash" ]; then
 fi
 
 # Multi-file create via par2, recover via our CLI
+
+# LuaJIT CLI integration (optional)
+if command -v luajit >/dev/null 2>&1; then
+	luajit_cli="$root_dir/zig-out/bin/par2z-cli-luajit"
+	if [ ! -x "$luajit_cli" ]; then
+		echo "par2z-cli-luajit not found at $luajit_cli" >&2
+		exit 1
+	fi
+	gen_data "$tmpdir/lj.bin" 32768
+	cp "$tmpdir/lj.bin" "$tmpdir/lj.orig.bin"
+	capture -- /bin/bash -c "cd \"$tmpdir\" && \"$luajit_cli\" create --block-size 4096 --redundancy-percent 10 lj.par2 lj.bin"
+	if [ "$rc" -ne 0 ]; then
+		echo "par2z-cli-luajit create failed: $err" >&2
+		exit 1
+	fi
+	capture -- /bin/bash -c "cd \"$tmpdir\" && \"$luajit_cli\" verify lj.par2 lj.bin"
+	if [ "$rc" -ne 0 ]; then
+		echo "par2z-cli-luajit verify failed: $err" >&2
+		exit 1
+	fi
+	corrupt_bytes "$tmpdir/lj.bin" 4096 4096
+	capture -- /bin/bash -c "cd \"$tmpdir\" && \"$luajit_cli\" recover lj.par2 lj.bin"
+	if [ "$rc" -ne 0 ]; then
+		echo "par2z-cli-luajit recover failed: $err" >&2
+		exit 1
+	fi
+	lj_hash="$(openssl dgst -sha256 "$tmpdir/lj.bin" | awk '{print $NF}')"
+	lj_orig_hash="$(openssl dgst -sha256 "$tmpdir/lj.orig.bin" | awk '{print $NF}')"
+	if [ "$lj_hash" != "$lj_orig_hash" ]; then
+		echo "hash mismatch for luajit cli case" >&2
+		exit 1
+	fi
+fi
 gen_data "$tmpdir/multi-a.bin" 32768
 gen_data "$tmpdir/multi-b.bin" 20000
 cp "$tmpdir/multi-a.bin" "$tmpdir/multi-a.orig"

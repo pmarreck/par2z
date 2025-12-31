@@ -65,6 +65,8 @@ pub fn build(b: *std.Build) void {
     cli.linkLibrary(lib);
     const install_cli = b.addInstallArtifact(cli, .{});
     b.getInstallStep().dependOn(&install_cli.step);
+    const install_luajit = b.addInstallFile(b.path("tools/par2z-cli-luajit"), "bin/par2z-cli-luajit");
+    b.getInstallStep().dependOn(&install_luajit.step);
 
     const prng_mod = b.createModule(.{
         .root_source_file = b.path("src/tools/prng_gen.zig"),

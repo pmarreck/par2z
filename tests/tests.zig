@@ -3120,6 +3120,41 @@ test "c api recover writes to output dir" {
     try std.testing.expectEqualStrings("ABCDEFGHABCDEFGH", recovered);
 }
 
+test "c api recover repairs in place when no output dir set" {
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "in.par2" });
+    const par2_path_z = try allocator.dupeZ(u8, par2_path);
+    const rec_path = try std.fs.path.join(allocator, &.{ tmp_path, "in.bin" });
+    const rec_path_z = try allocator.dupeZ(u8, rec_path);
+    try tmp.dir.writeFile(.{ .sub_path = "in.bin", .data = "ABCDEFGHABCDEFGH" });
+
+    var create_handle: ?*par2.Par2CreateHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(null, &create_handle));
+    defer par2.par2_create_destroy(create_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_path(create_handle, rec_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
+
+    try tmp.dir.writeFile(.{ .sub_path = "in.bin", .data = "XBCDEFGHABCDEFGH" });
+
+    var recover_handle: ?*par2.Par2RecoverHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_new(null, &recover_handle));
+    defer par2.par2_recover_destroy(recover_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_set_par2_path(recover_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_add_path(recover_handle, rec_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_run(recover_handle));
+
+    const repaired = try tmp.dir.readFileAlloc(allocator, "in.bin", 1 << 20);
+    try std.testing.expectEqualStrings("ABCDEFGHABCDEFGH", repaired);
+}
+
 test "cli recover rejects recovery slices that fail rfsc" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

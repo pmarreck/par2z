@@ -223,8 +223,12 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
                 break :blk try core.create_plan.splitRecoveryBlocksUniform(arena_alloc, recovery_blocks, count);
             }
             if (opts.limit_recovery) {
-                const count = core.create_plan.defaultVolumeCount(recovery_blocks);
-                break :blk try core.create_plan.splitRecoveryBlocksCounted(arena_alloc, recovery_blocks, count);
+                var max_blocks: u64 = 0;
+                for (files) |f| {
+                    const blocks = try core.slices.sliceCount(f.length, slice_size);
+                    if (blocks > max_blocks) max_blocks = blocks;
+                }
+                break :blk try core.create_plan.splitRecoveryBlocksLimited(arena_alloc, recovery_blocks, max_blocks);
             }
             break :blk try core.create_plan.splitRecoveryBlocksDefault(arena_alloc, recovery_blocks);
         };
@@ -238,6 +242,7 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
             .slice_size = slice_size,
             .plan = plan,
             .width = width,
+            .offset = offset,
             .par2_path = opts.par2_path,
             .output_open = opts.output_open,
             .recovery_set_id = recovery_set_id,
@@ -495,8 +500,12 @@ pub fn createStreams(
                 break :blk try core.create_plan.splitRecoveryBlocksUniform(arena_alloc, recovery_blocks, count);
             }
             if (opts.limit_recovery) {
-                const count = core.create_plan.defaultVolumeCount(recovery_blocks);
-                break :blk try core.create_plan.splitRecoveryBlocksCounted(arena_alloc, recovery_blocks, count);
+                var max_blocks: u64 = 0;
+                for (files) |f| {
+                    const blocks = try core.slices.sliceCount(f.length, slice_size);
+                    if (blocks > max_blocks) max_blocks = blocks;
+                }
+                break :blk try core.create_plan.splitRecoveryBlocksLimited(arena_alloc, recovery_blocks, max_blocks);
             }
             break :blk try core.create_plan.splitRecoveryBlocksDefault(arena_alloc, recovery_blocks);
         };
@@ -510,6 +519,7 @@ pub fn createStreams(
             .slice_size = slice_size,
             .plan = plan,
             .width = width,
+            .offset = offset,
             .par2_path = opts.par2_path,
             .output_open = opts.output_open,
             .recovery_set_id = recovery_set_id,
@@ -812,6 +822,7 @@ const VolumeShared = struct {
     slice_size: usize,
     plan: []const core.create_plan.VolumePlan,
     width: usize,
+    offset: u64,
     par2_path: []const u8,
     output_open: ?OutputOpener,
     recovery_set_id: [16]u8,
@@ -840,6 +851,7 @@ fn volumeWorker(shared: *VolumeShared) void {
             shared.slice_size,
             vol,
             shared.width,
+            shared.offset,
             shared.par2_path,
             shared.output_open,
             shared.recovery_set_id,
@@ -862,6 +874,7 @@ const StreamVolumeShared = struct {
     slice_size: usize,
     plan: []const core.create_plan.VolumePlan,
     width: usize,
+    offset: u64,
     par2_path: []const u8,
     output_open: ?OutputOpener,
     recovery_set_id: [16]u8,
@@ -890,6 +903,7 @@ fn streamVolumeWorker(shared: *StreamVolumeShared) void {
             shared.slice_size,
             vol,
             shared.width,
+            shared.offset,
             shared.par2_path,
             shared.output_open,
             shared.recovery_set_id,
@@ -923,6 +937,7 @@ fn buildVolume(
     slice_size: usize,
     vol: core.create_plan.VolumePlan,
     width: usize,
+    offset: u64,
     par2_path: []const u8,
     output_open: ?OutputOpener,
     recovery_set_id: [16]u8,
@@ -941,20 +956,24 @@ fn buildVolume(
         tmp_alloc = limited.allocator();
     }
 
-    const vol_path = try volumePath(allocator, par2_path, vol.start, vol.count, width);
+    const add = @addWithOverflow(vol.start, offset);
+    if (add[1] != 0) return error.InvalidInput;
+    const vol_start = add[0];
+    const vol_path = try volumePath(allocator, par2_path, vol_start, vol.count, width);
     var buffer = std.ArrayList(u8).empty;
     defer buffer.deinit(allocator);
     var vol_out: ?OutputTarget = null;
     if (output_open == null) {
         vol_out = try common.openFileOutput(allocator, vol_path);
     }
-    var offset: usize = 0;
+    var byte_offset: usize = 0;
     const count_usize = std.math.cast(usize, vol.count) orelse return error.InvalidInput;
     var exponents = try tmp_alloc.alloc(u32, count_usize);
     defer tmp_alloc.free(exponents);
     var r: usize = 0;
     while (r < count_usize) : (r += 1) {
-        exponents[r] = core.gf16.exponentForIndex(@as(u32, @intCast(vol.start + r)));
+        const exp_idx = vol_start + r;
+        exponents[r] = core.gf16.exponentForIndex(@as(u32, @intCast(exp_idx)));
     }
     const rec_slices = if (parallel_slices)
         try core.block_api.computeRecoverySlicesFileStoreBatchParallel(tmp_alloc, store, file_infos, slice_size, exponents)
@@ -979,7 +998,7 @@ fn buildVolume(
         } else {
             try vol_out.?.writeAll(pkt);
         }
-        offset += pkt.len;
+        byte_offset += pkt.len;
         if (emit_rfsc) {
             var entry: core.packet_types.RfscEntry = undefined;
             try core.md5.md5Digest(rec_slice, &entry.md5);
@@ -994,21 +1013,21 @@ fn buildVolume(
             } else {
                 try vol_out.?.writeAll(pkd_pkt);
             }
-            offset += pkd_pkt.len;
+            byte_offset += pkd_pkt.len;
         }
     }
     var rfsc_offset: ?usize = null;
     if (emit_rfsc) {
-        if (offset >= 16384) {
+        if (byte_offset >= 16384) {
             const file_id: [16]u8 = .{0} ** 16;
             const rfsc_pkt = try core.create_packets.buildRfscPacket(allocator, recovery_set_id, file_id, rfsc_entries.items);
-            rfsc_offset = offset;
+            rfsc_offset = byte_offset;
             if (output_open != null) {
                 try buffer.appendSlice(allocator, rfsc_pkt);
             } else {
                 try vol_out.?.writeAll(rfsc_pkt);
             }
-            offset += rfsc_pkt.len;
+            byte_offset += rfsc_pkt.len;
         }
     }
     if (include_volume_meta) {
@@ -1018,7 +1037,7 @@ fn buildVolume(
             } else {
                 try vol_out.?.writeAll(pkt);
             }
-            offset += pkt.len;
+            byte_offset += pkt.len;
         }
     }
     if (emit_rfsc and rfsc_offset != null) {
@@ -1046,6 +1065,7 @@ fn buildVolumeStream(
     slice_size: usize,
     vol: core.create_plan.VolumePlan,
     width: usize,
+    offset: u64,
     par2_path: []const u8,
     output_open: ?OutputOpener,
     recovery_set_id: [16]u8,
@@ -1064,20 +1084,24 @@ fn buildVolumeStream(
         tmp_alloc = limited.allocator();
     }
 
-    const vol_path = try volumePath(allocator, par2_path, vol.start, vol.count, width);
+    const add = @addWithOverflow(vol.start, offset);
+    if (add[1] != 0) return error.InvalidInput;
+    const vol_start = add[0];
+    const vol_path = try volumePath(allocator, par2_path, vol_start, vol.count, width);
     var buffer = std.ArrayList(u8).empty;
     defer buffer.deinit(allocator);
     var vol_out: ?OutputTarget = null;
     if (output_open == null) {
         vol_out = try common.openFileOutput(allocator, vol_path);
     }
-    var offset: usize = 0;
+    var byte_offset: usize = 0;
     const count_usize = std.math.cast(usize, vol.count) orelse return error.InvalidInput;
     var exponents = try tmp_alloc.alloc(u32, count_usize);
     defer tmp_alloc.free(exponents);
     var r: usize = 0;
     while (r < count_usize) : (r += 1) {
-        exponents[r] = core.gf16.exponentForIndex(@as(u32, @intCast(vol.start + r)));
+        const exp_idx = vol_start + r;
+        exponents[r] = core.gf16.exponentForIndex(@as(u32, @intCast(exp_idx)));
     }
     const rec_slices = if (parallel_slices)
         try core.block_api.computeRecoverySlicesStreamStoreBatchParallel(tmp_alloc, store, file_infos, slice_size, exponents)
@@ -1102,7 +1126,7 @@ fn buildVolumeStream(
         } else {
             try vol_out.?.writeAll(pkt);
         }
-        offset += pkt.len;
+        byte_offset += pkt.len;
         if (emit_rfsc) {
             var entry: core.packet_types.RfscEntry = undefined;
             try core.md5.md5Digest(rec_slice, &entry.md5);
@@ -1117,21 +1141,21 @@ fn buildVolumeStream(
             } else {
                 try vol_out.?.writeAll(pkd_pkt);
             }
-            offset += pkd_pkt.len;
+            byte_offset += pkd_pkt.len;
         }
     }
     var rfsc_offset: ?usize = null;
     if (emit_rfsc) {
-        if (offset >= 16384) {
+        if (byte_offset >= 16384) {
             const file_id: [16]u8 = .{0} ** 16;
             const rfsc_pkt = try core.create_packets.buildRfscPacket(allocator, recovery_set_id, file_id, rfsc_entries.items);
-            rfsc_offset = offset;
+            rfsc_offset = byte_offset;
             if (output_open != null) {
                 try buffer.appendSlice(allocator, rfsc_pkt);
             } else {
                 try vol_out.?.writeAll(rfsc_pkt);
             }
-            offset += rfsc_pkt.len;
+            byte_offset += rfsc_pkt.len;
         }
     }
     if (include_volume_meta) {
@@ -1141,7 +1165,7 @@ fn buildVolumeStream(
             } else {
                 try vol_out.?.writeAll(pkt);
             }
-            offset += pkt.len;
+            byte_offset += pkt.len;
         }
     }
     if (emit_rfsc and rfsc_offset != null) {

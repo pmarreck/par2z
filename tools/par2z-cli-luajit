@@ -1,0 +1,506 @@
+#!/usr/bin/env luajit
+local ffi = require("ffi")
+
+ffi.cdef[[
+typedef struct Par2CreateHandle Par2CreateHandle;
+typedef struct Par2VerifyHandle Par2VerifyHandle;
+typedef struct Par2RecoverHandle Par2RecoverHandle;
+typedef struct Par2ThreadPool Par2ThreadPool;
+
+typedef enum Par2Error {
+	PAR2_OK = 0,
+	PAR2_ERR_INVALID_ARGUMENT = 1,
+	PAR2_ERR_IO = 2,
+	PAR2_ERR_OUT_OF_MEMORY = 3,
+	PAR2_ERR_INTERNAL = 4,
+	PAR2_ERR_UNSUPPORTED = 5,
+	PAR2_ERR_NOT_FOUND = 6,
+	PAR2_ERR_DATA_CORRUPT = 7,
+} Par2Error;
+
+typedef void *(*Par2AllocFn)(void *ctx, size_t size, size_t align);
+typedef void *(*Par2ReallocFn)(void *ctx, void *ptr, size_t old_size, size_t new_size, size_t align);
+typedef void (*Par2FreeFn)(void *ctx, void *ptr, size_t old_size, size_t align);
+
+typedef struct Par2Allocator {
+	void *ctx;
+	Par2AllocFn alloc;
+	Par2ReallocFn realloc;
+	Par2FreeFn free;
+} Par2Allocator;
+
+typedef struct Par2CreateOptions {
+	uint64_t block_size;
+	uint64_t block_count;
+	uint64_t redundancy_percent;
+	uint64_t recovery_blocks;
+	uint64_t first_recovery_block;
+	uint32_t uniform_recovery;
+	uint32_t limit_recovery;
+	uint64_t recovery_file_count;
+	uint32_t include_input_slices;
+	uint32_t emit_packed;
+	uint32_t emit_rfsc;
+	uint32_t include_volume_meta;
+	uint32_t thread_count;
+	uint64_t memory_mb;
+	const char *basepath;
+	const char *comment;
+	Par2Allocator allocator;
+} Par2CreateOptions;
+
+typedef struct Par2VerifyOptions {
+	uint64_t memory_mb;
+	const char *basepath;
+	Par2Allocator allocator;
+} Par2VerifyOptions;
+
+typedef struct Par2RecoverOptions {
+	uint64_t memory_mb;
+	uint32_t allow_unsafe_paths;
+	uint32_t thread_count;
+	const char *basepath;
+	Par2Allocator allocator;
+} Par2RecoverOptions;
+
+const char *par2_version(void);
+
+Par2Error par2_create_new(const Par2CreateOptions *opts, Par2CreateHandle **out_handle);
+void par2_create_destroy(Par2CreateHandle *handle);
+Par2Error par2_create_add_path(Par2CreateHandle *handle, const char *path);
+Par2Error par2_create_set_output_path(Par2CreateHandle *handle, const char *par2_path);
+Par2Error par2_create_run(Par2CreateHandle *handle);
+const char *par2_create_last_error(Par2CreateHandle *handle);
+
+Par2Error par2_verify_new(const Par2VerifyOptions *opts, Par2VerifyHandle **out_handle);
+void par2_verify_destroy(Par2VerifyHandle *handle);
+Par2Error par2_verify_set_par2_path(Par2VerifyHandle *handle, const char *par2_path);
+Par2Error par2_verify_add_path(Par2VerifyHandle *handle, const char *path);
+Par2Error par2_verify_run(Par2VerifyHandle *handle);
+const char *par2_verify_last_error(Par2VerifyHandle *handle);
+
+Par2Error par2_recover_new(const Par2RecoverOptions *opts, Par2RecoverHandle **out_handle);
+void par2_recover_destroy(Par2RecoverHandle *handle);
+Par2Error par2_recover_set_par2_path(Par2RecoverHandle *handle, const char *par2_path);
+Par2Error par2_recover_add_path(Par2RecoverHandle *handle, const char *path);
+Par2Error par2_recover_set_output_dir(Par2RecoverHandle *handle, const char *out_dir);
+Par2Error par2_recover_run(Par2RecoverHandle *handle);
+const char *par2_recover_last_error(Par2RecoverHandle *handle);
+
+Par2Error par2_thread_pool_configure(uint32_t thread_count);
+]]
+
+local function file_exists(path)
+	local f = io.open(path, "rb")
+	if f then
+		f:close()
+		return true
+	end
+	return false
+end
+
+local function dirname(path)
+	local dir = path:match("^(.*)/[^/]*$")
+	if dir == nil or dir == "" then
+		return "."
+	end
+	return dir
+end
+
+local function find_lib()
+	if os.getenv("PAR2_LUAJIT_LIB") then
+		return os.getenv("PAR2_LUAJIT_LIB")
+	end
+	local arg0 = arg[0] or "par2z-cli-luajit"
+	local bin_dir = dirname(arg0)
+	local root = dirname(bin_dir)
+	local dylib = root .. "/lib/libpar2.dylib"
+	local so = root .. "/lib/libpar2.so"
+	if file_exists(dylib) then
+		return dylib
+	end
+	if file_exists(so) then
+		return so
+	end
+	return nil
+end
+
+local lib_path = find_lib()
+if not lib_path then
+	io.stderr:write("par2z-cli-luajit: cannot locate libpar2 (set PAR2_LUAJIT_LIB)\n")
+	os.exit(1)
+end
+
+local lib = ffi.load(lib_path)
+
+local usage = [[Usage:
+  par2z-cli-luajit verify [options] <par2 file> [data files...]
+  par2z-cli-luajit recover [options] <par2 file> [data files...]
+  par2z-cli-luajit repair  [options] <par2 file> [data files...]
+  par2z-cli-luajit create [options] <par2 file> <data files...>
+
+Verify/Recover options:
+  -B <path>        Base path used to resolve file names in FileDesc packets
+  -m <MB>          Memory cap (fail if estimated or actual usage exceeds)
+  -v/-q            Increase/decrease verbosity (-q -q is silent)
+  --stdout         Recover to stdout (not supported in LuaJIT CLI)
+  --tar            Emit recovered files as a tar stream (not supported in LuaJIT CLI)
+  -o, --out-dir    Output directory for recovered files
+  --allow-unsafe-paths  Allow absolute/.. paths from FileDesc (unsafe)
+
+Create options:
+  -a <par2 file>   Output PAR2 file (par2cmdline-compatible)
+  -T <count>       Thread count (par2cmdline-compatible)
+  -s <bytes>       Block size (mutually exclusive with -b)
+  -b <count>       Block count (mutually exclusive with -s)
+  -r <percent>     Redundancy percent (mutually exclusive with -c)
+  -c <count>       Recovery block count (mutually exclusive with -r)
+  -f <index>       First recovery block number (offset volume indices)
+  -u               Uniform recovery file sizes
+  -l               Limit recovery file sizes (based on largest input file)
+  -n <count>       Number of recovery files (max 31; incompatible with -l)
+  -R               Recurse into subdirectories for input paths (not supported in LuaJIT CLI)
+  --tar            Emit main+volumes as a tar stream (not supported in LuaJIT CLI)
+  --block-size     Long form of -s
+  --block-count    Long form of -b
+  --redundancy-percent  Long form of -r
+  --recovery-blocks     Long form of -c
+  --comment <text> Add comment packet(s) (ASCII + Unicode if transliterable)
+  --mute-defaults  Suppress derived plan output (no-op in LuaJIT CLI)
+  --include-input-slices  Emit FileSlic packets in main PAR2
+  --emit-packed    Emit PkdMain/PkdRecvS packets
+  --no-rfsc        Skip RFSC packets
+  --no-volume-meta Do not duplicate Main/FileDesc/IFSC/Creator in volumes
+]]
+
+local function die(msg)
+	io.stderr:write(msg, "\n")
+	os.exit(1)
+end
+
+local function parse_uint(argstr)
+	local n = tonumber(argstr)
+	if n == nil or n < 0 then
+		return nil
+	end
+	return n
+end
+
+local function parse_common(args, start)
+	local i = start
+	local basepath = nil
+	local memory_mb = 0
+	local thread_count = 0
+	while i <= #args do
+		local a = args[i]
+		if a == "--" then
+			i = i + 1
+			break
+		end
+		local handled = true
+		if a == "-m" then
+			memory_mb = assert(parse_uint(args[i + 1]))
+			i = i + 2
+		elseif a:sub(1, 2) == "-m" and #a > 2 then
+			memory_mb = assert(parse_uint(a:sub(3)))
+			i = i + 1
+		elseif a == "-B" or a == "--basepath" then
+			basepath = args[i + 1]
+			i = i + 2
+		elseif a:sub(1, 2) == "-B" and #a > 2 then
+			basepath = a:sub(3)
+			i = i + 1
+		elseif a == "-T" then
+			thread_count = assert(parse_uint(args[i + 1]))
+			i = i + 2
+		elseif a:sub(1, 2) == "-T" and #a > 2 then
+			thread_count = assert(parse_uint(a:sub(3)))
+			i = i + 1
+		else
+			handled = false
+		end
+		if not handled then
+			break
+		end
+	end
+	return i, basepath, memory_mb, thread_count
+end
+
+local function parse_create(args)
+	local opts = {
+		block_size = 0,
+		block_count = 0,
+		redundancy_percent = 0,
+		recovery_blocks = 0,
+		first_recovery_block = 0,
+		uniform_recovery = 0,
+		limit_recovery = 0,
+		recovery_file_count = 0,
+		include_input_slices = 0,
+		emit_packed = 0,
+		emit_rfsc = 1,
+		include_volume_meta = 1,
+	}
+	local output_path = nil
+	local i = 2
+	while i <= #args do
+		local a = args[i]
+		if a == "--" then
+			i = i + 1
+			break
+		end
+		local handled = true
+		if a == "-v" or a == "-q" then
+			i = i + 1
+		elseif a == "--mute-defaults" then
+			i = i + 1
+		elseif a == "-R" then
+			die("par2z-cli-luajit: -R not supported")
+		elseif a == "--tar" then
+			die("par2z-cli-luajit: --tar not supported")
+		elseif a == "--comment" then
+			opts.comment = args[i + 1]
+			i = i + 2
+		elseif a == "--include-input-slices" then
+			opts.include_input_slices = 1
+			i = i + 1
+		elseif a == "--emit-packed" then
+			opts.emit_packed = 1
+			i = i + 1
+		elseif a == "--no-rfsc" then
+			opts.emit_rfsc = 0
+			i = i + 1
+		elseif a == "--no-volume-meta" then
+			opts.include_volume_meta = 0
+			i = i + 1
+		elseif a == "-a" then
+			output_path = args[i + 1]
+			i = i + 2
+		elseif a:sub(1, 2) == "-a" and #a > 2 then
+			output_path = a:sub(3)
+			i = i + 1
+		elseif a == "--block-size" or a == "-s" then
+			opts.block_size = assert(parse_uint(args[i + 1]))
+			i = i + 2
+		elseif a:sub(1, 2) == "-s" and #a > 2 then
+			opts.block_size = assert(parse_uint(a:sub(3)))
+			i = i + 1
+		elseif a == "--block-count" or a == "-b" then
+			opts.block_count = assert(parse_uint(args[i + 1]))
+			i = i + 2
+		elseif a:sub(1, 2) == "-b" and #a > 2 then
+			opts.block_count = assert(parse_uint(a:sub(3)))
+			i = i + 1
+		elseif a == "--redundancy-percent" or a == "-r" then
+			opts.redundancy_percent = assert(parse_uint(args[i + 1]))
+			i = i + 2
+		elseif a:sub(1, 2) == "-r" and #a > 2 then
+			opts.redundancy_percent = assert(parse_uint(a:sub(3)))
+			i = i + 1
+		elseif a == "--recovery-blocks" or a == "-c" then
+			opts.recovery_blocks = assert(parse_uint(args[i + 1]))
+			i = i + 2
+		elseif a:sub(1, 2) == "-c" and #a > 2 then
+			opts.recovery_blocks = assert(parse_uint(a:sub(3)))
+			i = i + 1
+		elseif a == "-f" then
+			opts.first_recovery_block = assert(parse_uint(args[i + 1]))
+			i = i + 2
+		elseif a:sub(1, 2) == "-f" and #a > 2 then
+			opts.first_recovery_block = assert(parse_uint(a:sub(3)))
+			i = i + 1
+		elseif a == "-u" then
+			opts.uniform_recovery = 1
+			i = i + 1
+		elseif a == "-l" then
+			opts.limit_recovery = 1
+			i = i + 1
+		elseif a == "-n" then
+			opts.recovery_file_count = assert(parse_uint(args[i + 1]))
+			i = i + 2
+		elseif a:sub(1, 2) == "-n" and #a > 2 then
+			opts.recovery_file_count = assert(parse_uint(a:sub(3)))
+			i = i + 1
+		else
+			handled = false
+		end
+		if not handled then
+			break
+		end
+	end
+	local next_i, basepath, memory_mb, thread_count = parse_common(args, i)
+	i = next_i
+	local par2_path = nil
+	if output_path then
+		par2_path = output_path
+	else
+		par2_path = args[i]
+		i = i + 1
+	end
+	local data_paths = {}
+	for j = i, #args do
+		table.insert(data_paths, args[j])
+	end
+	if not par2_path or #data_paths == 0 then
+		die("par2z-cli-luajit: missing par2 path or data files")
+	end
+	return opts, par2_path, data_paths, basepath, memory_mb, thread_count
+end
+
+local function parse_verify(args)
+	local i, basepath, memory_mb = parse_common(args, 2)
+	local par2_path = args[i]
+	if not par2_path then
+		die("par2z-cli-luajit: missing par2 path")
+	end
+	i = i + 1
+	local data_paths = {}
+	for j = i, #args do
+		table.insert(data_paths, args[j])
+	end
+	return par2_path, data_paths, basepath, memory_mb
+end
+
+local function parse_recover(args)
+	local stdout_only = false
+	local out_dir = nil
+	local allow_unsafe = 0
+	local i = 2
+	while i <= #args do
+		local a = args[i]
+		if a == "--" then
+			i = i + 1
+			break
+		end
+		local handled = true
+		if a == "--stdout" then
+			stdout_only = true
+			i = i + 1
+		elseif a == "--tar" then
+			die("par2z-cli-luajit: --tar not supported")
+		elseif a == "--allow-unsafe-paths" then
+			allow_unsafe = 1
+			i = i + 1
+		elseif a == "-o" or a == "--out-dir" then
+			out_dir = args[i + 1]
+			i = i + 2
+		elseif a == "-v" or a == "-q" then
+			i = i + 1
+		else
+			handled = false
+		end
+		if not handled then
+			break
+		end
+	end
+	if stdout_only then
+		die("par2z-cli-luajit: --stdout not supported")
+	end
+	local next_i, basepath, memory_mb, thread_count = parse_common(args, i)
+	i = next_i
+	local par2_path = args[i]
+	if not par2_path then
+		die("par2z-cli-luajit: missing par2 path")
+	end
+	i = i + 1
+	local data_paths = {}
+	for j = i, #args do
+		table.insert(data_paths, args[j])
+	end
+	return par2_path, data_paths, out_dir, allow_unsafe, basepath, memory_mb, thread_count
+end
+
+local function check_err(rc, msg, errfn, handle)
+	if rc == lib.PAR2_OK then
+		return
+	end
+	local detail = nil
+	if errfn and handle ~= nil then
+		local cmsg = errfn(handle)
+		if cmsg ~= nil then
+			detail = ffi.string(cmsg)
+		end
+	end
+	if detail and detail ~= "" then
+		die(msg .. ": " .. detail)
+	end
+	die(msg)
+end
+
+local cmd = arg[1]
+if cmd == nil or cmd == "--help" or cmd == "-h" then
+	io.stdout:write(usage)
+	os.exit(0)
+end
+if cmd == "repair" then
+	cmd = "recover"
+end
+
+if cmd == "create" then
+	local opts_tbl, par2_path, data_paths, basepath, memory_mb, thread_count = parse_create(arg)
+	local opts = ffi.new("Par2CreateOptions")
+	opts.block_size = opts_tbl.block_size or 0
+	opts.block_count = opts_tbl.block_count or 0
+	opts.redundancy_percent = opts_tbl.redundancy_percent or 0
+	opts.recovery_blocks = opts_tbl.recovery_blocks or 0
+	opts.first_recovery_block = opts_tbl.first_recovery_block or 0
+	opts.uniform_recovery = opts_tbl.uniform_recovery or 0
+	opts.limit_recovery = opts_tbl.limit_recovery or 0
+	opts.recovery_file_count = opts_tbl.recovery_file_count or 0
+	opts.include_input_slices = opts_tbl.include_input_slices or 0
+	opts.emit_packed = opts_tbl.emit_packed or 0
+	opts.emit_rfsc = opts_tbl.emit_rfsc or 0
+	opts.include_volume_meta = opts_tbl.include_volume_meta or 0
+	opts.thread_count = thread_count or 0
+	opts.memory_mb = memory_mb or 0
+	opts.basepath = basepath
+	opts.comment = opts_tbl.comment
+
+	local handle = ffi.new("Par2CreateHandle*[1]")
+	check_err(lib.par2_create_new(opts, handle), "create init failed", lib.par2_create_last_error, handle[0])
+	local h = handle[0]
+	for _, path in ipairs(data_paths) do
+		check_err(lib.par2_create_add_path(h, path), "create add path failed", lib.par2_create_last_error, h)
+	end
+	check_err(lib.par2_create_set_output_path(h, par2_path), "create set output failed", lib.par2_create_last_error, h)
+	check_err(lib.par2_create_run(h), "create failed", lib.par2_create_last_error, h)
+	lib.par2_create_destroy(h)
+	os.exit(0)
+elseif cmd == "verify" then
+	local par2_path, data_paths, basepath, memory_mb = parse_verify(arg)
+	local opts = ffi.new("Par2VerifyOptions")
+	opts.memory_mb = memory_mb or 0
+	opts.basepath = basepath
+	local handle = ffi.new("Par2VerifyHandle*[1]")
+	check_err(lib.par2_verify_new(opts, handle), "verify init failed", lib.par2_verify_last_error, handle[0])
+	local h = handle[0]
+	check_err(lib.par2_verify_set_par2_path(h, par2_path), "verify set par2 failed", lib.par2_verify_last_error, h)
+	for _, path in ipairs(data_paths) do
+		check_err(lib.par2_verify_add_path(h, path), "verify add path failed", lib.par2_verify_last_error, h)
+	end
+	check_err(lib.par2_verify_run(h), "verify failed", lib.par2_verify_last_error, h)
+	lib.par2_verify_destroy(h)
+	os.exit(0)
+elseif cmd == "recover" then
+	local par2_path, data_paths, out_dir, allow_unsafe, basepath, memory_mb, thread_count = parse_recover(arg)
+	local opts = ffi.new("Par2RecoverOptions")
+	opts.memory_mb = memory_mb or 0
+	opts.allow_unsafe_paths = allow_unsafe or 0
+	opts.thread_count = thread_count or 0
+	opts.basepath = basepath
+	local handle = ffi.new("Par2RecoverHandle*[1]")
+	check_err(lib.par2_recover_new(opts, handle), "recover init failed", lib.par2_recover_last_error, handle[0])
+	local h = handle[0]
+	check_err(lib.par2_recover_set_par2_path(h, par2_path), "recover set par2 failed", lib.par2_recover_last_error, h)
+	for _, path in ipairs(data_paths) do
+		check_err(lib.par2_recover_add_path(h, path), "recover add path failed", lib.par2_recover_last_error, h)
+	end
+	if out_dir then
+		check_err(lib.par2_recover_set_output_dir(h, out_dir), "recover set output dir failed", lib.par2_recover_last_error, h)
+	end
+	check_err(lib.par2_recover_run(h), "recover failed", lib.par2_recover_last_error, h)
+	lib.par2_recover_destroy(h)
+	os.exit(0)
+else
+	die("par2z-cli-luajit: unknown command")
+end
