@@ -6,6 +6,7 @@ source "$HOME/dotfiles/bin/src/capture.bash"
 out=""
 err=""
 rc=0
+: "${PRINTABLE_BINARY_MUTE_STATS:=}"
 
 root_dir="$(pwd)"
 prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
@@ -229,6 +230,86 @@ if command -v luajit >/dev/null 2>&1; then
 	if [ "$lj_hash" != "$lj_orig_hash" ]; then
 		echo "hash mismatch for luajit cli case" >&2
 		exit 1
+	fi
+
+	# LuaJIT CLI recurse (-R)
+	mkdir -p "$tmpdir/ljr/sub"
+	gen_data "$tmpdir/ljr/sub/r.bin" 1024
+	capture -- /bin/bash -c "cd \"$tmpdir\" && \"$luajit_cli\" create -R --block-size 512 --recovery-blocks 2 ljr.par2 ljr"
+	if [ "$rc" -ne 0 ]; then
+		echo "par2z-cli-luajit create -R failed: $err" >&2
+		exit 1
+	fi
+	capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify ljr.par2"
+	if [ "$rc" -ne 0 ]; then
+		echo "par2 verify failed for luajit -R output" >&2
+		exit 1
+	fi
+
+	# LuaJIT CLI --stdout (single missing file)
+	gen_data "$tmpdir/ljout.bin" 16384
+	cp "$tmpdir/ljout.bin" "$tmpdir/ljout.orig.bin"
+	capture -- /bin/bash -c "cd \"$tmpdir\" && \"$luajit_cli\" create --block-size 4096 --recovery-blocks 4 ljout.par2 ljout.bin"
+	if [ "$rc" -ne 0 ]; then
+		echo "par2z-cli-luajit create for stdout failed: $err" >&2
+		exit 1
+	fi
+	rm -f "$tmpdir/ljout.bin"
+	if ! (cd "$tmpdir" && "$luajit_cli" recover --stdout ljout.par2 > ljout.recovered.bin); then
+		echo "par2z-cli-luajit recover --stdout failed" >&2
+		exit 1
+	fi
+	ljout_hash="$(openssl dgst -sha256 "$tmpdir/ljout.recovered.bin" | awk '{print $NF}')"
+	ljout_orig_hash="$(openssl dgst -sha256 "$tmpdir/ljout.orig.bin" | awk '{print $NF}')"
+	if [ "$ljout_hash" != "$ljout_orig_hash" ]; then
+		echo "hash mismatch for luajit --stdout case" >&2
+		exit 1
+	fi
+
+	# LuaJIT CLI --tar (optional)
+	if command -v tar >/dev/null 2>&1; then
+		gen_data "$tmpdir/ljtar.bin" 8192
+		if ! (cd "$tmpdir" && "$luajit_cli" create --block-size 4096 --recovery-blocks 2 --tar ljtar.par2 ljtar.bin > ljtar.tar); then
+			echo "par2z-cli-luajit create --tar failed" >&2
+			exit 1
+		fi
+		mkdir -p "$tmpdir/ljtar-out"
+		if ! (cd "$tmpdir/ljtar-out" && tar -xf "$tmpdir/ljtar.tar"); then
+			echo "tar extract failed for luajit create --tar" >&2
+			exit 1
+		fi
+		capture -- /bin/bash -c "par2 verify -B \"$tmpdir\" \"$tmpdir/ljtar-out/ljtar.par2\" \"$tmpdir/ljtar.bin\""
+		if [ "$rc" -ne 0 ]; then
+			echo "par2 verify failed for luajit create --tar output" >&2
+			exit 1
+		fi
+		cp "$tmpdir/ljtar.bin" "$tmpdir/ljtar.orig.bin"
+		corrupt_bytes "$tmpdir/ljtar.bin" 1024 0
+		if [ ! -f "$tmpdir/ljtar.bin" ]; then
+			echo "luajit --tar missing corrupted input" >&2
+			ls -la "$tmpdir" >&2
+			exit 1
+		fi
+		if ! (cd "$tmpdir" && "$luajit_cli" recover --tar "$tmpdir/ljtar-out/ljtar.par2" ljtar.bin > ljtar-recover.tar); then
+			echo "par2z-cli-luajit recover --tar failed" >&2
+			exit 1
+		fi
+		mkdir -p "$tmpdir/ljtar-recover"
+		if ! (cd "$tmpdir/ljtar-recover" && tar -xf "$tmpdir/ljtar-recover.tar"); then
+			echo "tar extract failed for luajit recover --tar" >&2
+			exit 1
+		fi
+		if [ ! -f "$tmpdir/ljtar-recover/ljtar.bin" ]; then
+			echo "luajit recover --tar missing output file" >&2
+			ls -la "$tmpdir/ljtar-recover" >&2
+			exit 1
+		fi
+		ljtar_hash="$(openssl dgst -sha256 "$tmpdir/ljtar-recover/ljtar.bin" | awk '{print $NF}')"
+		ljtar_orig_hash="$(openssl dgst -sha256 "$tmpdir/ljtar.orig.bin" | awk '{print $NF}')"
+		if [ "$ljtar_hash" != "$ljtar_orig_hash" ]; then
+			echo "hash mismatch for luajit recover --tar case" >&2
+			exit 1
+		fi
 	fi
 fi
 gen_data "$tmpdir/multi-a.bin" 32768
