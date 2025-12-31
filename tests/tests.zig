@@ -2177,6 +2177,46 @@ test "cli recover writes to out-dir" {
     try std.testing.expectEqualSlices(u8, data_bytes, recovered_bytes);
 }
 
+test "cli recover repairs in place when data path provided" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const cli_path = try cliPath(arena.allocator());
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const payload = "The quick brown fox jumps over the lazy dog.";
+    try tmp.dir.writeFile(.{ .sub_path = "in.bin", .data = payload });
+
+    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    const data_path = try tmp.dir.realpathAlloc(arena.allocator(), "in.bin");
+    const par2_path = try std.fs.path.join(arena.allocator(), &.{ tmp_path, "in.par2" });
+
+    const create = try std.process.Child.run(.{
+        .allocator = arena.allocator(),
+        .argv = &.{ cli_path, "create", "--block-size", "4", "--recovery-blocks", "2", par2_path, data_path },
+    });
+    switch (create.term) {
+        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        else => return error.UnexpectedTerm,
+    }
+
+    var file = try std.fs.cwd().openFile(data_path, .{ .mode = .read_write });
+    defer file.close();
+    try file.seekTo(5);
+    _ = try file.writeAll("X");
+
+    const recover = try std.process.Child.run(.{
+        .allocator = arena.allocator(),
+        .argv = &.{ cli_path, "recover", par2_path, data_path },
+    });
+    switch (recover.term) {
+        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        else => return error.UnexpectedTerm,
+    }
+
+    const repaired = try std.fs.cwd().readFileAlloc(arena.allocator(), data_path, 1 << 20);
+    try std.testing.expectEqualStrings(payload, repaired);
+}
+
 test "cli create tar stream" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

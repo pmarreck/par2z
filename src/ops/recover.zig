@@ -233,16 +233,30 @@ pub fn recover(
             computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, stdout);
         } else if (opts.output_open != null) {
             const target_dir = opts.out_dir orelse opts.basepath;
-            const out_path = try outputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths);
+            const out_path = try pickOutputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths, present[i], file_entries[i].path);
             defer if (out_path.owned) allocator.free(out_path.path);
             var out = try common.openOutput(allocator, out_path.path, opts.output_open);
             defer out.close();
             computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, &out);
         } else {
             const target_dir = opts.out_dir orelse opts.basepath;
-            const out_path = try outputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths);
+            const out_path = try pickOutputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths, present[i], file_entries[i].path);
             defer if (out_path.owned) allocator.free(out_path.path);
-            computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path.path);
+            const in_place = present[i] and file_entries[i].path.len != 0 and std.mem.eql(u8, out_path.path, file_entries[i].path);
+            if (in_place) {
+                var tmp = try openTempOutputForPath(allocator, out_path.path);
+                var keep_tmp = false;
+                defer {
+                    tmp.file.close();
+                    if (!keep_tmp) std.fs.cwd().deleteFile(tmp.path) catch {};
+                    allocator.free(tmp.path);
+                }
+                computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, tmp.file);
+                try std.fs.cwd().rename(tmp.path, out_path.path);
+                keep_tmp = true;
+            } else {
+                computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path.path);
+            }
         }
         if (!std.mem.eql(u8, &computed, &desc.file_hash)) return error.InvalidInput;
     }
@@ -600,6 +614,50 @@ fn outputPath(allocator: std.mem.Allocator, out_dir: ?[]const u8, file_name: []c
     return .{ .path = joined, .owned = true };
 }
 
+fn pickOutputPath(
+    allocator: std.mem.Allocator,
+    out_dir: ?[]const u8,
+    file_name: []const u8,
+    allow_unsafe_paths: bool,
+    present: bool,
+    file_path: []const u8,
+) !common.NormalizedPath {
+    if (out_dir != null) {
+        return outputPath(allocator, out_dir, file_name, allow_unsafe_paths);
+    }
+    if (present and file_path.len != 0) {
+        return .{ .path = file_path, .owned = false };
+    }
+    return outputPath(allocator, null, file_name, allow_unsafe_paths);
+}
+
+const TempOutput = struct {
+    path: []const u8,
+    file: std.fs.File,
+};
+
+fn openTempOutputForPath(allocator: std.mem.Allocator, target_path: []const u8) !TempOutput {
+    const dir = path_util.dirNameOrDot(target_path);
+    const base = path_util.baseName(target_path);
+    var attempt: usize = 0;
+    while (attempt < 32) : (attempt += 1) {
+        const stamp = std.time.nanoTimestamp();
+        const name = try std.fmt.allocPrint(allocator, ".{s}.par2z.{d}.{d}.tmp", .{ base, stamp, attempt });
+        defer allocator.free(name);
+        const full = try path_util.join(allocator, dir, name);
+        errdefer allocator.free(full);
+        const file = std.fs.cwd().createFile(full, .{ .exclusive = true }) catch |err| {
+            if (err == error.PathAlreadyExists) {
+                allocator.free(full);
+                continue;
+            }
+            return err;
+        };
+        return .{ .path = full, .file = file };
+    }
+    return error.PathAlreadyExists;
+}
+
 const SliceOverrideStore = struct {
     base: core.storage.FileStore,
     overrides: *std.AutoHashMap(u128, []const u8),
@@ -706,4 +764,20 @@ test "outputPath normalizes dotted segments" {
     const out = try outputPath(arena.allocator(), null, "a/./b/./c.txt", false);
     defer if (out.owned) arena.allocator().free(out.path);
     try std.testing.expectEqualStrings("a/b/c.txt", out.path);
+}
+
+test "pickOutputPath prefers explicit data path when present" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const out = try pickOutputPath(arena.allocator(), null, "file.txt", false, true, "/tmp/data/file.txt");
+    defer if (out.owned) arena.allocator().free(out.path);
+    try std.testing.expectEqualStrings("/tmp/data/file.txt", out.path);
+}
+
+test "pickOutputPath uses out_dir even if file path present" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const out = try pickOutputPath(arena.allocator(), "/out", "file.txt", false, true, "/tmp/data/file.txt");
+    defer if (out.owned) arena.allocator().free(out.path);
+    try std.testing.expectEqualStrings("/out/file.txt", out.path);
 }
