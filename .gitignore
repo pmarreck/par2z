@@ -3,3 +3,4 @@ zig-out/
 .DS_Store
 data.bin
 *.tmp
+tools/bitrot_guard_run

@@ -191,6 +191,13 @@ local function die(msg)
 	os.exit(1)
 end
 
+local function die_invalid(reason)
+	if reason then
+		die("par2z-cli-luajit: invalid input (" .. reason .. ")")
+	end
+	die("par2z-cli-luajit: invalid input")
+end
+
 local function parse_uint(argstr)
 	local n = tonumber(argstr)
 	if n == nil or n < 0 then
@@ -340,6 +347,21 @@ local function parse_create(args)
 	if not par2_path or #data_paths == 0 then
 		die("par2z-cli-luajit: missing par2 path or data files")
 	end
+	if opts.block_size ~= 0 and opts.block_count ~= 0 then
+		die_invalid("block size and block count are mutually exclusive")
+	end
+	if opts.redundancy_percent ~= 0 and opts.recovery_blocks ~= 0 then
+		die_invalid("redundancy percent and recovery blocks are mutually exclusive")
+	end
+	if opts.uniform_recovery ~= 0 and opts.limit_recovery ~= 0 then
+		die_invalid("uniform and limit flags are mutually exclusive")
+	end
+	if opts.limit_recovery ~= 0 and opts.recovery_file_count ~= 0 then
+		die_invalid("limit is incompatible with recovery file count")
+	end
+	if opts.recovery_file_count ~= 0 and (opts.recovery_file_count < 1 or opts.recovery_file_count > 31) then
+		die_invalid("recovery file count out of range")
+	end
 	return opts, par2_path, data_paths, basepath, memory_mb, thread_count, recurse, tar
 end
 
@@ -442,6 +464,9 @@ local function parse_recover(args)
 	end
 	if stdout_only and tar then
 		die("par2z-cli-luajit: --stdout cannot be combined with --tar")
+	end
+	if stdout_only and out_dir then
+		die_invalid("--stdout is incompatible with --out-dir")
 	end
 	local par2_path = args[i]
 	if not par2_path then

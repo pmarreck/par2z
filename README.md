@@ -139,6 +139,7 @@ lib.par2_create_destroy(handle[0])
 - Recover: `par2z-cli recover [options] <par2 file> [data files...]`
 - Recover to stdout: `par2z-cli recover --stdout [options] <par2 file> [data files...]`
 - Create: `par2z-cli create [options] <par2 file> <data files...>`
+- LuaJIT adapter CLI (FFI): `par2z-cli-luajit` (installed to `zig-out/bin/par2z-cli-luajit` by `zig build`)
 
 Behavior notes:
 - `verify`/`recover` match inputs by exact path when possible, then by basename. Ambiguous basenames cause an error unless exact paths are used.
@@ -146,6 +147,7 @@ Behavior notes:
 - Use `--mute-defaults` or set `PAR2_MUTE_DEFAULTS` (non-empty, not `0`/`false`) to suppress default reporting and derived plan on stderr.
 - Set `STDOUT_TO_STDERR` (non-empty, not `0`/`false`) to redirect informational stdout messages to stderr (does not affect `--stdout` file data).
 - `--tar` on `create` or `recover` emits a tar stream on stdout (main+volumes or recovered files).
+- Binary output note: for `--stdout`/`--tar`, avoid capturing stdout into shell variables unless you use a binary-safe wrapper (e.g., `capture -p`).
 - `--include-input-slices` emits `FileSlic` packets (large size increase).
 - `--emit-packed` emits `PkdMain` and `PkdRecvS` packets.
 - RFSC packets are emitted by default when recovery volumes exceed 16 KiB; use `--no-rfsc` to skip.
