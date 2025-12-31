@@ -10,11 +10,18 @@ pub fn build(b: *std.Build) void {
         test_filters = &.{filter};
     }
 
+    // SIMD optimization control: disable with -Dno-simd=true
+    const no_simd = b.option(bool, "no-simd", "Disable SIMD optimizations (PMULL/PCLMULQDQ)") orelse false;
+
+    const build_options = b.addOptions();
+    build_options.addOption(bool, "disable_simd", no_simd);
+
     const core_mod = b.addModule("core", .{
         .root_source_file = b.path("src/core/mod.zig"),
         .target = target,
         .optimize = optimize,
     });
+    core_mod.addOptions("build_options", build_options);
     const ops_mod = b.addModule("ops", .{
         .root_source_file = b.path("src/ops.zig"),
         .target = target,
@@ -193,15 +200,26 @@ pub fn build(b: *std.Build) void {
         fuzz_step.dependOn(&install_fuzz.step);
     }
 
+    // Cross-compile targets for static binaries (OS-architecture naming)
+    // Note: aarch64 and arm64 are the same; using aarch64 for Zig consistency
     addStaticCliVariant(b, optimize, .{
-        .cpu_arch = builtin.cpu.arch,
+        .cpu_arch = .aarch64,
         .os_tag = .macos,
-    }, "bin-static/macos");
+    }, "bin-static/macos-aarch64", build_options);
+    addStaticCliVariant(b, optimize, .{
+        .cpu_arch = .x86_64,
+        .os_tag = .macos,
+    }, "bin-static/macos-x86_64", build_options);
     addStaticCliVariant(b, optimize, .{
         .cpu_arch = .x86_64,
         .os_tag = .linux,
         .abi = .musl,
-    }, "bin-static/linux-x86_64");
+    }, "bin-static/linux-x86_64", build_options);
+    addStaticCliVariant(b, optimize, .{
+        .cpu_arch = .aarch64,
+        .os_tag = .linux,
+        .abi = .musl,
+    }, "bin-static/linux-aarch64", build_options);
 }
 
 fn addStaticCliVariant(
@@ -209,6 +227,7 @@ fn addStaticCliVariant(
     optimize: std.builtin.OptimizeMode,
     target_query: std.Target.Query,
     install_subdir: []const u8,
+    build_options: *std.Build.Step.Options,
 ) void {
     const target = b.resolveTargetQuery(target_query);
     const core_mod = b.addModule(b.fmt("core-{s}", .{install_subdir}), .{
@@ -216,6 +235,7 @@ fn addStaticCliVariant(
         .target = target,
         .optimize = optimize,
     });
+    core_mod.addOptions("build_options", build_options);
     const ops_mod = b.addModule(b.fmt("ops-{s}", .{install_subdir}), .{
         .root_source_file = b.path("src/ops.zig"),
         .target = target,

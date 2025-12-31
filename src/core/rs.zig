@@ -23,7 +23,7 @@ pub fn accumulateRecoverySlice(out: []u8, data_slice: []const u8, factor: u16) R
     var w: usize = 0;
     while (w < word_count) : (w += 1) {
         const word = readWord(data_slice, w);
-        const prod = gf.mul(word, factor);
+        const prod = gf.mulSimd(word, factor);
         const acc = readWord(out, w) ^ prod;
         writeWord(out, w, acc);
     }
@@ -245,7 +245,7 @@ fn encodeRange(out: []u8, data_slices: []const []const u8, factors: []const u16,
         while (i < data_slices.len) : (i += 1) {
             const slice = data_slices[i];
             const word = readWord(slice, w);
-            acc ^= gf.mul(word, factors[i]);
+            acc ^= gf.mulSimd(word, factors[i]);
         }
         writeWord(out, w, acc);
     }
@@ -262,12 +262,13 @@ fn encodeRangeSimd(out: []u8, data_slices: []const []const u8, factors: []const 
         var acc: @Vector(lanes, u16) = @splat(0);
         var i: usize = 0;
         while (i < data_slices.len) : (i += 1) {
-            var prod_arr: [lanes]u16 = undefined;
+            var words: [lanes]u16 = undefined;
             var lane: usize = 0;
             while (lane < lanes) : (lane += 1) {
-                const word = readWord(data_slices[i], w + lane);
-                prod_arr[lane] = gf.mul(word, factors[i]);
+                words[lane] = readWord(data_slices[i], w + lane);
             }
+            // Use SIMD-optimized multiply when available
+            const prod_arr = gf.mulVec8Simd(words, factors[i]);
             acc ^= @as(@Vector(lanes, u16), prod_arr);
         }
         var lane_write: usize = 0;
@@ -323,7 +324,7 @@ fn decodeRange(
             var j: usize = 0;
             while (j < pcount) : (j += 1) {
                 const word = readWord(present_slices[j], w);
-                acc ^= gf.mul(word, factors[r * pcount + j]);
+                acc ^= gf.mulSimd(word, factors[r * pcount + j]);
             }
             rhs[r] = acc;
         }
@@ -334,7 +335,7 @@ fn decodeRange(
             var mj: usize = 0;
             while (mj < n) : (mj += 1) {
                 const coeff = inv[mi * n + mj];
-                sum ^= gf.mul(coeff, rhs[mj]);
+                sum ^= gf.mulSimd(coeff, rhs[mj]);
             }
             writeWord(out_slices[mi], w, sum);
         }
@@ -374,8 +375,8 @@ fn invertMatrix(mat: []u16, inv: []u16, n: usize) RsError!void {
         const inv_pivot = gf.inv(pivot_val);
         var j: usize = 0;
         while (j < n) : (j += 1) {
-            mat[col * n + j] = gf.mul(mat[col * n + j], inv_pivot);
-            inv[col * n + j] = gf.mul(inv[col * n + j], inv_pivot);
+            mat[col * n + j] = gf.mulSimd(mat[col * n + j], inv_pivot);
+            inv[col * n + j] = gf.mulSimd(inv[col * n + j], inv_pivot);
         }
         var row: usize = 0;
         while (row < n) : (row += 1) {
@@ -384,8 +385,8 @@ fn invertMatrix(mat: []u16, inv: []u16, n: usize) RsError!void {
             if (factor == 0) continue;
             var k: usize = 0;
             while (k < n) : (k += 1) {
-                mat[row * n + k] ^= gf.mul(factor, mat[col * n + k]);
-                inv[row * n + k] ^= gf.mul(factor, inv[col * n + k]);
+                mat[row * n + k] ^= gf.mulSimd(factor, mat[col * n + k]);
+                inv[row * n + k] ^= gf.mulSimd(factor, inv[col * n + k]);
             }
         }
     }
