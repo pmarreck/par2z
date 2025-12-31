@@ -192,7 +192,18 @@ Full-file hash verification:
   - `PAR2_MEM_SIZE`, `PAR2_MEM_BLOCK_SIZE`, `PAR2_MEM_REDUNDANCY`, `PAR2_MEM_ITERS`, `PAR2_MEM_SEED`, `PAR2_MEM_SEQ` are supported.
 
 ## Benchmarks
-Run `bench` to compare our CLI against another PAR2 implementation (defaults to `par2cmdline-turbo` if `par2` is in PATH).
+
+Recent results (16 MiB file, 4KB blocks, 10% redundancy, Apple M-series):
+
+| Tool | Create | Verify | Repair |
+|------|--------|--------|--------|
+| par2cmdline 0.8.1 | 12.2 MiB/s | 168.4 MiB/s | 85.6 MiB/s |
+| par2cmdline-turbo 1.3.0 | 172.0 MiB/s | 363.6 MiB/s | 111.9 MiB/s |
+| par2z-cli | 10.4 MiB/s | 166.7 MiB/s | 56.9 MiB/s |
+
+par2z performs comparably to the original par2cmdline. par2cmdline-turbo is significantly faster, likely due to hand-optimized SIMD assembly for GF(2^16) multiplication (we have not examined its source code to maintain cleanroom status). See `TODO.md` for optimization opportunities.
+
+Run `bench` or `bench-all` to compare implementations:
 
 Env vars:
 - `PAR2_CLI_BIN` path to our CLI (default `zig-out/bin/par2z-cli`)
