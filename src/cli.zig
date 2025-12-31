@@ -148,7 +148,7 @@ pub fn main() !void {
         try ops.verify(allocator, parsed);
         return;
     }
-    if (std.mem.eql(u8, cmd, "recover")) {
+    if (std.mem.eql(u8, cmd, "recover") or std.mem.eql(u8, cmd, "repair")) {
         const parse = stripTarFlag(allocator, args[2..]) catch {
             try usage();
             return;
@@ -187,7 +187,7 @@ pub fn main() !void {
 
 fn usage() !void {
     try infoFile().writeAll(
-        "Usage:\n  par2z-cli verify [options] <par2 file> [data files...]\n  par2z-cli recover [options] <par2 file> [data files...]\n  par2z-cli create [options] <par2 file> <data files...>\n\nVerify/Recover options:\n  -B <path>        Base path used to resolve file names in FileDesc packets\n  -m <MB>          Memory cap (fail if estimated or actual usage exceeds)\n  -v/-q            Increase/decrease verbosity (-q -q is silent)\n  --stdout         Recover to stdout (requires exactly one missing file)\n  --tar            Emit recovered files as a tar stream on stdout\n  -o, --out-dir    Output directory for recovered files\n  --allow-unsafe-paths  Allow absolute/.. paths from FileDesc (unsafe)\n\nCreate options:\n  -s <bytes>       Block size (mutually exclusive with -b)\n  -b <count>       Block count (mutually exclusive with -s)\n  -r <percent>     Redundancy percent (mutually exclusive with -c)\n  -c <count>       Recovery block count (mutually exclusive with -r)\n  -f <index>       First recovery block number (offset volume indices)\n  -u               Uniform recovery file sizes\n  -l               Limit recovery file sizes (based on largest input file)\n  -n <count>       Number of recovery files (max 31; incompatible with -l)\n  -R               Recurse into subdirectories for input paths\n  --tar            Emit main+volumes as a tar stream on stdout\n  --block-size     Long form of -s\n  --block-count    Long form of -b\n  --redundancy-percent  Long form of -r\n  --recovery-blocks     Long form of -c\n  --comment <text> Add comment packet(s) (ASCII + Unicode if transliterable)\n  --mute-defaults  Suppress derived plan output (also PAR2_MUTE_DEFAULTS=1)\n  --include-input-slices  Emit FileSlic packets in main PAR2\n  --emit-packed    Emit PkdMain/PkdRecvS packets\n  --no-rfsc        Skip RFSC packets\n  --no-volume-meta Do not duplicate Main/FileDesc/IFSC/Creator in volumes\n\nNotes:\n  verify/recover match input files by exact path when possible, then by basename.\n  If basenames are ambiguous, verification/recovery fails unless exact paths are used.\n\npar2cmdline-turbo compatible options (subset):\n  -b<n> (block count)  -s<n> (block size)  -r<n> (redundancy %% )  -c<n> (recovery blocks)\n  -f<n> (first recovery block)  -u (uniform)  -l (limit)  -n<n> (recovery files)\n  -R (recurse)  -B<path> (basepath)  -m<n> (memory MB)  -v/-q (verbosity)\n",
+        "Usage:\n  par2z-cli verify [options] <par2 file> [data files...]\n  par2z-cli recover [options] <par2 file> [data files...]\n  par2z-cli repair  [options] <par2 file> [data files...]\n  par2z-cli create [options] <par2 file> <data files...>\n\nVerify/Recover options:\n  -B <path>        Base path used to resolve file names in FileDesc packets\n  -m <MB>          Memory cap (fail if estimated or actual usage exceeds)\n  -v/-q            Increase/decrease verbosity (-q -q is silent)\n  --stdout         Recover to stdout (requires exactly one missing file)\n  --tar            Emit recovered files as a tar stream on stdout\n  -o, --out-dir    Output directory for recovered files\n  --allow-unsafe-paths  Allow absolute/.. paths from FileDesc (unsafe)\n\nCreate options:\n  -a <par2 file>   Output PAR2 file (par2cmdline-compatible)\n  -T <count>       Thread count (par2cmdline-compatible)\n  -s <bytes>       Block size (mutually exclusive with -b)\n  -b <count>       Block count (mutually exclusive with -s)\n  -r <percent>     Redundancy percent (mutually exclusive with -c)\n  -c <count>       Recovery block count (mutually exclusive with -r)\n  -f <index>       First recovery block number (offset volume indices)\n  -u               Uniform recovery file sizes\n  -l               Limit recovery file sizes (based on largest input file)\n  -n <count>       Number of recovery files (max 31; incompatible with -l)\n  -R               Recurse into subdirectories for input paths\n  --tar            Emit main+volumes as a tar stream on stdout\n  --block-size     Long form of -s\n  --block-count    Long form of -b\n  --redundancy-percent  Long form of -r\n  --recovery-blocks     Long form of -c\n  --comment <text> Add comment packet(s) (ASCII + Unicode if transliterable)\n  --mute-defaults  Suppress derived plan output (also PAR2_MUTE_DEFAULTS=1)\n  --include-input-slices  Emit FileSlic packets in main PAR2\n  --emit-packed    Emit PkdMain/PkdRecvS packets\n  --no-rfsc        Skip RFSC packets\n  --no-volume-meta Do not duplicate Main/FileDesc/IFSC/Creator in volumes\n\nNotes:\n  verify/recover match input files by exact path when possible, then by basename.\n  If basenames are ambiguous, verification/recovery fails unless exact paths are used.\n\npar2cmdline-turbo compatible options (subset):\n  -a<path> (par2 file)  -T<n> (threads)  -b<n> (block count)  -s<n> (block size)  -r<n> (redundancy %% )  -c<n> (recovery blocks)\n  -f<n> (first recovery block)  -u (uniform)  -l (limit)  -n<n> (recovery files)\n  -R (recurse)  -B<path> (basepath)  -m<n> (memory MB)  -v/-q (verbosity)\n",
     );
 }
 
@@ -233,6 +233,8 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
     var verbosity: i32 = 0;
     var memory_mb: ?u64 = null;
     var recurse = false;
+    var thread_count: ?u32 = null;
+    var output_path: ?[]const u8 = null;
     var i: usize = 0;
     while (i < args.len) {
         const a = args[i];
@@ -263,6 +265,28 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
         }
         if (std.mem.startsWith(u8, a, "-m") and a.len > 2) {
             memory_mb = try std.fmt.parseInt(u64, a[2..], 10);
+            i += 1;
+            continue;
+        }
+        if (std.mem.eql(u8, a, "-T")) {
+            if (i + 1 >= args.len) return error.InvalidInput;
+            thread_count = try std.fmt.parseInt(u32, args[i + 1], 10);
+            i += 2;
+            continue;
+        }
+        if (std.mem.startsWith(u8, a, "-T") and a.len > 2) {
+            thread_count = try std.fmt.parseInt(u32, a[2..], 10);
+            i += 1;
+            continue;
+        }
+        if (std.mem.eql(u8, a, "-a")) {
+            if (i + 1 >= args.len) return error.InvalidInput;
+            output_path = args[i + 1];
+            i += 2;
+            continue;
+        }
+        if (std.mem.startsWith(u8, a, "-a") and a.len > 2) {
+            output_path = a[2..];
             i += 1;
             continue;
         }
@@ -417,9 +441,17 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
     if (recovery_file_count) |count| {
         if (count == 0 or count > 31) return error.InvalidInput;
     }
-    if (i >= args.len) return error.InvalidInput;
-    const par2_path = args[i];
-    const data_paths = args[i + 1 ..];
+    var par2_path: []const u8 = "";
+    var data_paths: []const []const u8 = &.{};
+    if (output_path) |out| {
+        par2_path = out;
+        if (i >= args.len) return error.InvalidInput;
+        data_paths = args[i..];
+    } else {
+        if (i >= args.len) return error.InvalidInput;
+        par2_path = args[i];
+        data_paths = args[i + 1 ..];
+    }
     if (data_paths.len == 0) return error.InvalidInput;
     if (redundancy_percent == null and recovery_blocks == null) {
         redundancy_percent = 5;
@@ -445,7 +477,7 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
         .verbosity = verbosity,
         .memory_mb = memory_mb,
         .recurse = recurse,
-        .thread_count = null,
+        .thread_count = thread_count,
         .output_open = null,
     };
 }
@@ -699,6 +731,14 @@ test "parseCreateArgs accepts par2-style short flags" {
     const parsed = try parseCreateArgs(&.{ "-s4096", "-r10", "out.par2", "file.bin" });
     try std.testing.expectEqual(@as(u64, 4096), parsed.block_size.?);
     try std.testing.expectEqual(@as(u64, 10), parsed.redundancy_percent.?);
+}
+
+test "parseCreateArgs accepts -a output path and -T threads" {
+    const parsed = try parseCreateArgs(&.{ "-s4", "-r5", "-n1", "-T16", "-a", "out.par2", "file.bin" });
+    try std.testing.expectEqualStrings("out.par2", parsed.par2_path);
+    try std.testing.expectEqual(@as(usize, 1), parsed.data_paths.len);
+    try std.testing.expectEqualStrings("file.bin", parsed.data_paths[0]);
+    try std.testing.expectEqual(@as(u32, 16), parsed.thread_count.?);
 }
 
 test "parseCreateArgs parses basepath, memory, and verbosity" {
