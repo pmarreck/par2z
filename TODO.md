@@ -10,11 +10,27 @@ Current benchmarks show par2cmdline-turbo is 10-15x faster than par2z on create 
 
 | Tool | Create (MiB/s) | Verify (MiB/s) | Repair (MiB/s) |
 |------|----------------|----------------|----------------|
-| par2cmdline | 12.2 | 164.9 | 85.6 |
-| par2cmdline-turbo | 179.8 | 340.4 | 112.7 |
-| par2z-cli | 15.3 | 168.4 | 56.7 |
+| par2cmdline | 11.7 | 160.0 | 85.1 |
+| par2cmdline-turbo | 172.0 | 363.6 | 111.9 |
+| par2z-cli | 10.4 | 166.7 | 56.9 |
 
 The bottleneck is GF16 (Galois Field 2^16) multiplication in `src/core/gf16.zig`.
+
+### What We Tried
+
+A split-table approach (`MulTables` in gf16.zig) was implemented but showed no improvement:
+- Table initialization overhead (~64 scalar muls per factor) wasn't amortized well
+- Zig's `@shuffle` requires comptime indices, preventing runtime PSHUFB-style lookups
+- The scalar `mulScalar` using 4-nibble XOR was slower than log/exp table approach
+- Branchless masking for zero handling added overhead without benefit
+- Extended exp table (doubled size) caused comptime initialization timeout
+
+The split-table code remains in gf16.zig for reference but isn't used in the hot path.
+
+**Key insight**: True SIMD optimization requires either:
+1. Inline assembly for PCLMULQDQ/PMULL (carry-less multiply)
+2. Inline assembly for PSHUFB/TBL (vectorized shuffle-based table lookup)
+3. Zig's vector operations alone cannot express these patterns efficiently
 
 ### Current Implementation
 

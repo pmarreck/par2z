@@ -112,3 +112,72 @@ fn mod65535(x: u64) u32 {
     if (v == 65535) return 0;
     return @as(u32, @intCast(v));
 }
+
+// =============================================================================
+// SIMD-optimized GF(2^16) multiplication using split-table technique
+// =============================================================================
+//
+// Mathematical basis: GF multiplication distributes over XOR (addition in GF):
+//   mul(a, c) = mul(a & 0xF000, c) ^ mul(a & 0x0F00, c) ^ mul(a & 0x00F0, c) ^ mul(a & 0x000F, c)
+//
+// Each nibble position has only 16 possible values, so we precompute 4 tables
+// of 16 entries each. SIMD shuffle instructions can do 16 parallel lookups.
+//
+// References:
+// - GF-Complete library SPLIT_TABLE(16,4) method
+// - https://github.com/animetosho/ParPar/blob/master/fast-gf-multiplication.md
+
+/// Precomputed lookup tables for multiplying by a constant factor.
+/// Uses the split-table technique with 4-bit nibbles.
+pub const MulTables = struct {
+    /// Tables for low byte result: table[nibble_position][nibble_value]
+    lo: [4][16]u8,
+    /// Tables for high byte result: table[nibble_position][nibble_value]
+    hi: [4][16]u8,
+
+    /// Create multiplication tables for a given constant factor.
+    pub fn init(factor: u16) MulTables {
+        var result: MulTables = undefined;
+        // For each nibble position (0=bits 0-3, 1=bits 4-7, 2=bits 8-11, 3=bits 12-15)
+        inline for (0..4) |nibble_pos| {
+            // For each possible nibble value (0-15)
+            inline for (0..16) |nibble_val| {
+                // Construct the input value with this nibble at this position
+                const input: u16 = @as(u16, @intCast(nibble_val)) << @intCast(nibble_pos * 4);
+                const product = mul(input, factor);
+                result.lo[nibble_pos][nibble_val] = @truncate(product);
+                result.hi[nibble_pos][nibble_val] = @truncate(product >> 8);
+            }
+        }
+        return result;
+    }
+
+    /// Multiply a single value using the precomputed tables (scalar fallback).
+    pub inline fn mulScalar(self: *const MulTables, a: u16) u16 {
+        const n0: u4 = @truncate(a);
+        const n1: u4 = @truncate(a >> 4);
+        const n2: u4 = @truncate(a >> 8);
+        const n3: u4 = @truncate(a >> 12);
+        const lo = self.lo[0][n0] ^ self.lo[1][n1] ^ self.lo[2][n2] ^ self.lo[3][n3];
+        const hi = self.hi[0][n0] ^ self.hi[1][n1] ^ self.hi[2][n2] ^ self.hi[3][n3];
+        return (@as(u16, hi) << 8) | lo;
+    }
+};
+
+/// Multiply 8 u16 values by a constant using precomputed tables.
+/// Uses the split-table technique for vectorized GF(2^16) multiplication.
+pub inline fn mulVec8(tbl: *const MulTables, input: [8]u16) [8]u16 {
+    var result: [8]u16 = undefined;
+    inline for (0..8) |i| {
+        result[i] = tbl.mulScalar(input[i]);
+    }
+    return result;
+}
+
+/// Accumulate: out[i] ^= tbl.mul(input[i]) for 8 words at a time.
+/// This is the core operation in RS encoding.
+pub inline fn mulAccVec8(tbl: *const MulTables, input: [8]u16, acc: *[8]u16) void {
+    inline for (0..8) |i| {
+        acc[i] ^= tbl.mulScalar(input[i]);
+    }
+}
