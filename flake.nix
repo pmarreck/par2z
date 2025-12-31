@@ -32,6 +32,9 @@
 						dir="''${TMPDIR:-/tmp}"
 						mktemp -d "$dir/mktmp.XXXXXX"
 					'';
+					par2TurboPkg = pkgs.writeShellScriptBin "par2-turbo" ''
+						exec ${pkgs.par2cmdline-turbo}/bin/par2 "$@"
+					'';
 				in {
 					default = pkgs.mkShell {
 						packages = [
@@ -43,6 +46,7 @@
 							pkgs.pkg-config
 							pkgs.openssl
 							pkgs.par2cmdline
+							par2TurboPkg
 							mktmpPkg
 						] ++ linuxOnly ++ pkgs.lib.optional (valgrindPkg != null) valgrindPkg;
 

@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Comprehensive benchmark comparing par2cmdline, par2cmdline-turbo, and par2z-cli
+
+root_dir="$(pwd)"
+par2z_cli="${PAR2Z_CLI:-$root_dir/zig-out/bin/par2z-cli}"
+par2_cli="${PAR2_CLI:-par2}"
+par2_turbo_cli="${PAR2_TURBO_CLI:-par2-turbo}"
+prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
+
+bench_size="${PAR2_BENCH_SIZE:-67108864}"  # 64 MiB default
+block_size="${PAR2_BENCH_BLOCK_SIZE:-4096}"
+redundancy="${PAR2_BENCH_REDUNDANCY:-10}"
+iters="${PAR2_BENCH_ITERS:-3}"
+corrupt_bytes="${PAR2_BENCH_CORRUPT_BYTES:-4096}"
+bench_seed="${PAR2_BENCH_SEED:-42}"
+bench_seq="${PAR2_BENCH_SEQ:-1}"
+
+# Build par2z first
+echo "Building par2z-cli (ReleaseFast)..."
+zig build -Doptimize=ReleaseFast
+echo ""
+
+# Create temp directory
+tmpdir="$(mktemp -d)"
+cleanup() { rm -rf "$tmpdir"; }
+trap cleanup EXIT
+
+# Generate test data
+echo "Generating ${bench_size} bytes of test data..."
+if [ -x "$prng_gen" ]; then
+    "$prng_gen" "$tmpdir/data.bin" "$bench_size" "$bench_seed" "$bench_seq"
+else
+    dd if=/dev/urandom of="$tmpdir/data.bin" bs=1M count=$((bench_size / 1048576)) status=none
+fi
+echo ""
+
+now_ms() {
+    perl -MTime::HiRes -e 'printf "%.0f\n", Time::HiRes::time()*1000'
+}
+
+run_bench() {
+    local name="$1"
+    local cli="$2"
+    local is_par2z="$3"
+    local dir="$tmpdir/$name"
+
+    mkdir -p "$dir"
+    cp "$tmpdir/data.bin" "$dir/data.bin"
+
+    local par2_file="$dir/data.par2"
+    local start end elapsed rate
+
+    # CREATE
+    start=$(now_ms)
+    if [ "$is_par2z" = "1" ]; then
+        PAR2_MUTE_DEFAULTS=1 "$cli" create --block-size "$block_size" --redundancy-percent "$redundancy" -q "$par2_file" "$dir/data.bin" >/dev/null 2>&1
+    else
+        "$cli" create -s"$block_size" -r"$redundancy" -q "$par2_file" "$dir/data.bin" >/dev/null 2>&1
+    fi
+    end=$(now_ms)
+    elapsed=$((end - start))
+    rate=$(awk -v s="$bench_size" -v ms="$elapsed" 'BEGIN { printf "%.1f", (s/1048576)/(ms/1000) }')
+    printf "  %-20s create: %6d ms  %7s MiB/s\n" "$name" "$elapsed" "$rate"
+
+    # VERIFY
+    start=$(now_ms)
+    if [ "$is_par2z" = "1" ]; then
+        "$cli" verify -q "$par2_file" "$dir/data.bin" >/dev/null 2>&1
+    else
+        "$cli" verify -q "$par2_file" "$dir/data.bin" >/dev/null 2>&1
+    fi
+    end=$(now_ms)
+    elapsed=$((end - start))
+    rate=$(awk -v s="$bench_size" -v ms="$elapsed" 'BEGIN { printf "%.1f", (s/1048576)/(ms/1000) }')
+    printf "  %-20s verify: %6d ms  %7s MiB/s\n" "$name" "$elapsed" "$rate"
+
+    # CORRUPT
+    dd if=/dev/urandom of="$dir/data.bin" bs=1 count="$corrupt_bytes" seek=4096 conv=notrunc status=none 2>/dev/null
+
+    # REPAIR
+    start=$(now_ms)
+    if [ "$is_par2z" = "1" ]; then
+        "$cli" recover -q "$par2_file" "$dir/data.bin" >/dev/null 2>&1
+    else
+        "$cli" repair -q "$par2_file" "$dir/data.bin" >/dev/null 2>&1
+    fi
+    end=$(now_ms)
+    elapsed=$((end - start))
+    rate=$(awk -v s="$bench_size" -v ms="$elapsed" 'BEGIN { printf "%.1f", (s/1048576)/(ms/1000) }')
+    printf "  %-20s repair: %6d ms  %7s MiB/s\n" "$name" "$elapsed" "$rate"
+}
+
+echo "Benchmark: size=${bench_size} bytes, block=${block_size}, redundancy=${redundancy}%"
+echo "============================================================"
+
+for iter in $(seq 1 "$iters"); do
+    echo ""
+    echo "--- Iteration $iter/$iters ---"
+    run_bench "par2cmdline" "$par2_cli" "0"
+    echo ""
+    run_bench "par2cmdline-turbo" "$par2_turbo_cli" "0"
+    echo ""
+    run_bench "par2z-cli" "$par2z_cli" "1"
+done
+
+echo ""
+echo "Done."
