@@ -80,7 +80,7 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 ## TODO (Performance/Portability)
 - [ ] Optional platform-specific SIMD intrinsics (x86_64 SSE2/AVX2, ARM NEON) behind target checks; keep portable SIMD + scalar fallback as default.
 
-## Recommendations Backlog (Merged Gemini + Claude, 2025-12-30)
+## Recommendations Backlog (2025-12-30)
 ### High Priority (Correctness / Portability / Perf)
 - [x] Replace platform-specific MD5 bindings with `std.crypto.hash.Md5` (pure Zig, portable); delete `src/core/md5_macos.zig` and `src/core/md5_linux.zig` after migration.
 - [x] Optimize GF16 mul/pow to avoid `% 65535` (conditional subtract or doubled LUT).

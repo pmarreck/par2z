@@ -9,7 +9,7 @@
   - macOS (as static as macOS allows): `zig-out/bin-static/macos/par2z-cli`
   - Linux x86_64 musl (fully static): `zig-out/bin-static/linux-x86_64/par2z-cli`
 - Copied both to `../bitrot_guard/bin/{macos,linux-x86_64}/par2z-cli`.
-- Removed `CLAUDE_RECOMMENDATIONS.md` and `GEMINI_3_PRO_RECOMMENDATIONS.md`.
+- Removed external AI recommendation files.
 - Added hidden helper script `tools/bitrot_guard_run` (no README mention) to run `../bitrot_guard` with `BRG_PAR2_BIN` defaulted by OS.
 
 ## Current Goal
