@@ -171,6 +171,28 @@ pub fn build(b: *std.Build) void {
     release_step.dependOn(&install_release_cli.step);
     release_step.dependOn(&install_release_lib.step);
 
+    // Fuzz targets (for AFL++ on Linux)
+    const fuzz_step = b.step("fuzz", "Build fuzz targets for AFL++");
+    inline for (.{ "fuzz_packet", "fuzz_recovery" }) |name| {
+        const fuzz_mod = b.createModule(.{
+            .root_source_file = b.path("fuzz/" ++ name ++ ".zig"),
+            .target = target,
+            .optimize = .Debug,
+            .imports = &.{
+                .{ .name = "core", .module = core_mod },
+                .{ .name = "ops", .module = ops_mod },
+            },
+        });
+        const fuzz_exe = b.addExecutable(.{
+            .name = name,
+            .root_module = fuzz_mod,
+        });
+        const install_fuzz = b.addInstallArtifact(fuzz_exe, .{
+            .dest_dir = .{ .override = .{ .custom = "fuzz" } },
+        });
+        fuzz_step.dependOn(&install_fuzz.step);
+    }
+
     addStaticCliVariant(b, optimize, .{
         .cpu_arch = builtin.cpu.arch,
         .os_tag = .macos,
