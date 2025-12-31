@@ -48,6 +48,7 @@
 
 						shellHook = ''
 							echo "par2z dev shell: zig/zls/afl++/par2cmdline"
+							echo "Linting: use 'zig fmt --check src/' and 'zls' diagnostics"
 						'';
 					};
 				});

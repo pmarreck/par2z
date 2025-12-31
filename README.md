@@ -178,13 +178,6 @@ Full-file hash verification:
 - `verify` falls back to full-file MD5 when IFSC packets are missing.
 - `recover` always validates the full-file MD5 after reconstruction.
 
-## Crypto Backend Configuration
-MD5 is provided via a small Zig wrapper that selects a platform crypto backend:
-- macOS: CommonCrypto
-- Linux: OpenSSL (libcrypto)
-
-This avoids shipping GPL components and keeps the core algorithm independent of a particular crypto library.
-
 ## Testing
 - Unit tests: `nix develop -c ./test`
 - If `zig build test` hangs on C-API tests (Zig `--listen` runner issue), use: `nix develop -c zig build test-direct`
@@ -212,9 +205,6 @@ Env vars:
 - `PAR2_PRNG_GEN` path to deterministic generator (default `zig-out/bin/prng-gen`)
 - `PAR2_BENCH_SEED` seed for deterministic data (default 1)
 - `PAR2_BENCH_SEQ` stream selector for deterministic data (default 1)
-
-## License
-Apache-2.0. See `LICENSE`.
 - `PAR2_BENCH_OPTIMIZE` Zig optimize mode (default ReleaseFast)
 - `PAR2_BENCH_BUILD` rebuild par2z-cli before running (default 1; set 0 to skip)
 - `PAR2_BENCH_LOG` path to bench log (default `bench-results.tsv`)
@@ -230,3 +220,6 @@ PAR2_BENCH_SIZE=16777216 PAR2_BENCH_ITERS=3 ./bench
 PAR2_BENCH_SIZE=67108864 PAR2_BENCH_ITERS=3 ./bench
 PAR2_BENCH_SIZE=268435456 PAR2_BENCH_BLOCK_SIZE=16384 PAR2_BENCH_ITERS=3 ./bench
 ```
+
+## License
+Apache-2.0. See `LICENSE`.

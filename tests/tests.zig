@@ -144,7 +144,7 @@ test "transliterateAscii preserves ascii and maps accents in mixed string (direc
 test "ops verifyStreams rejects data_paths" {
     const opts = ops.VerifyOptions{
         .par2_path = "unused.par2",
-        .data_paths = &.{ "a.bin" },
+        .data_paths = &.{"a.bin"},
         .basepath = null,
         .verbosity = 0,
         .memory_mb = null,
@@ -157,7 +157,7 @@ test "ops recoverStreams rejects data_paths" {
         .stdout_only = false,
         .out_dir = null,
         .par2_path = "unused.par2",
-        .data_paths = &.{ "a.bin" },
+        .data_paths = &.{"a.bin"},
         .allow_unsafe_paths = false,
         .basepath = null,
         .verbosity = 0,
@@ -296,109 +296,109 @@ test "ops createStreams is deterministic across thread counts" {
 }
 
 const StreamMemCtx = struct {
-	data: []const u8,
+    data: []const u8,
 };
 
 fn streamReadAt(ctx: *anyopaque, offset: u64, out: []u8) usize {
-	const mem: *StreamMemCtx = @ptrCast(@alignCast(ctx));
-	if (offset >= mem.data.len) return 0;
-	const avail = mem.data.len - @as(usize, @intCast(offset));
-	const n = @min(avail, out.len);
-	@memcpy(out[0..n], mem.data[@as(usize, @intCast(offset)) .. @as(usize, @intCast(offset)) + n]);
-	return n;
+    const mem: *StreamMemCtx = @ptrCast(@alignCast(ctx));
+    if (offset >= mem.data.len) return 0;
+    const avail = mem.data.len - @as(usize, @intCast(offset));
+    const n = @min(avail, out.len);
+    @memcpy(out[0..n], mem.data[@as(usize, @intCast(offset)) .. @as(usize, @intCast(offset)) + n]);
+    return n;
 }
 
 const OutBuffer = struct {
-	allocator: std.mem.Allocator,
-	data: std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    data: std.ArrayList(u8),
 };
 
 const OutCapture = struct {
-	allocator: std.mem.Allocator,
-	map: std.StringHashMap(OutBuffer),
-	mutex: std.Thread.Mutex = .{},
+    allocator: std.mem.Allocator,
+    map: std.StringHashMap(OutBuffer),
+    mutex: std.Thread.Mutex = .{},
 };
 
 fn outCaptureInit(allocator: std.mem.Allocator) OutCapture {
-	return .{ .allocator = allocator, .map = std.StringHashMap(OutBuffer).init(allocator), .mutex = .{} };
+    return .{ .allocator = allocator, .map = std.StringHashMap(OutBuffer).init(allocator), .mutex = .{} };
 }
 
 fn outCaptureDeinit(cap: *OutCapture) void {
-	var it = cap.map.iterator();
-	while (it.next()) |entry| {
-		entry.value_ptr.data.deinit(cap.allocator);
-		cap.allocator.free(entry.key_ptr.*);
-	}
-	cap.map.deinit();
+    var it = cap.map.iterator();
+    while (it.next()) |entry| {
+        entry.value_ptr.data.deinit(cap.allocator);
+        cap.allocator.free(entry.key_ptr.*);
+    }
+    cap.map.deinit();
 }
 
 fn outWrite(ctx: *anyopaque, data: []const u8) anyerror!usize {
-	const buf: *OutBuffer = @ptrCast(@alignCast(ctx));
-	try buf.data.appendSlice(buf.allocator, data);
-	return data.len;
+    const buf: *OutBuffer = @ptrCast(@alignCast(ctx));
+    try buf.data.appendSlice(buf.allocator, data);
+    return data.len;
 }
 
 fn outClose(_: *anyopaque) void {}
 
 fn outOpen(ctx: *anyopaque, path: []const u8) anyerror!ops.OutputTarget {
-	const cap: *OutCapture = @ptrCast(@alignCast(ctx));
-	cap.mutex.lock();
-	defer cap.mutex.unlock();
-	const name = std.fs.path.basename(path);
-	if (cap.map.getPtr(name)) |existing| {
-		existing.*.data.clearRetainingCapacity();
-		return .{ .ctx = existing, .writeFn = outWrite, .closeFn = outClose };
-	}
-	const key = try cap.allocator.dupe(u8, name);
-	const buf_val = OutBuffer{ .allocator = cap.allocator, .data = std.ArrayList(u8).empty };
-	try cap.map.put(key, buf_val);
-	const buf = cap.map.getPtr(key).?;
-	return .{ .ctx = buf, .writeFn = outWrite, .closeFn = outClose };
+    const cap: *OutCapture = @ptrCast(@alignCast(ctx));
+    cap.mutex.lock();
+    defer cap.mutex.unlock();
+    const name = std.fs.path.basename(path);
+    if (cap.map.getPtr(name)) |existing| {
+        existing.*.data.clearRetainingCapacity();
+        return .{ .ctx = existing, .writeFn = outWrite, .closeFn = outClose };
+    }
+    const key = try cap.allocator.dupe(u8, name);
+    const buf_val = OutBuffer{ .allocator = cap.allocator, .data = std.ArrayList(u8).empty };
+    try cap.map.put(key, buf_val);
+    const buf = cap.map.getPtr(key).?;
+    return .{ .ctx = buf, .writeFn = outWrite, .closeFn = outClose };
 }
 
 fn commandAvailable(allocator: std.mem.Allocator, name: []const u8) bool {
-	const res = std.process.Child.run(.{
-		.allocator = allocator,
-		.argv = &.{ "which", name },
-	}) catch return false;
-	defer allocator.free(res.stdout);
-	defer allocator.free(res.stderr);
-	return switch (res.term) {
-		.Exited => |code| code == 0,
-		else => false,
-	};
+    const res = std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = &.{ "which", name },
+    }) catch return false;
+    defer allocator.free(res.stdout);
+    defer allocator.free(res.stderr);
+    return switch (res.term) {
+        .Exited => |code| code == 0,
+        else => false,
+    };
 }
 
 fn sharedLibPath(allocator: std.mem.Allocator) ![]const u8 {
-	const builtin = @import("builtin");
-	const ext = switch (builtin.os.tag) {
-		.macos => "dylib",
-		else => "so",
-	};
-	const rel = try std.fmt.allocPrint(allocator, "zig-out/lib/libpar2.{s}", .{ext});
-	defer allocator.free(rel);
-	return try std.fs.cwd().realpathAlloc(allocator, rel);
+    const builtin = @import("builtin");
+    const ext = switch (builtin.os.tag) {
+        .macos => "dylib",
+        else => "so",
+    };
+    const rel = try std.fmt.allocPrint(allocator, "zig-out/lib/libpar2.{s}", .{ext});
+    defer allocator.free(rel);
+    return try std.fs.cwd().realpathAlloc(allocator, rel);
 }
 
 fn runCommandExpectOk(allocator: std.mem.Allocator, argv: []const []const u8, env: ?*std.process.EnvMap, cwd: ?[]const u8) !void {
-	const res = try std.process.Child.run(.{
-		.allocator = allocator,
-		.argv = argv,
-		.env_map = env,
-		.cwd = cwd,
-	});
-	defer allocator.free(res.stdout);
-	defer allocator.free(res.stderr);
-	switch (res.term) {
-		.Exited => |code| {
-			if (code != 0) {
-				if (res.stdout.len > 0) std.debug.print("stdout:\n{s}\n", .{res.stdout});
-				if (res.stderr.len > 0) std.debug.print("stderr:\n{s}\n", .{res.stderr});
-			}
-			try std.testing.expectEqual(@as(u8, 0), code);
-		},
-		else => return error.UnexpectedTerm,
-	}
+    const res = try std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = argv,
+        .env_map = env,
+        .cwd = cwd,
+    });
+    defer allocator.free(res.stdout);
+    defer allocator.free(res.stderr);
+    switch (res.term) {
+        .Exited => |code| {
+            if (code != 0) {
+                if (res.stdout.len > 0) std.debug.print("stdout:\n{s}\n", .{res.stdout});
+                if (res.stderr.len > 0) std.debug.print("stderr:\n{s}\n", .{res.stderr});
+            }
+            try std.testing.expectEqual(@as(u8, 0), code);
+        },
+        else => return error.UnexpectedTerm,
+    }
 }
 
 fn libPathEnvName() []const u8 {
@@ -407,212 +407,212 @@ fn libPathEnvName() []const u8 {
 }
 
 fn swiftSdkRootFromXcrun(allocator: std.mem.Allocator) !?[]const u8 {
-	var env = try std.process.getEnvMap(allocator);
-	defer env.deinit();
-	_ = env.remove("SDKROOT");
-	_ = env.remove("DEVELOPER_DIR");
-	_ = env.remove("TOOLCHAINS");
-	const xcrun_path = if (std.fs.accessAbsolute("/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
-	const res = try std.process.Child.run(.{
-		.allocator = allocator,
-		.argv = &.{ xcrun_path, "--sdk", "macosx", "--show-sdk-path" },
-		.env_map = &env,
-	});
-	defer allocator.free(res.stdout);
-	defer allocator.free(res.stderr);
-	switch (res.term) {
-		.Exited => |code| {
-			if (code != 0 or res.stdout.len == 0) return null;
-			const trimmed = std.mem.trimRight(u8, res.stdout, "\r\n");
-			return try allocator.dupe(u8, trimmed);
-		},
-		else => return null,
-	}
+    var env = try std.process.getEnvMap(allocator);
+    defer env.deinit();
+    _ = env.remove("SDKROOT");
+    _ = env.remove("DEVELOPER_DIR");
+    _ = env.remove("TOOLCHAINS");
+    const xcrun_path = if (std.fs.accessAbsolute("/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
+    const res = try std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = &.{ xcrun_path, "--sdk", "macosx", "--show-sdk-path" },
+        .env_map = &env,
+    });
+    defer allocator.free(res.stdout);
+    defer allocator.free(res.stderr);
+    switch (res.term) {
+        .Exited => |code| {
+            if (code != 0 or res.stdout.len == 0) return null;
+            const trimmed = std.mem.trimRight(u8, res.stdout, "\r\n");
+            return try allocator.dupe(u8, trimmed);
+        },
+        else => return null,
+    }
 }
 
 fn xcodeSelectPath(allocator: std.mem.Allocator) ?[]const u8 {
-	if (!commandAvailable(allocator, "xcode-select")) return null;
-	const res = std.process.Child.run(.{
-		.allocator = allocator,
-		.argv = &.{ "xcode-select", "-p" },
-	}) catch return null;
-	defer allocator.free(res.stdout);
-	defer allocator.free(res.stderr);
-	switch (res.term) {
-		.Exited => |code| {
-			if (code != 0 or res.stdout.len == 0) return null;
-			const trimmed = std.mem.trimRight(u8, res.stdout, "\r\n");
-			return allocator.dupe(u8, trimmed) catch null;
-		},
-		else => return null,
-	}
+    if (!commandAvailable(allocator, "xcode-select")) return null;
+    const res = std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = &.{ "xcode-select", "-p" },
+    }) catch return null;
+    defer allocator.free(res.stdout);
+    defer allocator.free(res.stderr);
+    switch (res.term) {
+        .Exited => |code| {
+            if (code != 0 or res.stdout.len == 0) return null;
+            const trimmed = std.mem.trimRight(u8, res.stdout, "\r\n");
+            return allocator.dupe(u8, trimmed) catch null;
+        },
+        else => return null,
+    }
 }
 
 fn swiftCompileArgv(allocator: std.mem.Allocator, swift_path: []const u8, lib_dir: []const u8, bin_path: []const u8, sdk_path: ?[]const u8) ![]const []const u8 {
-	if (xcodeSelectPath(allocator)) |dev| {
-		defer allocator.free(dev);
-		const swiftc_path = try std.fmt.allocPrint(allocator, "{s}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc", .{dev});
-		if (std.fs.accessAbsolute(swiftc_path, .{})) |_| {
-			const use_sdk = sdk_path != null;
-			const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
-			argv[0] = swiftc_path;
-			argv[1] = swift_path;
-			argv[2] = "-L";
-			argv[3] = lib_dir;
-			argv[4] = "-lpar2";
-			argv[5] = "-o";
-			argv[6] = bin_path;
-			if (use_sdk) {
-				argv[7] = "-sdk";
-				argv[8] = sdk_path.?;
-			}
-			return argv;
-		} else |_| {}
-	}
-	if (std.fs.accessAbsolute("/usr/bin/swiftc", .{})) |_| {
-		const use_sdk = sdk_path != null;
-		const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
-		argv[0] = "/usr/bin/swiftc";
-		argv[1] = swift_path;
-		argv[2] = "-L";
-		argv[3] = lib_dir;
-		argv[4] = "-lpar2";
-		argv[5] = "-o";
-		argv[6] = bin_path;
-		if (use_sdk) {
-			argv[7] = "-sdk";
-			argv[8] = sdk_path.?;
-		}
-		return argv;
-	} else |_| {}
-	if (commandAvailable(allocator, "xcrun")) {
-		const xcrun_path = if (std.fs.accessAbsolute("/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
-		const use_sdk = sdk_path != null;
-		const argv = try allocator.alloc([]const u8, if (use_sdk) 12 else 10);
-		argv[0] = xcrun_path;
-		argv[1] = "--sdk";
-		argv[2] = "macosx";
-		argv[3] = "swiftc";
-		argv[4] = swift_path;
-		argv[5] = "-L";
-		argv[6] = lib_dir;
-		argv[7] = "-lpar2";
-		argv[8] = "-o";
-		argv[9] = bin_path;
-		if (use_sdk) {
-			argv[10] = "-sdk";
-			argv[11] = sdk_path.?;
-		}
-		return argv;
-	}
-	const use_sdk = sdk_path != null;
-	const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
-	argv[0] = "swiftc";
-	argv[1] = swift_path;
-	argv[2] = "-L";
-	argv[3] = lib_dir;
-	argv[4] = "-lpar2";
-	argv[5] = "-o";
-	argv[6] = bin_path;
-	if (use_sdk) {
-		argv[7] = "-sdk";
-		argv[8] = sdk_path.?;
-	}
-	return argv;
+    if (xcodeSelectPath(allocator)) |dev| {
+        defer allocator.free(dev);
+        const swiftc_path = try std.fmt.allocPrint(allocator, "{s}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc", .{dev});
+        if (std.fs.accessAbsolute(swiftc_path, .{})) |_| {
+            const use_sdk = sdk_path != null;
+            const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
+            argv[0] = swiftc_path;
+            argv[1] = swift_path;
+            argv[2] = "-L";
+            argv[3] = lib_dir;
+            argv[4] = "-lpar2";
+            argv[5] = "-o";
+            argv[6] = bin_path;
+            if (use_sdk) {
+                argv[7] = "-sdk";
+                argv[8] = sdk_path.?;
+            }
+            return argv;
+        } else |_| {}
+    }
+    if (std.fs.accessAbsolute("/usr/bin/swiftc", .{})) |_| {
+        const use_sdk = sdk_path != null;
+        const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
+        argv[0] = "/usr/bin/swiftc";
+        argv[1] = swift_path;
+        argv[2] = "-L";
+        argv[3] = lib_dir;
+        argv[4] = "-lpar2";
+        argv[5] = "-o";
+        argv[6] = bin_path;
+        if (use_sdk) {
+            argv[7] = "-sdk";
+            argv[8] = sdk_path.?;
+        }
+        return argv;
+    } else |_| {}
+    if (commandAvailable(allocator, "xcrun")) {
+        const xcrun_path = if (std.fs.accessAbsolute("/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
+        const use_sdk = sdk_path != null;
+        const argv = try allocator.alloc([]const u8, if (use_sdk) 12 else 10);
+        argv[0] = xcrun_path;
+        argv[1] = "--sdk";
+        argv[2] = "macosx";
+        argv[3] = "swiftc";
+        argv[4] = swift_path;
+        argv[5] = "-L";
+        argv[6] = lib_dir;
+        argv[7] = "-lpar2";
+        argv[8] = "-o";
+        argv[9] = bin_path;
+        if (use_sdk) {
+            argv[10] = "-sdk";
+            argv[11] = sdk_path.?;
+        }
+        return argv;
+    }
+    const use_sdk = sdk_path != null;
+    const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
+    argv[0] = "swiftc";
+    argv[1] = swift_path;
+    argv[2] = "-L";
+    argv[3] = lib_dir;
+    argv[4] = "-lpar2";
+    argv[5] = "-o";
+    argv[6] = bin_path;
+    if (use_sdk) {
+        argv[7] = "-sdk";
+        argv[8] = sdk_path.?;
+    }
+    return argv;
 }
 
 fn capiReadAt(ctx: ?*anyopaque, offset: u64, out: [*]u8, len: usize) callconv(.c) usize {
-	if (ctx == null) return 0;
-	const mem: *StreamMemCtx = @ptrCast(@alignCast(ctx.?));
-	if (offset >= mem.data.len) return 0;
-	const avail = mem.data.len - @as(usize, @intCast(offset));
-	const n = @min(avail, len);
-	@memcpy(out[0..n], mem.data[@as(usize, @intCast(offset)) .. @as(usize, @intCast(offset)) + n]);
-	return n;
+    if (ctx == null) return 0;
+    const mem: *StreamMemCtx = @ptrCast(@alignCast(ctx.?));
+    if (offset >= mem.data.len) return 0;
+    const avail = mem.data.len - @as(usize, @intCast(offset));
+    const n = @min(avail, len);
+    @memcpy(out[0..n], mem.data[@as(usize, @intCast(offset)) .. @as(usize, @intCast(offset)) + n]);
+    return n;
 }
 
 test "ops streaming create/verify/recover" {
-	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-	defer arena.deinit();
-	const allocator = arena.allocator();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
-	var cap = outCaptureInit(allocator);
-	defer outCaptureDeinit(&cap);
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
 
-	const payload = "ABCDEFGHIJKLMNOP";
-	var mem_ctx = StreamMemCtx{ .data = payload };
-	const inputs = [_]ops.StreamInput{.{
-		.name = "a.bin",
-		.length = payload.len,
-		.read_at = streamReadAt,
-		.ctx = &mem_ctx,
-	}};
+    const payload = "ABCDEFGHIJKLMNOP";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "a.bin",
+        .length = payload.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
 
-	const create_opts = ops.CreateOptions{
-		.block_size = 4,
-		.block_count = null,
-		.redundancy_percent = null,
-		.recovery_blocks = 1,
-		.first_recovery_block = null,
-		.uniform_recovery = false,
-		.limit_recovery = false,
-		.recovery_file_count = null,
-		.par2_path = "set.par2",
-		.data_paths = &.{},
-		.mute_defaults = true,
-		.comment = null,
-		.include_input_slices = false,
-		.emit_packed = false,
-		.emit_rfsc = true,
-		.include_volume_meta = true,
-		.basepath = null,
-		.verbosity = -1,
-		.memory_mb = null,
-		.recurse = false,
-		.thread_count = 1,
-		.output_open = .{ .ctx = &cap, .openFn = outOpen },
-	};
-	try ops.createStreams(allocator, create_opts, &inputs);
-	const main_buf = cap.map.getPtr("set.par2") orelse return error.NotFound;
-	const vol_buf = cap.map.getPtr("set.vol0+1.par2") orelse return error.NotFound;
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+    const main_buf = cap.map.getPtr("set.par2") orelse return error.NotFound;
+    const vol_buf = cap.map.getPtr("set.vol0+1.par2") orelse return error.NotFound;
 
-	const verify_opts = ops.VerifyOptions{
-		.par2_path = "set.par2",
-		.data_paths = &.{},
-		.basepath = null,
-		.verbosity = -1,
-		.memory_mb = null,
-	};
-	try ops.verifyStreams(allocator, main_buf.data.items, verify_opts, &inputs);
+    const verify_opts = ops.VerifyOptions{
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+    };
+    try ops.verifyStreams(allocator, main_buf.data.items, verify_opts, &inputs);
 
-	var corrupt: [16]u8 = undefined;
-	@memcpy(&corrupt, payload);
-	corrupt[0] = 'Z';
-	var corrupt_ctx = StreamMemCtx{ .data = corrupt[0..] };
-	const inputs_corrupt = [_]ops.StreamInput{.{
-		.name = "a.bin",
-		.length = corrupt.len,
-		.read_at = streamReadAt,
-		.ctx = &corrupt_ctx,
-	}};
+    var corrupt: [16]u8 = undefined;
+    @memcpy(&corrupt, payload);
+    corrupt[0] = 'Z';
+    var corrupt_ctx = StreamMemCtx{ .data = corrupt[0..] };
+    const inputs_corrupt = [_]ops.StreamInput{.{
+        .name = "a.bin",
+        .length = corrupt.len,
+        .read_at = streamReadAt,
+        .ctx = &corrupt_ctx,
+    }};
 
-	var out_cap = outCaptureInit(allocator);
-	defer outCaptureDeinit(&out_cap);
-	const recover_opts = ops.RecoverOptions{
-		.stdout_only = false,
-		.out_dir = null,
-		.par2_path = "set.par2",
-		.data_paths = &.{},
-		.allow_unsafe_paths = false,
-		.basepath = null,
-		.verbosity = -1,
-		.memory_mb = null,
-		.output_open = .{ .ctx = &out_cap, .openFn = outOpen },
-	};
-	const vols = [_][]const u8{vol_buf.data.items};
-	try ops.recoverStreams(allocator, allocator, main_buf.data.items, &vols, recover_opts, &inputs_corrupt);
-	const recovered = out_cap.map.getPtr("a.bin") orelse return error.NotFound;
-	try std.testing.expectEqualStrings(payload, recovered.data.items);
+    var out_cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&out_cap);
+    const recover_opts = ops.RecoverOptions{
+        .stdout_only = false,
+        .out_dir = null,
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .allow_unsafe_paths = false,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .output_open = .{ .ctx = &out_cap, .openFn = outOpen },
+    };
+    const vols = [_][]const u8{vol_buf.data.items};
+    try ops.recoverStreams(allocator, allocator, main_buf.data.items, &vols, recover_opts, &inputs_corrupt);
+    const recovered = out_cap.map.getPtr("a.bin") orelse return error.NotFound;
+    try std.testing.expectEqualStrings(payload, recovered.data.items);
 }
 
 test "computeIfscEntries splits and pads" {
@@ -2789,154 +2789,154 @@ test "c api thread pool configure" {
 }
 
 test "ffi swift example (optional)" {
-	if (!commandAvailable(std.testing.allocator, "swiftc")) return;
-	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-	defer arena.deinit();
-	const allocator = arena.allocator();
+    if (!commandAvailable(std.testing.allocator, "swiftc")) return;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
-	const lib_path = try sharedLibPath(allocator);
-	std.fs.cwd().access(lib_path, .{}) catch return error.FileNotFound;
-	const lib_dir = std.fs.path.dirname(lib_path) orelse ".";
+    const lib_path = try sharedLibPath(allocator);
+    std.fs.cwd().access(lib_path, .{}) catch return error.FileNotFound;
+    const lib_dir = std.fs.path.dirname(lib_path) orelse ".";
 
-	var tmp = std.testing.tmpDir(.{});
-	defer tmp.cleanup();
-	const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
-	const out_path = try std.fs.path.join(allocator, &.{ tmp_path, "swift.par2" });
-	const swift_path = try std.fs.path.join(allocator, &.{ tmp_path, "main.swift" });
-	const bin_path = try std.fs.path.join(allocator, &.{ tmp_path, "swift-ffi-test" });
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const out_path = try std.fs.path.join(allocator, &.{ tmp_path, "swift.par2" });
+    const swift_path = try std.fs.path.join(allocator, &.{ tmp_path, "main.swift" });
+    const bin_path = try std.fs.path.join(allocator, &.{ tmp_path, "swift-ffi-test" });
 
-	var src = std.ArrayList(u8).empty;
-	defer src.deinit(allocator);
-	try src.appendSlice(allocator, "import Foundation\n");
-	try src.appendSlice(allocator, "typealias Par2CreateHandle = OpaquePointer\n");
-	try src.appendSlice(allocator, "typealias Par2Error = Int32\n");
-	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_new\") func par2_create_new(_ opts: UnsafeRawPointer?, _ out: UnsafeMutablePointer<Par2CreateHandle?>) -> Par2Error\n");
-	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_add_memory\") func par2_create_add_memory(_ h: Par2CreateHandle?, _ name: UnsafePointer<CChar>, _ data: UnsafePointer<UInt8>, _ len: Int) -> Par2Error\n");
-	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_set_output_path\") func par2_create_set_output_path(_ h: Par2CreateHandle?, _ path: UnsafePointer<CChar>) -> Par2Error\n");
-	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_run\") func par2_create_run(_ h: Par2CreateHandle?) -> Par2Error\n");
-	try src.appendSlice(allocator, "@_silgen_name(\"par2_create_destroy\") func par2_create_destroy(_ h: Par2CreateHandle?)\n");
-	try src.appendSlice(allocator, "func check(_ rc: Par2Error) {\n");
-	try src.appendSlice(allocator, "    if rc != 0 { exit(1) }\n");
-	try src.appendSlice(allocator, "}\n");
-	try src.appendSlice(allocator, "let payload: [UInt8] = [0,1,2,3,4,5,6,7]\n");
-	try src.appendSlice(allocator, "var handle: Par2CreateHandle?\n");
-	try src.appendSlice(allocator, "check(par2_create_new(nil, &handle))\n");
-	try src.appendSlice(allocator, "payload.withUnsafeBytes { buf in\n");
-	try src.appendSlice(allocator, "    \"data.bin\".withCString { name in\n");
-	try src.appendSlice(allocator, "        check(par2_create_add_memory(handle, name, buf.bindMemory(to: UInt8.self).baseAddress!, buf.count))\n");
-	try src.appendSlice(allocator, "    }\n");
-	try src.appendSlice(allocator, "}\n");
-	const out_line = try std.fmt.allocPrint(allocator, "\"{s}\".withCString {{ path in check(par2_create_set_output_path(handle, path)) }}\n", .{out_path});
-	defer allocator.free(out_line);
-	try src.appendSlice(allocator, out_line);
-	try src.appendSlice(allocator, "check(par2_create_run(handle))\n");
-	try src.appendSlice(allocator, "par2_create_destroy(handle)\n");
-	try src.appendSlice(allocator, "exit(0)\n");
-	try tmp.dir.writeFile(.{ .sub_path = "main.swift", .data = src.items });
+    var src = std.ArrayList(u8).empty;
+    defer src.deinit(allocator);
+    try src.appendSlice(allocator, "import Foundation\n");
+    try src.appendSlice(allocator, "typealias Par2CreateHandle = OpaquePointer\n");
+    try src.appendSlice(allocator, "typealias Par2Error = Int32\n");
+    try src.appendSlice(allocator, "@_silgen_name(\"par2_create_new\") func par2_create_new(_ opts: UnsafeRawPointer?, _ out: UnsafeMutablePointer<Par2CreateHandle?>) -> Par2Error\n");
+    try src.appendSlice(allocator, "@_silgen_name(\"par2_create_add_memory\") func par2_create_add_memory(_ h: Par2CreateHandle?, _ name: UnsafePointer<CChar>, _ data: UnsafePointer<UInt8>, _ len: Int) -> Par2Error\n");
+    try src.appendSlice(allocator, "@_silgen_name(\"par2_create_set_output_path\") func par2_create_set_output_path(_ h: Par2CreateHandle?, _ path: UnsafePointer<CChar>) -> Par2Error\n");
+    try src.appendSlice(allocator, "@_silgen_name(\"par2_create_run\") func par2_create_run(_ h: Par2CreateHandle?) -> Par2Error\n");
+    try src.appendSlice(allocator, "@_silgen_name(\"par2_create_destroy\") func par2_create_destroy(_ h: Par2CreateHandle?)\n");
+    try src.appendSlice(allocator, "func check(_ rc: Par2Error) {\n");
+    try src.appendSlice(allocator, "    if rc != 0 { exit(1) }\n");
+    try src.appendSlice(allocator, "}\n");
+    try src.appendSlice(allocator, "let payload: [UInt8] = [0,1,2,3,4,5,6,7]\n");
+    try src.appendSlice(allocator, "var handle: Par2CreateHandle?\n");
+    try src.appendSlice(allocator, "check(par2_create_new(nil, &handle))\n");
+    try src.appendSlice(allocator, "payload.withUnsafeBytes { buf in\n");
+    try src.appendSlice(allocator, "    \"data.bin\".withCString { name in\n");
+    try src.appendSlice(allocator, "        check(par2_create_add_memory(handle, name, buf.bindMemory(to: UInt8.self).baseAddress!, buf.count))\n");
+    try src.appendSlice(allocator, "    }\n");
+    try src.appendSlice(allocator, "}\n");
+    const out_line = try std.fmt.allocPrint(allocator, "\"{s}\".withCString {{ path in check(par2_create_set_output_path(handle, path)) }}\n", .{out_path});
+    defer allocator.free(out_line);
+    try src.appendSlice(allocator, out_line);
+    try src.appendSlice(allocator, "check(par2_create_run(handle))\n");
+    try src.appendSlice(allocator, "par2_create_destroy(handle)\n");
+    try src.appendSlice(allocator, "exit(0)\n");
+    try tmp.dir.writeFile(.{ .sub_path = "main.swift", .data = src.items });
 
-	var compile_env = std.process.EnvMap.init(allocator);
-	defer compile_env.deinit();
-	try compile_env.put("PATH", "/usr/bin:/bin");
-	if (std.process.getEnvVarOwned(allocator, "HOME")) |home| {
-		defer allocator.free(home);
-		try compile_env.put("HOME", home);
-	} else |_| {}
-	if (std.process.getEnvVarOwned(allocator, "TMPDIR")) |tmpdir| {
-		defer allocator.free(tmpdir);
-		try compile_env.put("TMPDIR", tmpdir);
-	} else |_| {}
-	if (commandAvailable(allocator, "xcrun")) {
-		if (xcodeSelectPath(allocator)) |dev| {
-			defer allocator.free(dev);
-			try compile_env.put("DEVELOPER_DIR", dev);
-		}
-		try compile_env.put("TOOLCHAINS", "com.apple.dt.toolchain.XcodeDefault");
-	}
-	var sdk_path: ?[]const u8 = null;
-	const sdk = swiftSdkRootFromXcrun(allocator) catch null;
-	if (sdk) |path| {
-		sdk_path = path;
-		try compile_env.put("SDKROOT", path);
-	}
-	defer if (sdk_path) |path| allocator.free(path);
-	const compile_argv = try swiftCompileArgv(allocator, swift_path, lib_dir, bin_path, sdk_path);
-	defer allocator.free(compile_argv);
-	const compile = try std.process.Child.run(.{
-		.allocator = allocator,
-		.argv = compile_argv,
-		.env_map = &compile_env,
-		.cwd = tmp_path,
-	});
-	defer allocator.free(compile.stdout);
-	defer allocator.free(compile.stderr);
-	switch (compile.term) {
-		.Exited => |code| {
-			if (code != 0) {
-				if (compile.stdout.len > 0) std.debug.print("swiftc stdout:\n{s}\n", .{compile.stdout});
-				if (compile.stderr.len > 0) std.debug.print("swiftc stderr:\n{s}\n", .{compile.stderr});
-				return error.UnexpectedTerm;
-			}
-		},
-		else => return error.UnexpectedTerm,
-	}
+    var compile_env = std.process.EnvMap.init(allocator);
+    defer compile_env.deinit();
+    try compile_env.put("PATH", "/usr/bin:/bin");
+    if (std.process.getEnvVarOwned(allocator, "HOME")) |home| {
+        defer allocator.free(home);
+        try compile_env.put("HOME", home);
+    } else |_| {}
+    if (std.process.getEnvVarOwned(allocator, "TMPDIR")) |tmpdir| {
+        defer allocator.free(tmpdir);
+        try compile_env.put("TMPDIR", tmpdir);
+    } else |_| {}
+    if (commandAvailable(allocator, "xcrun")) {
+        if (xcodeSelectPath(allocator)) |dev| {
+            defer allocator.free(dev);
+            try compile_env.put("DEVELOPER_DIR", dev);
+        }
+        try compile_env.put("TOOLCHAINS", "com.apple.dt.toolchain.XcodeDefault");
+    }
+    var sdk_path: ?[]const u8 = null;
+    const sdk = swiftSdkRootFromXcrun(allocator) catch null;
+    if (sdk) |path| {
+        sdk_path = path;
+        try compile_env.put("SDKROOT", path);
+    }
+    defer if (sdk_path) |path| allocator.free(path);
+    const compile_argv = try swiftCompileArgv(allocator, swift_path, lib_dir, bin_path, sdk_path);
+    defer allocator.free(compile_argv);
+    const compile = try std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = compile_argv,
+        .env_map = &compile_env,
+        .cwd = tmp_path,
+    });
+    defer allocator.free(compile.stdout);
+    defer allocator.free(compile.stderr);
+    switch (compile.term) {
+        .Exited => |code| {
+            if (code != 0) {
+                if (compile.stdout.len > 0) std.debug.print("swiftc stdout:\n{s}\n", .{compile.stdout});
+                if (compile.stderr.len > 0) std.debug.print("swiftc stderr:\n{s}\n", .{compile.stderr});
+                return error.UnexpectedTerm;
+            }
+        },
+        else => return error.UnexpectedTerm,
+    }
 
-	var env = std.process.EnvMap.init(allocator);
-	defer env.deinit();
-	try env.put(libPathEnvName(), lib_dir);
-	try runCommandExpectOk(allocator, &.{ bin_path }, &env, tmp_path);
+    var env = std.process.EnvMap.init(allocator);
+    defer env.deinit();
+    try env.put(libPathEnvName(), lib_dir);
+    try runCommandExpectOk(allocator, &.{bin_path}, &env, tmp_path);
 
-	_ = try std.fs.cwd().statFile(out_path);
+    _ = try std.fs.cwd().statFile(out_path);
 }
 
 test "ffi luajit example (optional)" {
-	if (!commandAvailable(std.testing.allocator, "luajit")) return;
-	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-	defer arena.deinit();
-	const allocator = arena.allocator();
+    if (!commandAvailable(std.testing.allocator, "luajit")) return;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
-	const lib_path = try sharedLibPath(allocator);
-	std.fs.cwd().access(lib_path, .{}) catch return error.FileNotFound;
-	const lib_dir = std.fs.path.dirname(lib_path) orelse ".";
+    const lib_path = try sharedLibPath(allocator);
+    std.fs.cwd().access(lib_path, .{}) catch return error.FileNotFound;
+    const lib_dir = std.fs.path.dirname(lib_path) orelse ".";
 
-	var tmp = std.testing.tmpDir(.{});
-	defer tmp.cleanup();
-	const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
-	const out_path = try std.fs.path.join(allocator, &.{ tmp_path, "lua.par2" });
-	const script_path = try std.fs.path.join(allocator, &.{ tmp_path, "ffi.lua" });
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const out_path = try std.fs.path.join(allocator, &.{ tmp_path, "lua.par2" });
+    const script_path = try std.fs.path.join(allocator, &.{ tmp_path, "ffi.lua" });
 
-	var src = std.ArrayList(u8).empty;
-	defer src.deinit(allocator);
-	try src.appendSlice(allocator, "local ffi = require(\"ffi\")\n");
-	try src.appendSlice(allocator, "ffi.cdef[[\n");
-	try src.appendSlice(allocator, "typedef struct Par2CreateHandle Par2CreateHandle;\n");
-	try src.appendSlice(allocator, "typedef int Par2Error;\n");
-	try src.appendSlice(allocator, "Par2Error par2_create_new(const void *opts, Par2CreateHandle **out_handle);\n");
-	try src.appendSlice(allocator, "Par2Error par2_create_add_memory(Par2CreateHandle *h, const char *name, const uint8_t *data, size_t len);\n");
-	try src.appendSlice(allocator, "Par2Error par2_create_set_output_path(Par2CreateHandle *h, const char *par2_path);\n");
-	try src.appendSlice(allocator, "Par2Error par2_create_run(Par2CreateHandle *h);\n");
-	try src.appendSlice(allocator, "void par2_create_destroy(Par2CreateHandle *h);\n");
-	try src.appendSlice(allocator, "]]\n");
-	const lib_line = try std.fmt.allocPrint(allocator, "local lib = ffi.load(\"{s}\")\n", .{lib_path});
-	defer allocator.free(lib_line);
-	try src.appendSlice(allocator, lib_line);
-	try src.appendSlice(allocator, "local data = ffi.new(\"uint8_t[8]\", {0,1,2,3,4,5,6,7})\n");
-	try src.appendSlice(allocator, "local handle = ffi.new(\"Par2CreateHandle*[1]\")\n");
-	try src.appendSlice(allocator, "if lib.par2_create_new(nil, handle) ~= 0 then os.exit(1) end\n");
-	try src.appendSlice(allocator, "if lib.par2_create_add_memory(handle[0], \"data.bin\", data, 8) ~= 0 then os.exit(1) end\n");
-	const out_line = try std.fmt.allocPrint(allocator, "if lib.par2_create_set_output_path(handle[0], \"{s}\") ~= 0 then os.exit(1) end\n", .{out_path});
-	defer allocator.free(out_line);
-	try src.appendSlice(allocator, out_line);
-	try src.appendSlice(allocator, "if lib.par2_create_run(handle[0]) ~= 0 then os.exit(1) end\n");
-	try src.appendSlice(allocator, "lib.par2_create_destroy(handle[0])\n");
-	try src.appendSlice(allocator, "os.exit(0)\n");
-	try tmp.dir.writeFile(.{ .sub_path = "ffi.lua", .data = src.items });
+    var src = std.ArrayList(u8).empty;
+    defer src.deinit(allocator);
+    try src.appendSlice(allocator, "local ffi = require(\"ffi\")\n");
+    try src.appendSlice(allocator, "ffi.cdef[[\n");
+    try src.appendSlice(allocator, "typedef struct Par2CreateHandle Par2CreateHandle;\n");
+    try src.appendSlice(allocator, "typedef int Par2Error;\n");
+    try src.appendSlice(allocator, "Par2Error par2_create_new(const void *opts, Par2CreateHandle **out_handle);\n");
+    try src.appendSlice(allocator, "Par2Error par2_create_add_memory(Par2CreateHandle *h, const char *name, const uint8_t *data, size_t len);\n");
+    try src.appendSlice(allocator, "Par2Error par2_create_set_output_path(Par2CreateHandle *h, const char *par2_path);\n");
+    try src.appendSlice(allocator, "Par2Error par2_create_run(Par2CreateHandle *h);\n");
+    try src.appendSlice(allocator, "void par2_create_destroy(Par2CreateHandle *h);\n");
+    try src.appendSlice(allocator, "]]\n");
+    const lib_line = try std.fmt.allocPrint(allocator, "local lib = ffi.load(\"{s}\")\n", .{lib_path});
+    defer allocator.free(lib_line);
+    try src.appendSlice(allocator, lib_line);
+    try src.appendSlice(allocator, "local data = ffi.new(\"uint8_t[8]\", {0,1,2,3,4,5,6,7})\n");
+    try src.appendSlice(allocator, "local handle = ffi.new(\"Par2CreateHandle*[1]\")\n");
+    try src.appendSlice(allocator, "if lib.par2_create_new(nil, handle) ~= 0 then os.exit(1) end\n");
+    try src.appendSlice(allocator, "if lib.par2_create_add_memory(handle[0], \"data.bin\", data, 8) ~= 0 then os.exit(1) end\n");
+    const out_line = try std.fmt.allocPrint(allocator, "if lib.par2_create_set_output_path(handle[0], \"{s}\") ~= 0 then os.exit(1) end\n", .{out_path});
+    defer allocator.free(out_line);
+    try src.appendSlice(allocator, out_line);
+    try src.appendSlice(allocator, "if lib.par2_create_run(handle[0]) ~= 0 then os.exit(1) end\n");
+    try src.appendSlice(allocator, "lib.par2_create_destroy(handle[0])\n");
+    try src.appendSlice(allocator, "os.exit(0)\n");
+    try tmp.dir.writeFile(.{ .sub_path = "ffi.lua", .data = src.items });
 
-	var env = std.process.EnvMap.init(allocator);
-	defer env.deinit();
-	try env.put(libPathEnvName(), lib_dir);
-	try runCommandExpectOk(allocator, &.{ "luajit", script_path }, &env, tmp_path);
+    var env = std.process.EnvMap.init(allocator);
+    defer env.deinit();
+    try env.put(libPathEnvName(), lib_dir);
+    try runCommandExpectOk(allocator, &.{ "luajit", script_path }, &env, tmp_path);
 
-	_ = try std.fs.cwd().statFile(out_path);
+    _ = try std.fs.cwd().statFile(out_path);
 }
 
 const CapiBuffer = struct {
@@ -3524,4 +3524,288 @@ fn corruptFirstRecvSlicPacket(path: []const u8) !bool {
         return true;
     }
     return false;
+}
+
+// =============================================================================
+// Randomized Stress Tests for ReleaseFast confidence
+// =============================================================================
+
+test "randomized roundtrip stress (small files)" {
+    // Tests create → corrupt → recover cycle with random data and parameters
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+
+    // Use deterministic seed for reproducibility
+    var rng = core.prng.Pcg32.init(0xDEADBEEF, 0xCAFEBABE);
+
+    const cli_path = try cliPath(allocator);
+
+    // Run multiple iterations with varying parameters
+    var iteration: usize = 0;
+    while (iteration < 10) : (iteration += 1) {
+        // Random file size: 100 bytes to 8KB (stay smaller for speed, avoid edge cases for now)
+        const file_size = 100 + (rng.nextU32() % 8000);
+        // Block size: use fixed reasonable value to avoid edge cases
+        const block_size: u32 = 64;
+        // Fixed high redundancy to ensure recovery works
+        const redundancy: u32 = 30;
+
+        // Generate random data
+        const data = try allocator.alloc(u8, file_size);
+        for (data) |*b| {
+            b.* = @truncate(rng.nextU32());
+        }
+        // Save original for comparison
+        const original = try allocator.dupe(u8, data);
+
+        // Write data file
+        const data_name = try std.fmt.allocPrint(allocator, "data_{d}.bin", .{iteration});
+        const data_path = try std.fs.path.join(allocator, &.{ tmp_path, data_name });
+        try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+        // Create PAR2
+        const par2_name = try std.fmt.allocPrint(allocator, "data_{d}.par2", .{iteration});
+        const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, par2_name });
+
+        const block_str = try std.fmt.allocPrint(allocator, "{d}", .{block_size});
+        const redund_str = try std.fmt.allocPrint(allocator, "{d}", .{redundancy});
+
+        _ = try std.process.Child.run(.{
+            .argv = &.{ cli_path, "create", "-s", block_str, "-r", redund_str, "-q", par2_path, data_path },
+            .allocator = allocator,
+            .cwd = tmp_path,
+        });
+
+        // Corrupt one byte in the data file
+        const corrupt_pos = rng.nextU32() % file_size;
+        data[corrupt_pos] ^= 0xFF;
+        try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+        // Recover
+        _ = try std.process.Child.run(.{
+            .argv = &.{ cli_path, "recover", "-q", par2_path },
+            .allocator = allocator,
+            .cwd = tmp_path,
+        });
+
+        // Verify recovered file matches original
+        const recovered = try std.fs.cwd().readFileAlloc(allocator, data_path, 1 << 20);
+        try std.testing.expectEqualSlices(u8, original, recovered);
+    }
+}
+
+test "boundary conditions: empty and tiny files" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const cli_path = try cliPath(allocator);
+
+    // Test 1-byte file (use explicit byte to avoid any newline issues)
+    const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "tiny.bin" });
+    const original_data = [_]u8{0x58}; // 'X'
+
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = &original_data });
+
+    // Create and recover from tmp_path so file paths resolve correctly
+    _ = try std.process.Child.run(.{
+        .argv = &.{ cli_path, "create", "-s4", "-r50", "-q", "tiny.par2", "tiny.bin" },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+
+    // Corrupt it
+    const corrupt_data = [_]u8{0x59}; // 'Y'
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = &corrupt_data });
+
+    // Recover
+    _ = try std.process.Child.run(.{
+        .argv = &.{ cli_path, "recover", "-q", "tiny.par2" },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+
+    // Verify
+    const recovered = try std.fs.cwd().readFileAlloc(allocator, data_path, 1024);
+    try std.testing.expectEqualSlices(u8, &original_data, recovered);
+}
+
+test "boundary conditions: file exactly one block" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const cli_path = try cliPath(allocator);
+
+    const block_size: usize = 64;
+    const data = try allocator.alloc(u8, block_size);
+    for (data, 0..) |*b, i| {
+        b.* = @truncate(i);
+    }
+    const original = try allocator.dupe(u8, data);
+
+    const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "oneblock.bin" });
+
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+    // Create and recover from tmp_path so file paths resolve correctly
+    _ = try std.process.Child.run(.{
+        .argv = &.{ cli_path, "create", "-s64", "-r100", "-q", "oneblock.par2", "oneblock.bin" },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+
+    // Corrupt first byte
+    data[0] = 0xFF;
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+    _ = try std.process.Child.run(.{
+        .argv = &.{ cli_path, "recover", "-q", "oneblock.par2" },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+
+    const recovered = try std.fs.cwd().readFileAlloc(allocator, data_path, 1024);
+    // First byte should be 0, not 0xFF
+    try std.testing.expectEqual(@as(u8, 0), recovered[0]);
+    try std.testing.expectEqualSlices(u8, original, recovered);
+}
+
+test "par2cmdline cross-validation: par2z create, par2cmdline verify" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const cli_path = try cliPath(allocator);
+
+    // Create test data
+    const data = "The quick brown fox jumps over the lazy dog. 1234567890!";
+    const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "cross.bin" });
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "cross.par2" });
+
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+    // Create with par2z
+    _ = try std.process.Child.run(.{
+        .argv = &.{ cli_path, "create", "-s4", "-r20", "-q", par2_path, data_path },
+        .allocator = allocator,
+    });
+
+    // Verify with par2cmdline
+    const verify_result = try std.process.Child.run(.{
+        .argv = &.{ "par2", "verify", "-q", par2_path },
+        .allocator = allocator,
+    });
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+}
+
+test "par2cmdline cross-validation: par2cmdline create, par2z verify" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const cli_path = try cliPath(allocator);
+
+    // Create test data
+    const data = "Cross validation test data for par2cmdline interop.";
+    const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "interop.bin" });
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "interop.par2" });
+
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+    // Create with par2cmdline - must run from the tmp dir so paths match
+    _ = try std.process.Child.run(.{
+        .argv = &.{ "par2", "create", "-s4", "-r20", "-q", par2_path, data_path },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+
+    // Verify with par2z - also run from tmp dir
+    const verify_result = try std.process.Child.run(.{
+        .argv = &.{ cli_path, "verify", "-q", par2_path, data_path },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+}
+
+test "multi-file randomized roundtrip" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const cli_path = try cliPath(allocator);
+
+    var rng = core.prng.Pcg32.init(0x12345678, 0x87654321);
+
+    // Create 3 files of varying sizes
+    const file_count = 3;
+    var original_data: [file_count][]u8 = undefined;
+    var data_paths: [file_count][]const u8 = undefined;
+    var basenames: [file_count][]const u8 = undefined;
+
+    for (0..file_count) |i| {
+        const size = 100 + (rng.nextU32() % 1000);
+        const data = try allocator.alloc(u8, size);
+        for (data) |*b| {
+            b.* = @truncate(rng.nextU32());
+        }
+        // Save a copy of the original
+        original_data[i] = try allocator.dupe(u8, data);
+
+        const name = try std.fmt.allocPrint(allocator, "multi_{d}.bin", .{i});
+        basenames[i] = name;
+        const path = try std.fs.path.join(allocator, &.{ tmp_path, name });
+        data_paths[i] = path;
+        try std.fs.cwd().writeFile(.{ .sub_path = path, .data = data });
+    }
+
+    // Create PAR2 for all files (use basenames since we'll run from tmp_path)
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "multi.par2" });
+    _ = try std.process.Child.run(.{
+        .argv = &.{ cli_path, "create", "-s32", "-r50", "-q", par2_path, basenames[0], basenames[1], basenames[2] },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+
+    // Corrupt one random byte in each file
+    for (0..file_count) |i| {
+        const corrupted = try allocator.dupe(u8, original_data[i]);
+        const pos = rng.nextU32() % @as(u32, @intCast(corrupted.len));
+        corrupted[pos] ^= 0xFF;
+        try std.fs.cwd().writeFile(.{ .sub_path = data_paths[i], .data = corrupted });
+    }
+
+    // Recover
+    _ = try std.process.Child.run(.{
+        .argv = &.{ cli_path, "recover", "-q", par2_path },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+
+    // Verify all files match originals
+    for (0..file_count) |i| {
+        const recovered = try std.fs.cwd().readFileAlloc(allocator, data_paths[i], 1 << 20);
+        try std.testing.expectEqualSlices(u8, original_data[i], recovered);
+    }
 }

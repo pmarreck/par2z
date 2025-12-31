@@ -118,6 +118,59 @@ pub fn build(b: *std.Build) void {
     const test_direct_step = b.step("test-direct", "Run unit tests directly (no zig --listen)");
     test_direct_step.dependOn(&run_tests_direct.step);
 
+    // Production release build (always ReleaseFast)
+    const release_core_mod = b.addModule("core-release", .{
+        .root_source_file = b.path("src/core/mod.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    const release_ops_mod = b.addModule("ops-release", .{
+        .root_source_file = b.path("src/ops.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+        .imports = &.{
+            .{ .name = "core", .module = release_core_mod },
+        },
+    });
+    const release_lib_mod = b.addModule("par2-release", .{
+        .root_source_file = b.path("src/lib.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+        .imports = &.{
+            .{ .name = "ops", .module = release_ops_mod },
+            .{ .name = "core", .module = release_core_mod },
+        },
+    });
+    const release_lib = b.addLibrary(.{
+        .name = "par2",
+        .root_module = release_lib_mod,
+        .linkage = .static,
+    });
+    const release_cli_mod = b.createModule(.{
+        .root_source_file = b.path("src/cli.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+        .imports = &.{
+            .{ .name = "par2", .module = release_lib_mod },
+            .{ .name = "core", .module = release_core_mod },
+            .{ .name = "ops", .module = release_ops_mod },
+        },
+    });
+    const release_cli = b.addExecutable(.{
+        .name = "par2z-cli",
+        .root_module = release_cli_mod,
+    });
+    release_cli.linkLibrary(release_lib);
+    const install_release_cli = b.addInstallArtifact(release_cli, .{
+        .dest_dir = .{ .override = .{ .custom = "release" } },
+    });
+    const install_release_lib = b.addInstallArtifact(release_lib, .{
+        .dest_dir = .{ .override = .{ .custom = "release/lib" } },
+    });
+    const release_step = b.step("release", "Build production CLI and library (ReleaseFast)");
+    release_step.dependOn(&install_release_cli.step);
+    release_step.dependOn(&install_release_lib.step);
+
     addStaticCliVariant(b, optimize, .{
         .cpu_arch = builtin.cpu.arch,
         .os_tag = .macos,
