@@ -1,7 +1,7 @@
 # par2z
 
 ## Overview
-Cleanroom PAR2 implementation with a Zig core, C ABI for FFI (Swift/LuaJIT), and a CLI for testing.
+Cleanroom PAR2 implementation with a Zig core, C ABI for FFI (Swift/LuaJIT), and a standalone CLI.
 
 ## API Layers
 - High-level recovery/verification API in `src/core/api.zig`.
