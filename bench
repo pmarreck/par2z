@@ -7,6 +7,7 @@ root_dir="$(pwd)"
 
 par2_cli="${PAR2_CLI_BIN:-$root_dir/zig-out/bin/par2z-cli}"
 other_cli="${PAR2_OTHER_BIN:-par2}"
+other_name="${PAR2_OTHER_NAME:-par2cmdline}"
 bench_log="${PAR2_BENCH_LOG:-bench-results.tsv}"
 prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
 bench_optimize="${PAR2_BENCH_OPTIMIZE:-ReleaseFast}"
@@ -160,7 +161,7 @@ gen_data "$data"
 iter=1
 while [ "$iter" -le "$iters" ]; do
 	echo "iteration $iter/$iters"
-	bench_tool "par2cmdline" "par2" "$tmpdir/par2-$iter" "$data"
+	bench_tool "$other_name" "par2" "$tmpdir/par2-$iter" "$data"
 	bench_tool "par2z-cli" "ours" "$tmpdir/ours-$iter" "$data"
 	iter=$((iter + 1))
 done

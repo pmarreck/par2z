@@ -6,13 +6,13 @@
 
 ### Problem
 
-Current benchmarks show par2cmdline-turbo is 10-15x faster than par2z on create operations:
+See `bench-results.tsv` for the full benchmark log. The most recent logged results (2026-01-01T17:00:13Z) show:
 
 | Tool | Create (MiB/s) | Verify (MiB/s) | Repair (MiB/s) |
 |------|----------------|----------------|----------------|
-| par2cmdline | 11.7 | 160.0 | 85.1 |
-| par2cmdline-turbo | 172.0 | 363.6 | 111.9 |
-| par2z-cli | 10.4 | 166.7 | 56.9 |
+| par2cmdline | 6.12 | 167.54 | 87.43 |
+| par2cmdline-turbo | 111.11 | 264.46 | 61.07 |
+| par2z-cli | 7.28 | 86.49 | 32.52 |
 
 The bottleneck is GF16 (Galois Field 2^16) multiplication in `src/core/gf16.zig`.
 

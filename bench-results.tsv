@@ -632,3 +632,9 @@ timestamp	commit	tool	phase	elapsed_ms	rate_mib_s	bench_size	block_size	redundan
 2025-12-31T18:50:42Z	9912f668131f9533d24ee303cd017c30fd34d4eb	par2z-cli	create	2922	10.95	33554432	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
 2025-12-31T18:50:42Z	9912f668131f9533d24ee303cd017c30fd34d4eb	par2z-cli	verify	189	169.31	33554432	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
 2025-12-31T18:50:43Z	9912f668131f9533d24ee303cd017c30fd34d4eb	par2z-cli	recover	538	59.48	33554432	4096	10	1	par2	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2026-01-01T17:00:07Z	0c0676550bd216bd0f77846b7722f66109fc6104	par2cmdline-turbo	create	288	111.11	33554432	4096	10	1	par2-turbo	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2026-01-01T17:00:07Z	0c0676550bd216bd0f77846b7722f66109fc6104	par2cmdline-turbo	verify	121	264.46	33554432	4096	10	1	par2-turbo	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2026-01-01T17:00:07Z	0c0676550bd216bd0f77846b7722f66109fc6104	par2cmdline-turbo	repair	524	61.07	33554432	4096	10	1	par2-turbo	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2026-01-01T17:00:12Z	0c0676550bd216bd0f77846b7722f66109fc6104	par2z-cli	create	4393	7.28	33554432	4096	10	1	par2-turbo	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2026-01-01T17:00:12Z	0c0676550bd216bd0f77846b7722f66109fc6104	par2z-cli	verify	370	86.49	33554432	4096	10	1	par2-turbo	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
+2026-01-01T17:00:13Z	0c0676550bd216bd0f77846b7722f66109fc6104	par2z-cli	recover	984	32.52	33554432	4096	10	1	par2-turbo	/Users/pmarreck/Documents-CloudManaged/par2-cleanroom/zig-out/bin/par2z-cli
