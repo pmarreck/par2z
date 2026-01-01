@@ -1,13 +1,12 @@
 # PAR2 Cleanroom Plan
 
 ## Goal
-Document a cleanroom-derivable PAR2 file format specification and algorithm (implementation-ready, no code) and recommend an implementation language for a macOS product.
+Document a cleanroom-derivable PAR2 file format specification and algorithm (implementation-ready, no code).
 
 ## Done Criteria
 - [x] PAR2_SPECIFICATION.md describes the full PAR2 packet format (core + optional), data conventions, and recovery algorithm at implementation detail.
 - [x] PAR2_SPECIFICATION.md includes explicit recovery math and slice ordering rules from primary sources.
 - [x] Cleanroom approach and sources are recorded here.
-- [x] Language recommendation provided with brief pros/cons and a request for direction.
 - [x] flake.nix provides Zig toolchain, fuzzing tools, and par2cmdline for compatibility tests.
 - [x] Licensing notes recorded for MD5 and par2cmdline dev tooling vs distribution.
 - [x] TOOLCHAIN.md created with build presets and safe C++ subset rules.
@@ -34,6 +33,7 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 - [x] 2025-12-24: Add flake.nix safety toolchain and par2cmdline for compatibility testing.
 - [x] 2025-12-24: Draft TOOLCHAIN.md with safety policy and build presets.
 - [x] 2025-12-24: Draft PROJECT_PLAN.md with TDD implementation steps.
+- [x] 2026-01-01: Added README archival-use guidance section (non-normative).
 
 ## Implementation Phase
 - [x] CLI recover command uses core recovery API and writes recovered output to disk or stdout.

@@ -201,6 +201,7 @@ Recent results (16 MiB file, 4KB blocks, 10% redundancy, Apple M-series):
 | par2cmdline-turbo 1.3.0 | 172.0 MiB/s | 363.6 MiB/s | 111.9 MiB/s |
 | par2z-cli | 10.4 MiB/s | 166.7 MiB/s | 56.9 MiB/s |
 
+See `bench-results.tsv` for the full benchmark log (last updated 2025-12-31T18:50:43Z).
 par2z performs comparably to the original par2cmdline. par2cmdline-turbo is significantly faster, likely due to hand-optimized SIMD assembly for GF(2^16) multiplication (we have not examined its source code to maintain cleanroom status). See `TODO.md` for optimization opportunities.
 
 Run `bench` or `bench-all` to compare implementations:
@@ -231,6 +232,37 @@ PAR2_BENCH_SIZE=16777216 PAR2_BENCH_ITERS=3 ./bench
 PAR2_BENCH_SIZE=67108864 PAR2_BENCH_ITERS=3 ./bench
 PAR2_BENCH_SIZE=268435456 PAR2_BENCH_BLOCK_SIZE=16384 PAR2_BENCH_ITERS=3 ./bench
 ```
+
+## Long-Term Data Integrity (Research Notes)
+
+These notes summarize published guidance and field studies that shape how much redundancy is needed for long-term storage. They are design constraints, not guarantees.
+
+SSD unpowered retention (JEDEC context):
+- Enterprise-class SSDs are typically required to retain data for at least 3 months at 40C when fully worn (JEDEC JESD218/JESD219 context).
+- Client-class SSDs are typically required to retain data for at least 1 year at 30C when fully worn (JEDEC JESD218/JESD219 context).
+- Retention degrades with higher temperature and higher wear; vendors recommend periodic power-on refresh or full read to refresh NAND charge.
+
+HDD latent sector errors:
+- Large field studies show latent sector errors are not independent and exhibit spatial/temporal locality; scrubbing helps catch these before they stack up.
+
+Design implications for redundancy:
+- Parity budgets (1-5%) are most effective when paired with periodic scrubbing.
+- For SSDs stored unpowered beyond JEDEC retention windows, parity alone is not sufficient; require periodic refresh or additional independent copies.
+
+Sources:
+- Dell SSD/NVMe data retention guidance (JEDEC references and power-off recommendations): https://www.dell.com/support/kbdoc/en-mv/000198930/ssd-data-retention-considerations-when-powering-off-systems-for-a-prolonged-duration
+- NetApp latent sector error study (1.53M disks over 32 months): https://www.netapp.com/atg/publications/publications-an-analysis-of-latent-sector-errors-in-disk-drives-20074817/
+- Curtiss-Wright summary of JEDEC client retention requirements and temperature effects: https://defense-solutions.curtisswright.com/media-center/blog/extended-temperatures-flash-memory
+- Example enterprise SSD spec listing 3 months power-off retention at 40C (JESD218): https://www.digikey.com/en/htmldatasheets/production/2042810/0/0/1/intel-ssd-dc-s3520-series-for-150gb.html
+
+## Archival Use Guidance (Non-Normative)
+
+This project targets long-term archival workflows that want strong integrity without full data duplication. It is designed to add a parity layer on top of existing storage, not to replace independent backups.
+
+Practical expectations:
+- 1-5% parity can address many bit-rot and small loss events when paired with periodic scrubbing.
+- Parity cannot guarantee recovery after catastrophic device failure or long unpowered retention beyond vendor guidance.
+- For higher confidence, use parity plus at least one independent copy stored on a separate device or location.
 
 ## License
 Apache-2.0. See `LICENSE`.
