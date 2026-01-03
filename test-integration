@@ -88,6 +88,15 @@ corrupt_bytes() {
 	fi
 }
 
+corrupt_byte() {
+	local path="$1"
+	local offset="$2"
+	if ! printf '\xFF' | dd of="$path" bs=1 count=1 seek="$offset" conv=notrunc status=none; then
+		echo "dd corrupt failed for byte patch" >&2
+		exit 1
+	fi
+}
+
 gen_data "$tmpdir/data.bin" 65536
 
 capture par2 create -s4096 -c16 "$tmpdir/data.par2" "$tmpdir/data.bin"
@@ -143,6 +152,52 @@ cp "$tmpdir/out2/data2.bin" "$tmpdir/data2.bin"
 capture -- /bin/bash -c "cd \"$tmpdir\" && par2 verify data2.par2 data2.bin"
 if [ "$rc" -ne 0 ]; then
 	echo "par2 verify failed: $err" >&2
+	exit 1
+fi
+
+# Corrupt data + par2 recovery data, then recover with par2 and par2z
+gen_data "$tmpdir/mix.bin" 65536
+cp "$tmpdir/mix.bin" "$tmpdir/mix.orig"
+capture -- /bin/bash -c "cd \"$tmpdir\" && par2 create -s4096 -c5 -n4 mix.par2 mix.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2 create failed for mixed corruption case: $err" >&2
+	exit 1
+fi
+mkdir -p "$tmpdir/mix-par2" "$tmpdir/mix-ours"
+cp "$tmpdir/mix.bin" "$tmpdir/mix-par2/mix.bin"
+cp "$tmpdir/mix.bin" "$tmpdir/mix-ours/mix.bin"
+for f in "$tmpdir"/mix*.par2; do
+	[ -f "$f" ] || continue
+	cp "$f" "$tmpdir/mix-par2/"
+	cp "$f" "$tmpdir/mix-ours/"
+done
+corrupt_byte "$tmpdir/mix-par2/mix.bin" 4096
+corrupt_byte "$tmpdir/mix-par2/mix.bin" 12288
+corrupt_byte "$tmpdir/mix-ours/mix.bin" 4096
+corrupt_byte "$tmpdir/mix-ours/mix.bin" 12288
+mix_par2_vol="$(find "$tmpdir/mix-par2" -maxdepth 1 -name 'mix.vol*.par2' -print | head -n1 || true)"
+mix_ours_vol="$(find "$tmpdir/mix-ours" -maxdepth 1 -name 'mix.vol*.par2' -print | head -n1 || true)"
+if [ -z "$mix_par2_vol" ] || [ -z "$mix_ours_vol" ]; then
+	echo "missing volume files for mixed corruption case" >&2
+	exit 1
+fi
+corrupt_byte "$mix_par2_vol" 0
+corrupt_byte "$mix_ours_vol" 0
+capture -- /bin/bash -c "cd \"$tmpdir/mix-par2\" && par2 repair -q mix.par2 mix.bin"
+if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ] && [ "$rc" -ne 6 ]; then
+	echo "par2 repair failed for mixed corruption case: $err" >&2
+	exit 1
+fi
+capture -- /bin/bash -c "cd \"$tmpdir/mix-ours\" && \"$root_dir/zig-out/bin/par2z-cli\" recover -q mix.par2 mix.bin"
+if [ "$rc" -ne 0 ]; then
+	echo "par2z-cli recover failed for mixed corruption case: $err" >&2
+	exit 1
+fi
+mix_orig_hash="$(openssl dgst -sha256 "$tmpdir/mix.orig" | awk '{print $NF}')"
+mix_par2_hash="$(openssl dgst -sha256 "$tmpdir/mix-par2/mix.bin" | awk '{print $NF}')"
+mix_ours_hash="$(openssl dgst -sha256 "$tmpdir/mix-ours/mix.bin" | awk '{print $NF}')"
+if [ "$mix_orig_hash" != "$mix_par2_hash" ] || [ "$mix_orig_hash" != "$mix_ours_hash" ]; then
+	echo "hash mismatch for mixed corruption case" >&2
 	exit 1
 fi
 

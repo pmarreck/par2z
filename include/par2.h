@@ -23,6 +23,8 @@ typedef enum Par2Error {
 	PAR2_ERR_NOT_FOUND = 6,
 	PAR2_ERR_DATA_CORRUPT = 7,
 	PAR2_ERR_INSUFFICIENT_RECOVERY = 8,
+	PAR2_ERR_PARITY_MISSING_FILE = 9,
+	PAR2_ERR_PARITY_CORRUPT = 10,
 } Par2Error;
 
 typedef void *(*Par2AllocFn)(void *ctx, size_t size, size_t align);
@@ -98,6 +100,7 @@ Par2Error par2_verify_new(const Par2VerifyOptions *opts, Par2VerifyHandle **out_
 void par2_verify_destroy(Par2VerifyHandle *handle);
 Par2Error par2_verify_set_par2_path(Par2VerifyHandle *handle, const char *par2_path);
 Par2Error par2_verify_set_par2_data(Par2VerifyHandle *handle, const uint8_t *data, size_t len);
+Par2Error par2_verify_add_par2_data(Par2VerifyHandle *handle, const uint8_t *data, size_t len, const char *name);
 Par2Error par2_verify_add_path(Par2VerifyHandle *handle, const char *path);
 Par2Error par2_verify_add_memory(Par2VerifyHandle *handle, const char *name, const uint8_t *data, size_t len);
 Par2Error par2_verify_add_stream(Par2VerifyHandle *handle, const char *name, uint64_t len, Par2ReadAtFn read_at, void *ctx);
@@ -109,6 +112,7 @@ Par2Error par2_recover_new(const Par2RecoverOptions *opts, Par2RecoverHandle **o
 void par2_recover_destroy(Par2RecoverHandle *handle);
 Par2Error par2_recover_set_par2_path(Par2RecoverHandle *handle, const char *par2_path);
 Par2Error par2_recover_set_par2_data(Par2RecoverHandle *handle, const uint8_t *data, size_t len);
+Par2Error par2_recover_add_par2_data(Par2RecoverHandle *handle, const uint8_t *data, size_t len, const char *name);
 Par2Error par2_recover_add_path(Par2RecoverHandle *handle, const char *path);
 Par2Error par2_recover_add_memory(Par2RecoverHandle *handle, const char *name, const uint8_t *data, size_t len);
 Par2Error par2_recover_add_stream(Par2RecoverHandle *handle, const char *name, uint64_t len, Par2ReadAtFn read_at, void *ctx);

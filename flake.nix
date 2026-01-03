@@ -44,11 +44,12 @@
 							pkgs.cmake
 							pkgs.ninja
 							pkgs.pkg-config
-							pkgs.openssl
-							pkgs.par2cmdline
-							par2TurboPkg
-							mktmpPkg
-						] ++ linuxOnly ++ pkgs.lib.optional (valgrindPkg != null) valgrindPkg;
+						pkgs.openssl
+						pkgs.par2cmdline
+						pkgs.luajit
+						par2TurboPkg
+						mktmpPkg
+					] ++ linuxOnly ++ pkgs.lib.optional (valgrindPkg != null) valgrindPkg;
 
 						shellHook = ''
 							echo "par2z dev shell: zig/zls/afl++/par2cmdline"

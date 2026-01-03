@@ -45,6 +45,12 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 - [x] Optional packet support: parse FileSlic/RFSC/PkdMain/PkdRecvS; emit FileSlic (flag) and PkdMain/PkdRecvS (flag).
 - [x] Expanded integration interoperability tests (multi-file, volume-only, no-RFSC, seeded data).
 - [x] Streaming encode for file-backed store (avoid loading all slices in memory).
+- [x] Corrupt PAR2 recovery data + data slices and verify recovery with par2cmdline and par2z.
+- [x] Add LuaJIT to dev shell for LuaJIT CLI integration tests.
+- [x] Entropy Shield: add C API parity blob inputs for verify/recover (multiple in-memory par2 files).
+- [x] Entropy Shield: expand error codes (parity missing file, parity corrupt) and map source-missing vs parity-missing.
+- [x] Entropy Shield: update verify/recover stream APIs + tests for multi-blob parity inputs.
+- [x] Entropy Shield: document any global/shared state for concurrency expectations.
 
 ## TODO: par2cmdline-turbo Flags (Compatibility)
 - [x] Empirically verify par2cmdline-turbo flag behavior (no source code).

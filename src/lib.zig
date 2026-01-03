@@ -14,6 +14,8 @@ pub const Par2Error = enum(c_int) {
     not_found = 6,
     data_corrupt = 7,
     insufficient_recovery = 8,
+    parity_missing_file = 9,
+    parity_corrupt = 10,
 };
 
 pub const Par2CreateHandle = opaque {};
@@ -157,6 +159,8 @@ fn anyErrorFromPar2(code: Par2Error) anyerror {
         .not_found => error.NotFound,
         .data_corrupt => error.DataCorrupt,
         .insufficient_recovery => error.InsufficientRecovery,
+        .parity_missing_file => error.ParityMissingFile,
+        .parity_corrupt => error.ParityCorrupt,
     };
 }
 
@@ -217,6 +221,23 @@ const OwnedStreamCtx = struct {
 const MemStreamCtx = struct {
     data: []const u8,
 };
+
+const Par2Blob = struct {
+    name: ?[]const u8,
+    bytes: []const u8,
+};
+
+fn clearPar2Blobs(allocator: std.mem.Allocator, blobs: *std.ArrayList(Par2Blob)) void {
+    for (blobs.items) |blob| {
+        if (blob.name) |name| allocator.free(name);
+    }
+    blobs.clearRetainingCapacity();
+}
+
+fn addPar2Blob(allocator: std.mem.Allocator, blobs: *std.ArrayList(Par2Blob), name: ?[*:0]const u8, data: []const u8) !void {
+    const name_copy = if (name) |n| try allocator.dupe(u8, std.mem.span(n)) else null;
+    try blobs.append(allocator, .{ .name = name_copy, .bytes = data });
+}
 
 const CStreamCtx = struct {
     read_at: Par2ReadAtFn,
@@ -296,7 +317,7 @@ const VerifyHandle = struct {
     owned_stream_names: std.ArrayList([]const u8),
     par2_path: ?[]const u8,
     basepath: ?[]const u8,
-    par2_data: ?[]const u8,
+    par2_blobs: std.ArrayList(Par2Blob),
     memory_inputs: bool,
     temp_dir: ?[]const u8,
     temp_paths: std.ArrayList([]const u8),
@@ -314,7 +335,7 @@ const RecoverHandle = struct {
     owned_stream_names: std.ArrayList([]const u8),
     par2_path: ?[]const u8,
     basepath: ?[]const u8,
-    par2_data: ?[]const u8,
+    par2_blobs: std.ArrayList(Par2Blob),
     memory_inputs: bool,
     output_dir: ?[]const u8,
     output_open: ?Par2OpenOutputFn,
@@ -388,6 +409,8 @@ fn errorCodeFrom(err: anyerror) Par2Error {
         error.InvalidInput => return .invalid_argument,
         error.InsufficientRecovery => return .insufficient_recovery,
         error.DataCorrupt => return .data_corrupt,
+        error.ParityMissingFile => return .parity_missing_file,
+        error.ParityCorrupt => return .parity_corrupt,
         error.StoreError => return .io_error,
         error.IoError => return .io_error,
         error.NotFound => return .not_found,
@@ -755,7 +778,7 @@ pub export fn par2_verify_new(opts: ?*const Par2VerifyOptions, out_handle: ?*?*P
         .owned_stream_names = std.ArrayList([]const u8).empty,
         .par2_path = null,
         .basepath = null,
-        .par2_data = null,
+        .par2_blobs = std.ArrayList(Par2Blob).empty,
         .memory_inputs = false,
         .temp_dir = null,
         .temp_paths = std.ArrayList([]const u8).empty,
@@ -779,6 +802,8 @@ pub export fn par2_verify_destroy(handle: ?*Par2VerifyHandle) void {
     for (h.data_paths.items) |p| allocator.free(p);
     for (h.owned_stream_names.items) |name| allocator.free(name);
     for (h.owned_stream_ctxs.items) |owned| owned.freeFn(allocator, owned.ptr);
+    clearPar2Blobs(allocator, &h.par2_blobs);
+    h.par2_blobs.deinit(allocator);
     if (h.temp_dir) |d| {
         _ = std.fs.cwd().deleteTree(d) catch {};
         allocator.free(d);
@@ -795,7 +820,7 @@ pub export fn par2_verify_destroy(handle: ?*Par2VerifyHandle) void {
 pub export fn par2_verify_set_par2_path(handle: ?*Par2VerifyHandle, par2_path: ?[*:0]const u8) Par2Error {
     if (handle == null or par2_path == null) return .invalid_argument;
     var h = castVerify(handle.?);
-    if (h.par2_data != null) return .invalid_argument;
+    if (h.par2_blobs.items.len != 0) return .invalid_argument;
     const p = h.allocator.dupe(u8, std.mem.span(par2_path.?)) catch return .out_of_memory;
     h.par2_path = p;
     return .ok;
@@ -805,7 +830,16 @@ pub export fn par2_verify_set_par2_data(handle: ?*Par2VerifyHandle, data: ?[*]co
     if (handle == null or data == null) return .invalid_argument;
     var h = castVerify(handle.?);
     if (h.par2_path != null) return .invalid_argument;
-    h.par2_data = data.?[0..len];
+    clearPar2Blobs(h.allocator, &h.par2_blobs);
+    addPar2Blob(h.allocator, &h.par2_blobs, null, data.?[0..len]) catch return .out_of_memory;
+    return .ok;
+}
+
+pub export fn par2_verify_add_par2_data(handle: ?*Par2VerifyHandle, data: ?[*]const u8, len: usize, name: ?[*:0]const u8) Par2Error {
+    if (handle == null or data == null) return .invalid_argument;
+    var h = castVerify(handle.?);
+    if (h.par2_path != null) return .invalid_argument;
+    addPar2Blob(h.allocator, &h.par2_blobs, name, data.?[0..len]) catch return .out_of_memory;
     return .ok;
 }
 
@@ -872,12 +906,19 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
     var h = castVerify(handle.?);
     if (h.last_status) |msg| h.allocator.free(msg);
     h.last_status = null;
-    const use_streams = h.memory_inputs or h.par2_data != null;
+    const use_streams = h.memory_inputs or h.par2_blobs.items.len > 0;
     if (use_streams) {
-        var par2_bytes: ?[]const u8 = null;
         var par2_alloc: ?[]u8 = null;
-        if (h.par2_data) |data| {
-            par2_bytes = data;
+        var arena = std.heap.ArenaAllocator.init(h.allocator);
+        defer arena.deinit();
+        var par2_files = std.ArrayList([]const u8).empty;
+        defer par2_files.deinit(arena.allocator());
+        if (h.par2_blobs.items.len > 0) {
+            for (h.par2_blobs.items) |blob| {
+                par2_files.append(arena.allocator(), blob.bytes) catch {
+                    return .out_of_memory;
+                };
+            }
         } else if (h.par2_path) |path| {
             const info = std.fs.cwd().statFile(path) catch |e| {
                 setLastError(h.allocator, &h.last_error, "par2 stat failed");
@@ -889,14 +930,16 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
                 return errorCodeFrom(e);
             };
             par2_alloc = buf;
-            par2_bytes = buf;
+            par2_files.append(arena.allocator(), buf) catch {
+                h.allocator.free(buf);
+                return .out_of_memory;
+            };
         }
-        if (par2_bytes == null) {
+        if (par2_files.items.len == 0) {
             setLastError(h.allocator, &h.last_error, "missing par2 path");
             return .invalid_argument;
         }
-        var arena = std.heap.ArenaAllocator.init(h.allocator);
-        defer arena.deinit();
+        defer if (par2_alloc) |buf| h.allocator.free(buf);
         var inputs = std.ArrayList(ops.StreamInput).empty;
         defer inputs.deinit(arena.allocator());
         var inputs_items: []const ops.StreamInput = &.{};
@@ -906,11 +949,9 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
             for (h.data_paths.items) |path| {
                 const info = std.fs.cwd().statFile(path) catch |e| {
                     setLastError(h.allocator, &h.last_error, "input stat failed");
-                    if (par2_alloc) |buf| h.allocator.free(buf);
                     return errorCodeFrom(e);
                 };
                 const ctx = arena.allocator().create(FileStreamCtx) catch {
-                    if (par2_alloc) |buf| h.allocator.free(buf);
                     return .out_of_memory;
                 };
                 ctx.* = .{ .path = path, .length = info.size };
@@ -920,7 +961,6 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
                     .read_at = fileReadAt,
                     .ctx = ctx,
                 }) catch {
-                    if (par2_alloc) |buf| h.allocator.free(buf);
                     return .out_of_memory;
                 };
             }
@@ -933,12 +973,10 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
             .verbosity = 0,
             .memory_mb = h.options.memory_mb,
         };
-        ops.verifyStreams(h.allocator, par2_bytes.?, opts, inputs_items) catch |e| {
+        ops.verifyStreams(h.allocator, par2_files.items, opts, inputs_items) catch |e| {
             setLastError(h.allocator, &h.last_error, @errorName(e));
-            if (par2_alloc) |buf| h.allocator.free(buf);
             return errorCodeFrom(e);
         };
-        if (par2_alloc) |buf| h.allocator.free(buf);
         setLastStatus(h.allocator, &h.last_status, "OK");
         return .ok;
     }
@@ -1002,7 +1040,7 @@ pub export fn par2_recover_new(opts: ?*const Par2RecoverOptions, out_handle: ?*?
         .owned_stream_names = std.ArrayList([]const u8).empty,
         .par2_path = null,
         .basepath = null,
-        .par2_data = null,
+        .par2_blobs = std.ArrayList(Par2Blob).empty,
         .memory_inputs = false,
         .output_dir = null,
         .output_open = null,
@@ -1028,6 +1066,8 @@ pub export fn par2_recover_destroy(handle: ?*Par2RecoverHandle) void {
     for (h.data_paths.items) |p| allocator.free(p);
     for (h.owned_stream_names.items) |name| allocator.free(name);
     for (h.owned_stream_ctxs.items) |owned| owned.freeFn(allocator, owned.ptr);
+    clearPar2Blobs(allocator, &h.par2_blobs);
+    h.par2_blobs.deinit(allocator);
     if (h.temp_dir) |d| {
         _ = std.fs.cwd().deleteTree(d) catch {};
         allocator.free(d);
@@ -1045,7 +1085,7 @@ pub export fn par2_recover_destroy(handle: ?*Par2RecoverHandle) void {
 pub export fn par2_recover_set_par2_path(handle: ?*Par2RecoverHandle, par2_path: ?[*:0]const u8) Par2Error {
     if (handle == null or par2_path == null) return .invalid_argument;
     var h = castRecover(handle.?);
-    if (h.par2_data != null) return .invalid_argument;
+    if (h.par2_blobs.items.len != 0) return .invalid_argument;
     const p = h.allocator.dupe(u8, std.mem.span(par2_path.?)) catch return .out_of_memory;
     h.par2_path = p;
     return .ok;
@@ -1055,7 +1095,16 @@ pub export fn par2_recover_set_par2_data(handle: ?*Par2RecoverHandle, data: ?[*]
     if (handle == null or data == null) return .invalid_argument;
     var h = castRecover(handle.?);
     if (h.par2_path != null) return .invalid_argument;
-    h.par2_data = data.?[0..len];
+    clearPar2Blobs(h.allocator, &h.par2_blobs);
+    addPar2Blob(h.allocator, &h.par2_blobs, null, data.?[0..len]) catch return .out_of_memory;
+    return .ok;
+}
+
+pub export fn par2_recover_add_par2_data(handle: ?*Par2RecoverHandle, data: ?[*]const u8, len: usize, name: ?[*:0]const u8) Par2Error {
+    if (handle == null or data == null) return .invalid_argument;
+    var h = castRecover(handle.?);
+    if (h.par2_path != null) return .invalid_argument;
+    addPar2Blob(h.allocator, &h.par2_blobs, name, data.?[0..len]) catch return .out_of_memory;
     return .ok;
 }
 
@@ -1142,12 +1191,23 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
         open_ctx = .{ .open_fn = open_fn, .ctx = h.output_ctx, .allocator = h.allocator };
         output_open = .{ .ctx = &open_ctx, .openFn = openOutputC };
     }
-    const use_streams = h.memory_inputs or h.par2_data != null;
+    const use_streams = h.memory_inputs or h.par2_blobs.items.len > 0;
     if (use_streams) {
-        var par2_bytes: ?[]const u8 = null;
         var par2_alloc: ?[]u8 = null;
-        if (h.par2_data) |data| {
-            par2_bytes = data;
+        defer if (par2_alloc) |buf| h.allocator.free(buf);
+        var volumes: [][]u8 = &.{};
+        defer {
+            for (volumes) |v| h.allocator.free(v);
+            if (volumes.len > 0) h.allocator.free(volumes);
+        }
+        var arena = std.heap.ArenaAllocator.init(h.allocator);
+        defer arena.deinit();
+        var par2_files = std.ArrayList([]const u8).empty;
+        defer par2_files.deinit(arena.allocator());
+        if (h.par2_blobs.items.len > 0) {
+            for (h.par2_blobs.items) |blob| {
+                par2_files.append(arena.allocator(), blob.bytes) catch return .out_of_memory;
+            }
         } else if (h.par2_path) |path| {
             const info = std.fs.cwd().statFile(path) catch |e| {
                 setLastError(h.allocator, &h.last_error, "par2 stat failed");
@@ -1159,27 +1219,24 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
                 return errorCodeFrom(e);
             };
             par2_alloc = buf;
-            par2_bytes = buf;
+            par2_files.append(arena.allocator(), buf) catch {
+                par2_alloc = null;
+                h.allocator.free(buf);
+                return .out_of_memory;
+            };
+            volumes = loadVolumeBytes(h.allocator, path) catch |e| {
+                setLastError(h.allocator, &h.last_error, "volume read failed");
+                return errorCodeFrom(e);
+            };
+            for (volumes) |v| {
+                par2_files.append(arena.allocator(), v) catch return .out_of_memory;
+            }
         }
-        if (par2_bytes == null) {
+        if (par2_files.items.len == 0) {
             setLastError(h.allocator, &h.last_error, "missing par2 path");
             return .invalid_argument;
         }
-        var volumes: [][]u8 = &.{};
-        if (h.par2_path) |path| {
-            volumes = loadVolumeBytes(h.allocator, path) catch |e| {
-                setLastError(h.allocator, &h.last_error, "volume read failed");
-                if (par2_alloc) |buf| h.allocator.free(buf);
-                return errorCodeFrom(e);
-            };
-        }
-        defer {
-            for (volumes) |v| h.allocator.free(v);
-            if (volumes.len > 0) h.allocator.free(volumes);
-        }
 
-        var arena = std.heap.ArenaAllocator.init(h.allocator);
-        defer arena.deinit();
         var inputs = std.ArrayList(ops.StreamInput).empty;
         defer inputs.deinit(arena.allocator());
         var inputs_items: []const ops.StreamInput = &.{};
@@ -1189,11 +1246,9 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
             for (h.data_paths.items) |path| {
                 const info = std.fs.cwd().statFile(path) catch |e| {
                     setLastError(h.allocator, &h.last_error, "input stat failed");
-                    if (par2_alloc) |buf| h.allocator.free(buf);
                     return errorCodeFrom(e);
                 };
                 const ctx = arena.allocator().create(FileStreamCtx) catch {
-                    if (par2_alloc) |buf| h.allocator.free(buf);
                     return .out_of_memory;
                 };
                 ctx.* = .{ .path = path, .length = info.size };
@@ -1203,7 +1258,6 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
                     .read_at = fileReadAt,
                     .ctx = ctx,
                 }) catch {
-                    if (par2_alloc) |buf| h.allocator.free(buf);
                     return .out_of_memory;
                 };
             }
@@ -1226,12 +1280,10 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
             .memory_mb = h.options.memory_mb,
             .output_open = output_open,
         };
-        ops.recoverStreams(h.allocator, h.allocator, par2_bytes.?, volumes, opts, inputs_items) catch |e| {
+        ops.recoverStreams(h.allocator, h.allocator, par2_files.items, opts, inputs_items) catch |e| {
             setRecoverError(h.allocator, &h.last_error, e);
-            if (par2_alloc) |buf| h.allocator.free(buf);
             return errorCodeFrom(e);
         };
-        if (par2_alloc) |buf| h.allocator.free(buf);
         return .ok;
     }
 

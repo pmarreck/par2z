@@ -55,8 +55,7 @@ pub fn recover(
     var recovery_set_id: ?[16]u8 = null;
     try common.loadPar2File(allocator, &ctx, &recovery_slices, &packed_slices, &file_slices, &rfsc_packets, opts.par2_path, &recovery_set_id);
     try common.loadVolumeFiles(allocator, &ctx, &recovery_slices, &packed_slices, &file_slices, &rfsc_packets, opts.par2_path, &recovery_set_id);
-    if (ctx.recovery_set == null) return error.InvalidInput;
-    if (recovery_slices.items.len == 0 and packed_slices.items.len == 0) return error.InvalidInput;
+    if (ctx.recovery_set == null) return error.ParityCorrupt;
 
     if (debug_recover) {
         var desc_count: usize = 0;
@@ -72,17 +71,17 @@ pub fn recover(
         try std.fs.File.stderr().writeAll(msg);
     }
     const rs_set = ctx.recovery_set.?;
-    const slice_size = std.math.cast(usize, rs_set.slice_size) orelse return error.InvalidInput;
+    const slice_size = std.math.cast(usize, rs_set.slice_size) orelse return error.ParityCorrupt;
     if (recovery_slices.items.len == 0 and packed_slices.items.len > 0) {
         const packed_main = ctx.packed_main orelse ctx.main;
         if (packed_main) |m| {
             if (m.subslice_size != null and m.subslice_size.? == m.slice_size) {
                 try recovery_slices.appendSlice(allocator, packed_slices.items);
             } else {
-                return error.InvalidInput;
+                return error.ParityCorrupt;
             }
         } else {
-            return error.InvalidInput;
+            return error.ParityCorrupt;
         }
     }
 
@@ -95,7 +94,7 @@ pub fn recover(
     var i: usize = 0;
     while (i < rs_set.recovery_files.len) : (i += 1) {
         const entry = rs_set.recovery_files[i];
-        if (entry.desc == null) return error.InvalidInput;
+        if (entry.desc == null) return error.ParityCorrupt;
         const desc = entry.desc.?;
         files[i] = .{ .length = desc.file_length };
         file_entries[i] = .{ .path = "", .length = desc.file_length, .present = false };
@@ -121,7 +120,10 @@ pub fn recover(
             const path = opts.data_paths[i];
             const base = path_util.baseName(path);
             const rel = if (opts.basepath) |bp| try common.relativePathForInput(allocator, bp, path) else null;
-            const idx = try common.findRecoveryIndexByName(rs_set, path, base, rel);
+            const idx = common.findRecoveryIndexByName(rs_set, path, base, rel) catch |e| switch (e) {
+                error.NotFound => return error.ParityMissingFile,
+                else => return e,
+            };
             if (present[idx]) return error.InvalidInput;
             const info = try std.fs.cwd().statFile(path);
             file_entries[idx] = .{ .path = path, .length = info.size, .present = true };
@@ -134,7 +136,7 @@ pub fn recover(
     i = 0;
     while (i < rs_set.recovery_files.len) : (i += 1) {
         const entry = rs_set.recovery_files[i];
-        if (entry.desc == null) return error.InvalidInput;
+        if (entry.desc == null) return error.ParityCorrupt;
         const desc = entry.desc.?;
         const slice_count = try core.slices.sliceCount(desc.file_length, slice_size);
         var flags = try allocator.alloc(bool, slice_count);
@@ -142,9 +144,9 @@ pub fn recover(
         if (!present[i]) {
             @memset(flags, true);
         } else {
-            if (entry.ifsc == null) return error.InvalidInput;
+            if (entry.ifsc == null) return error.ParityCorrupt;
             const expected = entry.ifsc.?.entries;
-            if (expected.len != slice_count) return error.InvalidInput;
+            if (expected.len != slice_count) return error.ParityCorrupt;
             var si: usize = 0;
             while (si < slice_count) : (si += 1) {
                 const slice = store.readSlice(scratch, i, slice_size, si) catch {
@@ -297,12 +299,12 @@ pub fn recover(
 pub fn recoverStreams(
     allocator: std.mem.Allocator,
     scratch: std.mem.Allocator,
-    main_bytes: []const u8,
-    volumes: []const []const u8,
+    par2_files: []const []const u8,
     opts: common.RecoverOptions,
     inputs: []const StreamInput,
 ) !void {
     if (opts.data_paths.len != 0) return error.InvalidInput;
+    if (par2_files.len == 0) return error.InvalidInput;
     const debug_recover = common.envFlagSet("PAR2_DEBUG_RECOVER");
     const cap_bytes = try common.memoryCapBytes(opts.memory_mb);
     var limited: common.LimitedAllocator = undefined;
@@ -322,12 +324,10 @@ pub fn recoverStreams(
     var rfsc_packets = std.ArrayList(core.packet_types.RfscPacket).empty;
     defer rfsc_packets.deinit(allocator);
     var recovery_set_id: ?[16]u8 = null;
-    try common.loadPar2Bytes(allocator, &ctx, &recovery_slices, &packed_slices, &file_slices, &rfsc_packets, main_bytes, &recovery_set_id);
-    for (volumes) |vol| {
-        try common.loadPar2Bytes(allocator, &ctx, &recovery_slices, &packed_slices, &file_slices, &rfsc_packets, vol, &recovery_set_id);
+    for (par2_files) |par2_bytes| {
+        try common.loadPar2Bytes(allocator, &ctx, &recovery_slices, &packed_slices, &file_slices, &rfsc_packets, par2_bytes, &recovery_set_id);
     }
-    if (ctx.recovery_set == null) return error.InvalidInput;
-    if (recovery_slices.items.len == 0 and packed_slices.items.len == 0) return error.InvalidInput;
+    if (ctx.recovery_set == null) return error.ParityCorrupt;
 
     if (debug_recover) {
         var desc_count: usize = 0;
@@ -343,44 +343,51 @@ pub fn recoverStreams(
         try std.fs.File.stderr().writeAll(msg);
     }
     const rs_set = ctx.recovery_set.?;
-    const slice_size = std.math.cast(usize, rs_set.slice_size) orelse return error.InvalidInput;
+    const slice_size = std.math.cast(usize, rs_set.slice_size) orelse return error.ParityCorrupt;
     if (recovery_slices.items.len == 0 and packed_slices.items.len > 0) {
         const packed_main = ctx.packed_main orelse ctx.main;
         if (packed_main) |m| {
             if (m.subslice_size != null and m.subslice_size.? == m.slice_size) {
                 try recovery_slices.appendSlice(allocator, packed_slices.items);
             } else {
-                return error.InvalidInput;
+                return error.ParityCorrupt;
             }
         } else {
-            return error.InvalidInput;
+            return error.ParityCorrupt;
         }
     }
 
     var files = try allocator.alloc(core.layout.FileInfo, rs_set.recovery_files.len);
     var stream_entries = try allocator.alloc(core.storage.StreamEntry, rs_set.recovery_files.len);
     var present = try allocator.alloc(bool, rs_set.recovery_files.len);
+    var input_paths = try allocator.alloc(?[]const u8, rs_set.recovery_files.len);
     defer allocator.free(files);
     defer allocator.free(stream_entries);
     defer allocator.free(present);
+    defer allocator.free(input_paths);
     var i: usize = 0;
     while (i < rs_set.recovery_files.len) : (i += 1) {
         const entry = rs_set.recovery_files[i];
-        if (entry.desc == null) return error.InvalidInput;
+        if (entry.desc == null) return error.ParityCorrupt;
         const desc = entry.desc.?;
         files[i] = .{ .length = desc.file_length };
         stream_entries[i] = .{ .length = desc.file_length, .read_at = common.missingReadAt, .ctx = &common.missing_ctx };
         present[i] = false;
+        input_paths[i] = null;
     }
 
     for (inputs) |input| {
         const base = path_util.baseName(input.name);
         const rel = if (opts.basepath) |bp| try common.relativePathForInput(allocator, bp, input.name) else null;
-        const idx = try common.findRecoveryIndexByName(rs_set, input.name, base, rel);
+        const idx = common.findRecoveryIndexByName(rs_set, input.name, base, rel) catch |e| switch (e) {
+            error.NotFound => return error.ParityMissingFile,
+            else => return e,
+        };
         if (present[idx]) return error.InvalidInput;
         if (input.length != files[idx].length) return error.InvalidInput;
         stream_entries[idx] = .{ .length = input.length, .read_at = input.read_at, .ctx = input.ctx };
         present[idx] = true;
+        input_paths[idx] = input.name;
     }
 
     const base_store = core.storage.StreamStore{ .files = stream_entries };
@@ -388,7 +395,7 @@ pub fn recoverStreams(
     i = 0;
     while (i < rs_set.recovery_files.len) : (i += 1) {
         const entry = rs_set.recovery_files[i];
-        if (entry.desc == null) return error.InvalidInput;
+        if (entry.desc == null) return error.ParityCorrupt;
         const desc = entry.desc.?;
         const slice_count = try core.slices.sliceCount(desc.file_length, slice_size);
         var flags = try allocator.alloc(bool, slice_count);
@@ -396,9 +403,9 @@ pub fn recoverStreams(
         if (!present[i]) {
             @memset(flags, true);
         } else {
-            if (entry.ifsc == null) return error.InvalidInput;
+            if (entry.ifsc == null) return error.ParityCorrupt;
             const expected = entry.ifsc.?.entries;
-            if (expected.len != slice_count) return error.InvalidInput;
+            if (expected.len != slice_count) return error.ParityCorrupt;
             var si: usize = 0;
             while (si < slice_count) : (si += 1) {
                 const slice = base_store.readSlice(scratch, i, slice_size, si) catch {
@@ -522,7 +529,21 @@ pub fn recoverStreams(
             const target_dir = opts.out_dir orelse opts.basepath;
             const out_path = try outputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths);
             defer if (out_path.owned) allocator.free(out_path.path);
-            computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path.path);
+            const in_place = present[i] and input_paths[i] != null and std.mem.eql(u8, out_path.path, input_paths[i].?);
+            if (in_place) {
+                var tmp = try openTempOutputForPath(allocator, out_path.path);
+                var keep_tmp = false;
+                defer {
+                    tmp.file.close();
+                    if (!keep_tmp) std.fs.cwd().deleteFile(tmp.path) catch {};
+                    allocator.free(tmp.path);
+                }
+                computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, tmp.file);
+                try std.fs.cwd().rename(tmp.path, out_path.path);
+                keep_tmp = true;
+            } else {
+                computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path.path);
+            }
         }
         if (!std.mem.eql(u8, &computed, &desc.file_hash)) return error.InvalidInput;
     }

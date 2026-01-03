@@ -23,7 +23,7 @@ pub fn verify(
         try core.api.addPacket(allocator, &ctx, pkt);
         offset += end - 1;
     }
-    if (ctx.recovery_set == null) return error.InvalidInput;
+    if (ctx.recovery_set == null) return error.ParityCorrupt;
     const rs_set = ctx.recovery_set.?;
     var file_entries = try allocator.alloc(core.storage.FileEntry, rs_set.recovery_files.len);
     var present = try allocator.alloc(bool, rs_set.recovery_files.len);
@@ -55,7 +55,10 @@ pub fn verify(
         for (opts.data_paths) |path| {
             const base = path_util.baseName(path);
             const rel = if (opts.basepath) |bp| try common.relativePathForInput(allocator, bp, path) else null;
-            const idx = try common.findRecoveryIndexByName(rs_set, path, base, rel);
+            const idx = common.findRecoveryIndexByName(rs_set, path, base, rel) catch |e| switch (e) {
+                error.NotFound => return error.ParityMissingFile,
+                else => return e,
+            };
             if (present[idx]) return error.InvalidInput;
             const info = std.fs.cwd().statFile(path) catch return error.NotFound;
             file_entries[idx] = .{ .path = path, .length = info.size, .present = true };
@@ -66,7 +69,7 @@ pub fn verify(
         if (!p) return error.NotFound;
     }
     for (rs_set.recovery_files, 0..) |entry, i| {
-        if (entry.desc == null) return error.InvalidInput;
+        if (entry.desc == null) return error.ParityCorrupt;
         if (entry.desc.?.file_length != file_entries[i].length) return error.DataCorrupt;
         if (entry.ifsc != null) continue;
         const computed = try common.md5File(file_entries[i].path);
@@ -78,11 +81,12 @@ pub fn verify(
 
 pub fn verifyStreams(
     allocator: std.mem.Allocator,
-    par2_bytes: []const u8,
+    par2_files: []const []const u8,
     opts: common.VerifyOptions,
     inputs: []const StreamInput,
 ) !void {
     if (opts.data_paths.len != 0) return error.InvalidInput;
+    if (par2_files.len == 0) return error.InvalidInput;
     var ctx = core.api.initContext(allocator);
     var recovery_slices = std.ArrayList(core.rs.RecoverySlice).empty;
     defer recovery_slices.deinit(allocator);
@@ -93,8 +97,10 @@ pub fn verifyStreams(
     var rfsc_packets = std.ArrayList(core.packet_types.RfscPacket).empty;
     defer rfsc_packets.deinit(allocator);
     var recovery_set_id: ?[16]u8 = null;
-    try common.loadPar2Bytes(allocator, &ctx, &recovery_slices, &packed_slices, &file_slices, &rfsc_packets, par2_bytes, &recovery_set_id);
-    if (ctx.recovery_set == null) return error.InvalidInput;
+    for (par2_files) |par2_bytes| {
+        try common.loadPar2Bytes(allocator, &ctx, &recovery_slices, &packed_slices, &file_slices, &rfsc_packets, par2_bytes, &recovery_set_id);
+    }
+    if (ctx.recovery_set == null) return error.ParityCorrupt;
     const rs_set = ctx.recovery_set.?;
 
     var stream_entries = try allocator.alloc(core.storage.StreamEntry, rs_set.recovery_files.len);
@@ -108,9 +114,12 @@ pub fn verifyStreams(
     for (inputs) |input| {
         const base = path_util.baseName(input.name);
         const rel = if (opts.basepath) |bp| try common.relativePathForInput(allocator, bp, input.name) else null;
-        const idx = try common.findRecoveryIndexByName(rs_set, input.name, base, rel);
+        const idx = common.findRecoveryIndexByName(rs_set, input.name, base, rel) catch |e| switch (e) {
+            error.NotFound => return error.ParityMissingFile,
+            else => return e,
+        };
         if (present[idx]) return error.InvalidInput;
-        const desc = rs_set.recovery_files[idx].desc orelse return error.InvalidInput;
+        const desc = rs_set.recovery_files[idx].desc orelse return error.ParityCorrupt;
         if (desc.file_length != input.length) return error.DataCorrupt;
         stream_entries[idx] = .{ .length = input.length, .read_at = input.read_at, .ctx = input.ctx };
         present[idx] = true;
@@ -128,7 +137,7 @@ pub fn verifyStreams(
     }
 
     for (rs_set.recovery_files, 0..) |entry, i| {
-        if (entry.desc == null) return error.InvalidInput;
+        if (entry.desc == null) return error.ParityCorrupt;
         if (entry.ifsc != null) continue;
         const computed = try common.md5Stream(.{
             .name = entry.desc.?.file_name,

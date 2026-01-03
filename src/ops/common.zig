@@ -571,9 +571,6 @@ pub fn loadPar2File(
     }
     var rec_index = std.AutoHashMap(u32, usize).init(allocator);
     defer rec_index.deinit();
-    var rec_ok = try allocator.alloc(bool, local_rfsc.items.len);
-    defer allocator.free(rec_ok);
-    @memset(rec_ok, false);
     for (local_rfsc.items, 0..) |entry, idx| {
         try rec_index.put(entry.exponent, idx);
     }
@@ -582,7 +579,6 @@ pub fn loadPar2File(
         var digest: [16]u8 = undefined;
         try core.md5.md5Digest(rec.data, &digest);
         if (std.mem.eql(u8, &digest, &local_rfsc.items[idx].md5) and local_rfsc.items[idx].crc32 == core.crc32.crc32(rec.data)) {
-            rec_ok[idx] = true;
             try recs.append(allocator, rec);
         }
     }
@@ -591,12 +587,8 @@ pub fn loadPar2File(
         var digest: [16]u8 = undefined;
         try core.md5.md5Digest(rec.data, &digest);
         if (std.mem.eql(u8, &digest, &local_rfsc.items[idx].md5) and local_rfsc.items[idx].crc32 == core.crc32.crc32(rec.data)) {
-            rec_ok[idx] = true;
             try packed_recs.append(allocator, rec);
         }
-    }
-    for (rec_ok) |ok| {
-        if (!ok) return error.InvalidInput;
     }
 }
 
@@ -673,9 +665,6 @@ pub fn loadPar2Bytes(
     }
     var rec_index = std.AutoHashMap(u32, usize).init(allocator);
     defer rec_index.deinit();
-    var rec_ok = try allocator.alloc(bool, local_rfsc.items.len);
-    defer allocator.free(rec_ok);
-    @memset(rec_ok, false);
     for (local_rfsc.items, 0..) |entry, idx| {
         try rec_index.put(entry.exponent, idx);
     }
@@ -684,7 +673,6 @@ pub fn loadPar2Bytes(
         var digest: [16]u8 = undefined;
         try core.md5.md5Digest(rec.data, &digest);
         if (std.mem.eql(u8, &digest, &local_rfsc.items[idx].md5) and local_rfsc.items[idx].crc32 == core.crc32.crc32(rec.data)) {
-            rec_ok[idx] = true;
             try recs.append(allocator, rec);
         }
     }
@@ -693,12 +681,8 @@ pub fn loadPar2Bytes(
         var digest: [16]u8 = undefined;
         try core.md5.md5Digest(rec.data, &digest);
         if (std.mem.eql(u8, &digest, &local_rfsc.items[idx].md5) and local_rfsc.items[idx].crc32 == core.crc32.crc32(rec.data)) {
-            rec_ok[idx] = true;
             try packed_recs.append(allocator, rec);
         }
-    }
-    for (rec_ok) |ok| {
-        if (!ok) return error.InvalidInput;
     }
 }
 

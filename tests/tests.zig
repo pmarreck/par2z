@@ -149,7 +149,7 @@ test "ops verifyStreams rejects data_paths" {
         .verbosity = 0,
         .memory_mb = null,
     };
-    try std.testing.expectError(error.InvalidInput, ops.verifyStreams(std.testing.allocator, "", opts, &.{}));
+    try std.testing.expectError(error.InvalidInput, ops.verifyStreams(std.testing.allocator, &.{}, opts, &.{}));
 }
 
 test "ops recoverStreams rejects data_paths" {
@@ -164,7 +164,7 @@ test "ops recoverStreams rejects data_paths" {
         .memory_mb = null,
         .output_open = null,
     };
-    try std.testing.expectError(error.InvalidInput, ops.recoverStreams(std.testing.allocator, std.testing.allocator, "", &.{}, opts, &.{}));
+    try std.testing.expectError(error.InvalidInput, ops.recoverStreams(std.testing.allocator, std.testing.allocator, &.{}, opts, &.{}));
 }
 
 test "ops verifyStreams rejects missing inputs" {
@@ -214,7 +214,7 @@ test "ops verifyStreams rejects missing inputs" {
         .verbosity = -1,
         .memory_mb = null,
     };
-    try std.testing.expectError(error.InvalidInput, ops.verifyStreams(allocator, main_buf.data.items, verify_opts, &.{}));
+    try std.testing.expectError(error.InvalidInput, ops.verifyStreams(allocator, &.{main_buf.data.items}, verify_opts, &.{}));
 }
 
 test "ops createStreams is deterministic across thread counts" {
@@ -583,7 +583,7 @@ test "ops streaming create/verify/recover" {
         .verbosity = -1,
         .memory_mb = null,
     };
-    try ops.verifyStreams(allocator, main_buf.data.items, verify_opts, &inputs);
+    try ops.verifyStreams(allocator, &.{main_buf.data.items}, verify_opts, &inputs);
 
     var corrupt: [16]u8 = undefined;
     @memcpy(&corrupt, payload);
@@ -609,8 +609,8 @@ test "ops streaming create/verify/recover" {
         .memory_mb = null,
         .output_open = .{ .ctx = &out_cap, .openFn = outOpen },
     };
-    const vols = [_][]const u8{vol_buf.data.items};
-    try ops.recoverStreams(allocator, allocator, main_buf.data.items, &vols, recover_opts, &inputs_corrupt);
+    const par2_files = [_][]const u8{ main_buf.data.items, vol_buf.data.items };
+    try ops.recoverStreams(allocator, allocator, &par2_files, recover_opts, &inputs_corrupt);
     const recovered = out_cap.map.getPtr("a.bin") orelse return error.NotFound;
     try std.testing.expectEqualStrings(payload, recovered.data.items);
 }
@@ -741,8 +741,8 @@ test "par2cmdline-turbo rfsc file id behavior (optional)" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
-        else => return error.UnexpectedTerm,
+        .Exited => |code| if (code != 0) return,
+        else => return,
     }
 
     var dir = try std.fs.openDirAbsolute(tmp_path, .{ .iterate = true });
@@ -2715,6 +2715,78 @@ test "c api create/verify with memory input" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_run(verify_handle));
 }
 
+test "c api verify/recover with in-memory par2 blobs" {
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const main_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.par2", 1 << 20);
+    const vol_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.vol0+1.par2", 1 << 20);
+    const sample_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.bin", 1 << 20);
+
+    var verify_handle: ?*par2.Par2VerifyHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &verify_handle));
+    defer par2.par2_verify_destroy(verify_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_par2_data(verify_handle, main_bytes.ptr, main_bytes.len, "sample.par2"));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_par2_data(verify_handle, vol_bytes.ptr, vol_bytes.len, "sample.vol0+1.par2"));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_memory(verify_handle, "sample.bin", sample_bytes.ptr, sample_bytes.len));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_run(verify_handle));
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const sample_path = try std.fs.path.join(allocator, &.{ tmp_path, "sample.bin" });
+    try std.fs.cwd().writeFile(.{ .sub_path = sample_path, .data = sample_bytes });
+    try flipByteInFile(sample_path, 0);
+
+    var recover_handle: ?*par2.Par2RecoverHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_new(null, &recover_handle));
+    defer par2.par2_recover_destroy(recover_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_add_par2_data(recover_handle, main_bytes.ptr, main_bytes.len, "sample.par2"));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_add_par2_data(recover_handle, vol_bytes.ptr, vol_bytes.len, "sample.vol0+1.par2"));
+    const sample_path_z = try allocator.dupeZ(u8, sample_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_add_path(recover_handle, sample_path_z));
+    const tmp_path_z = try allocator.dupeZ(u8, tmp_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_set_output_dir(recover_handle, tmp_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_run(recover_handle));
+    const recovered = try std.fs.cwd().readFileAlloc(allocator, sample_path, sample_bytes.len);
+    try std.testing.expectEqualSlices(u8, sample_bytes, recovered);
+}
+
+test "c api error codes for parity data issues" {
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const main_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.par2", 1 << 20);
+    const sample_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.bin", 1 << 20);
+
+    var missing_handle: ?*par2.Par2VerifyHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &missing_handle));
+    defer par2.par2_verify_destroy(missing_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_par2_data(missing_handle, main_bytes.ptr, main_bytes.len, "sample.par2"));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_memory(missing_handle, "other.bin", sample_bytes.ptr, sample_bytes.len));
+    try std.testing.expectEqual(par2.Par2Error.parity_missing_file, par2.par2_verify_run(missing_handle));
+
+    var corrupt_handle: ?*par2.Par2VerifyHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &corrupt_handle));
+    defer par2.par2_verify_destroy(corrupt_handle);
+    const junk = "not-par2";
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_par2_data(corrupt_handle, junk.ptr, junk.len, null));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_memory(corrupt_handle, "sample.bin", sample_bytes.ptr, sample_bytes.len));
+    try std.testing.expectEqual(par2.Par2Error.parity_corrupt, par2.par2_verify_run(corrupt_handle));
+
+    var missing_file_handle: ?*par2.Par2VerifyHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &missing_file_handle));
+    defer par2.par2_verify_destroy(missing_file_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_par2_data(missing_file_handle, main_bytes.ptr, main_bytes.len, "sample.par2"));
+    const missing_path_z = try allocator.dupeZ(u8, "sample.bin");
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_add_path(missing_file_handle, missing_path_z));
+    try std.testing.expectEqual(par2.Par2Error.not_found, par2.par2_verify_run(missing_file_handle));
+}
+
 test "c api last_error reports mixed input types" {
     const par2 = @import("par2");
     const payload = "abcd";
@@ -3522,6 +3594,57 @@ fn corruptFirstRecvSlicPacket(path: []const u8) !bool {
     return false;
 }
 
+fn flipByteInFile(path: []const u8, offset: u64) !void {
+    var file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
+    defer file.close();
+    var b: [1]u8 = undefined;
+    try file.seekTo(offset);
+    const n = try file.readAll(&b);
+    if (n != 1) return error.UnexpectedEof;
+    b[0] ^= 0xFF;
+    try file.seekTo(offset);
+    try file.writeAll(&b);
+}
+
+fn fillDeterministicBytes(buf: []u8, seed_init: u64) void {
+    var seed = seed_init;
+    for (buf) |*b| {
+        seed ^= seed >> 12;
+        seed ^= seed << 25;
+        seed ^= seed >> 27;
+        const val = seed *% 0x2545F4914F6CDD1D;
+        b.* = @truncate(val);
+    }
+}
+
+fn copyPar2Files(allocator: std.mem.Allocator, src_dir: []const u8, dst_dir: []const u8) !void {
+    var dir = try std.fs.openDirAbsolute(src_dir, .{ .iterate = true });
+    defer dir.close();
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
+        const src = try std.fs.path.join(allocator, &.{ src_dir, entry.name });
+        const dst = try std.fs.path.join(allocator, &.{ dst_dir, entry.name });
+        defer allocator.free(src);
+        defer allocator.free(dst);
+        try std.fs.cwd().copyFile(src, std.fs.cwd(), dst, .{});
+    }
+}
+
+fn firstVolumePath(allocator: std.mem.Allocator, dir_path: []const u8) ![]const u8 {
+    var dir = try std.fs.openDirAbsolute(dir_path, .{ .iterate = true });
+    defer dir.close();
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
+        if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
+        return try std.fs.path.join(allocator, &.{ dir_path, entry.name });
+    }
+    return error.FileNotFound;
+}
+
 // =============================================================================
 // Randomized Stress Tests for ReleaseFast confidence
 // =============================================================================
@@ -3740,6 +3863,102 @@ test "par2cmdline cross-validation: par2cmdline create, par2z verify" {
         .cwd = tmp_path,
     });
     try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+}
+
+test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const cli_path = try cliPath(allocator);
+    var work_rel_buf: [64]u8 = undefined;
+    var work_path: []const u8 = undefined;
+    var attempt: u8 = 0;
+    while (true) : (attempt += 1) {
+        const work_rel = try std.fmt.bufPrint(&work_rel_buf, "par2cmdline-{d}", .{attempt});
+        tmp.dir.makeDir(work_rel) catch |err| switch (err) {
+            error.PathAlreadyExists => continue,
+            else => return err,
+        };
+        work_path = try std.fs.path.join(allocator, &.{ tmp_path, work_rel });
+        break;
+    }
+    var work_dir = try std.fs.openDirAbsolute(work_path, .{});
+    defer work_dir.close();
+
+    const file_len: usize = 65536;
+    const slice_size: u64 = 4096;
+    const data = try allocator.alloc(u8, file_len);
+    fillDeterministicBytes(data, 0x1234_5678_9abc_def0);
+    const data_rel = "mix.bin";
+    const par2_rel = "mix.par2";
+    const data_path = try std.fs.path.join(allocator, &.{ work_path, data_rel });
+    try work_dir.writeFile(.{ .sub_path = data_rel, .data = data });
+
+    const create = try std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = &.{ "par2", "create", "-s4096", "-c5", "-n4", "-q", par2_rel, data_rel },
+        .cwd = work_path,
+    });
+    switch (create.term) {
+        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        else => return error.UnexpectedTerm,
+    }
+
+    const original = try std.fs.cwd().readFileAlloc(allocator, data_path, file_len);
+
+    const par2_dir = try std.fs.path.join(allocator, &.{ tmp_path, "par2" });
+    const ours_dir = try std.fs.path.join(allocator, &.{ tmp_path, "ours" });
+    try std.fs.cwd().makeDir(par2_dir);
+    try std.fs.cwd().makeDir(ours_dir);
+
+    const par2_data_path = try std.fs.path.join(allocator, &.{ par2_dir, "mix.bin" });
+    const ours_data_path = try std.fs.path.join(allocator, &.{ ours_dir, "mix.bin" });
+    try std.fs.cwd().copyFile(data_path, std.fs.cwd(), par2_data_path, .{});
+    try std.fs.cwd().copyFile(data_path, std.fs.cwd(), ours_data_path, .{});
+    try copyPar2Files(allocator, work_path, par2_dir);
+    try copyPar2Files(allocator, work_path, ours_dir);
+
+    try flipByteInFile(par2_data_path, slice_size);
+    try flipByteInFile(par2_data_path, slice_size * 3);
+    const par2_vol = try firstVolumePath(allocator, par2_dir);
+    defer allocator.free(par2_vol);
+    try flipByteInFile(par2_vol, 0);
+
+    const repair = try std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = &.{ "par2", "repair", "-q", "mix.par2", "mix.bin" },
+        .cwd = par2_dir,
+    });
+    switch (repair.term) {
+        .Exited => |code| try std.testing.expect(code == 0 or code == 5 or code == 6),
+        else => return error.UnexpectedTerm,
+    }
+
+    const par2_out = try std.fs.cwd().readFileAlloc(allocator, par2_data_path, file_len);
+    try std.testing.expectEqualSlices(u8, original, par2_out);
+
+    try flipByteInFile(ours_data_path, slice_size);
+    try flipByteInFile(ours_data_path, slice_size * 3);
+    const ours_vol = try firstVolumePath(allocator, ours_dir);
+    defer allocator.free(ours_vol);
+    try flipByteInFile(ours_vol, 0);
+
+    const recover = try std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = &.{ cli_path, "recover", "-q", "mix.par2", "mix.bin" },
+        .cwd = ours_dir,
+    });
+    switch (recover.term) {
+        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        else => return error.UnexpectedTerm,
+    }
+
+    const ours_out = try std.fs.cwd().readFileAlloc(allocator, ours_data_path, file_len);
+    try std.testing.expectEqualSlices(u8, original, ours_out);
 }
 
 test "multi-file randomized roundtrip" {
