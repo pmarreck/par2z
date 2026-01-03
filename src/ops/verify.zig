@@ -74,9 +74,6 @@ pub fn verify(
     }
     const store = core.storage.FileStore{ .files = file_entries };
     try core.api.verifyStoreFile(verify_alloc, &ctx, store);
-    if (opts.verbosity >= 0) {
-        try common.infoFile().writeAll("OK\n");
-    }
 }
 
 pub fn verifyStreams(
@@ -143,7 +140,4 @@ pub fn verifyStreams(
     }
     const store = core.storage.StreamStore{ .files = stream_entries };
     try core.api.verifyStoreStream(verify_alloc, &ctx, store);
-    if (opts.verbosity >= 0) {
-        try common.infoFile().writeAll("OK\n");
-    }
 }

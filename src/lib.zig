@@ -301,6 +301,7 @@ const VerifyHandle = struct {
     temp_dir: ?[]const u8,
     temp_paths: std.ArrayList([]const u8),
     last_error: ?[]u8,
+    last_status: ?[]u8,
 };
 
 const RecoverHandle = struct {
@@ -360,6 +361,17 @@ fn freeHandle(comptime T: type, alloc_state: *AllocState, handle: *T) void {
 }
 
 fn setLastError(allocator: std.mem.Allocator, slot: *?[]u8, msg: []const u8) void {
+    if (slot.*) |old| allocator.free(old);
+    const buf = allocator.alloc(u8, msg.len + 1) catch {
+        slot.* = null;
+        return;
+    };
+    @memcpy(buf[0..msg.len], msg);
+    buf[msg.len] = 0;
+    slot.* = buf;
+}
+
+fn setLastStatus(allocator: std.mem.Allocator, slot: *?[]u8, msg: []const u8) void {
     if (slot.*) |old| allocator.free(old);
     const buf = allocator.alloc(u8, msg.len + 1) catch {
         slot.* = null;
@@ -748,6 +760,7 @@ pub export fn par2_verify_new(opts: ?*const Par2VerifyOptions, out_handle: ?*?*P
         .temp_dir = null,
         .temp_paths = std.ArrayList([]const u8).empty,
         .last_error = null,
+        .last_status = null,
     };
     handle.allocator = if (hasCallbacks(handle.alloc_state.callbacks)) handle.alloc_state.allocator() else std.heap.c_allocator;
     if (basepath) |bp| {
@@ -762,6 +775,7 @@ pub export fn par2_verify_destroy(handle: ?*Par2VerifyHandle) void {
     var h = castVerify(handle.?);
     const allocator = h.allocator;
     if (h.last_error) |msg| allocator.free(msg);
+    if (h.last_status) |msg| allocator.free(msg);
     for (h.data_paths.items) |p| allocator.free(p);
     for (h.owned_stream_names.items) |name| allocator.free(name);
     for (h.owned_stream_ctxs.items) |owned| owned.freeFn(allocator, owned.ptr);
@@ -856,6 +870,8 @@ pub export fn par2_verify_add_stream(handle: ?*Par2VerifyHandle, name: ?[*:0]con
 pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
     if (handle == null) return .invalid_argument;
     var h = castVerify(handle.?);
+    if (h.last_status) |msg| h.allocator.free(msg);
+    h.last_status = null;
     const use_streams = h.memory_inputs or h.par2_data != null;
     if (use_streams) {
         var par2_bytes: ?[]const u8 = null;
@@ -923,6 +939,7 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
             return errorCodeFrom(e);
         };
         if (par2_alloc) |buf| h.allocator.free(buf);
+        setLastStatus(h.allocator, &h.last_status, "OK");
         return .ok;
     }
 
@@ -941,6 +958,7 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
         setLastError(h.allocator, &h.last_error, @errorName(e));
         return errorCodeFrom(e);
     };
+    setLastStatus(h.allocator, &h.last_status, "OK");
     return .ok;
 }
 
@@ -948,6 +966,12 @@ pub export fn par2_verify_last_error(handle: ?*Par2VerifyHandle) ?[*:0]const u8 
     if (handle == null) return null;
     const h = castVerify(handle.?);
     return if (h.last_error) |msg| @ptrCast(msg.ptr) else null;
+}
+
+pub export fn par2_verify_last_status(handle: ?*Par2VerifyHandle) ?[*:0]const u8 {
+    if (handle == null) return null;
+    const h = castVerify(handle.?);
+    return if (h.last_status) |msg| @ptrCast(msg.ptr) else null;
 }
 
 pub export fn par2_recover_new(opts: ?*const Par2RecoverOptions, out_handle: ?*?*Par2RecoverHandle) Par2Error {

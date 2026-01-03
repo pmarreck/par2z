@@ -1927,7 +1927,6 @@ test "cli verify fixture" {
         .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "OK") != null);
 }
 
 test "cli verify accepts input files in any order" {
@@ -1969,7 +1968,6 @@ test "cli verify accepts input files in any order" {
         .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    try std.testing.expect(std.mem.indexOf(u8, verify.stdout, "OK") != null);
 }
 
 test "cli create accepts space separated short flags" {
@@ -2068,7 +2066,6 @@ test "cli verify resolves duplicate basenames by exact path" {
         .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    try std.testing.expect(std.mem.indexOf(u8, verify.stdout, "OK") != null);
 }
 
 test "cli verify rejects ambiguous basenames when paths are not exact" {
@@ -2616,7 +2613,6 @@ test "cli verify succeeds under low memory cap" {
         .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    try std.testing.expect(std.mem.indexOf(u8, verify.stdout, "OK") != null);
 }
 
 test "cli create enforces memory cap" {

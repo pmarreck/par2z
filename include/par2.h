@@ -103,6 +103,7 @@ Par2Error par2_verify_add_memory(Par2VerifyHandle *handle, const char *name, con
 Par2Error par2_verify_add_stream(Par2VerifyHandle *handle, const char *name, uint64_t len, Par2ReadAtFn read_at, void *ctx);
 Par2Error par2_verify_run(Par2VerifyHandle *handle);
 const char *par2_verify_last_error(Par2VerifyHandle *handle);
+const char *par2_verify_last_status(Par2VerifyHandle *handle);
 
 Par2Error par2_recover_new(const Par2RecoverOptions *opts, Par2RecoverHandle **out_handle);
 void par2_recover_destroy(Par2RecoverHandle *handle);
