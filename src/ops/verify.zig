@@ -57,20 +57,20 @@ pub fn verify(
             const rel = if (opts.basepath) |bp| try common.relativePathForInput(allocator, bp, path) else null;
             const idx = try common.findRecoveryIndexByName(rs_set, path, base, rel);
             if (present[idx]) return error.InvalidInput;
-            const info = try std.fs.cwd().statFile(path);
+            const info = std.fs.cwd().statFile(path) catch return error.NotFound;
             file_entries[idx] = .{ .path = path, .length = info.size, .present = true };
             present[idx] = true;
         }
     }
     for (present) |p| {
-        if (!p) return error.InvalidInput;
+        if (!p) return error.NotFound;
     }
     for (rs_set.recovery_files, 0..) |entry, i| {
         if (entry.desc == null) return error.InvalidInput;
-        if (entry.desc.?.file_length != file_entries[i].length) return error.InvalidInput;
+        if (entry.desc.?.file_length != file_entries[i].length) return error.DataCorrupt;
         if (entry.ifsc != null) continue;
         const computed = try common.md5File(file_entries[i].path);
-        if (!std.mem.eql(u8, &computed, &entry.desc.?.file_hash)) return error.InvalidInput;
+        if (!std.mem.eql(u8, &computed, &entry.desc.?.file_hash)) return error.DataCorrupt;
     }
     const store = core.storage.FileStore{ .files = file_entries };
     try core.api.verifyStoreFile(verify_alloc, &ctx, store);
@@ -114,7 +114,7 @@ pub fn verifyStreams(
         const idx = try common.findRecoveryIndexByName(rs_set, input.name, base, rel);
         if (present[idx]) return error.InvalidInput;
         const desc = rs_set.recovery_files[idx].desc orelse return error.InvalidInput;
-        if (desc.file_length != input.length) return error.InvalidInput;
+        if (desc.file_length != input.length) return error.DataCorrupt;
         stream_entries[idx] = .{ .length = input.length, .read_at = input.read_at, .ctx = input.ctx };
         present[idx] = true;
     }
@@ -139,7 +139,7 @@ pub fn verifyStreams(
             .read_at = stream_entries[i].read_at,
             .ctx = stream_entries[i].ctx,
         });
-        if (!std.mem.eql(u8, &computed, &entry.desc.?.file_hash)) return error.InvalidInput;
+        if (!std.mem.eql(u8, &computed, &entry.desc.?.file_hash)) return error.DataCorrupt;
     }
     const store = core.storage.StreamStore{ .files = stream_entries };
     try core.api.verifyStoreStream(verify_alloc, &ctx, store);

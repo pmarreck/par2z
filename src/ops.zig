@@ -11,6 +11,7 @@ pub const OutputOpener = common.OutputOpener;
 pub const StreamInput = common.StreamInput;
 pub const LimitedAllocator = common.LimitedAllocator;
 pub const transliterateAscii = common.transliterateAscii;
+pub const InsufficientRecoveryDetails = recover_mod.InsufficientRecoveryDetails;
 
 pub fn stdoutToStderrEnabled() bool {
     return common.stdoutToStderrEnabled();
@@ -22,3 +23,7 @@ pub const verify = verify_mod.verify;
 pub const verifyStreams = verify_mod.verifyStreams;
 pub const recover = recover_mod.recover;
 pub const recoverStreams = recover_mod.recoverStreams;
+
+pub fn takeLastInsufficientRecovery() ?InsufficientRecoveryDetails {
+    return recover_mod.takeLastInsufficientRecovery();
+}

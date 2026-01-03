@@ -6,6 +6,29 @@ const path_util = @import("path.zig");
 const OutputTarget = common.OutputTarget;
 const StreamInput = common.StreamInput;
 
+pub const InsufficientRecoveryDetails = struct {
+    missing_blocks: usize,
+    recovery_blocks: usize,
+    needed_blocks: usize,
+};
+
+threadlocal var last_insufficient: ?InsufficientRecoveryDetails = null;
+
+pub fn takeLastInsufficientRecovery() ?InsufficientRecoveryDetails {
+    const value = last_insufficient;
+    last_insufficient = null;
+    return value;
+}
+
+fn recordInsufficient(missing: usize, recovery: usize) void {
+    const needed = if (missing > recovery) missing - recovery else 0;
+    last_insufficient = .{
+        .missing_blocks = missing,
+        .recovery_blocks = recovery,
+        .needed_blocks = needed,
+    };
+}
+
 pub fn recover(
     allocator: std.mem.Allocator,
     scratch: std.mem.Allocator,
@@ -192,7 +215,10 @@ pub fn recover(
         }
         return;
     }
-    if (missing_indices.items.len > 0 and recovery_slices.items.len < missing_indices.items.len) return error.InvalidInput;
+    if (missing_indices.items.len > 0 and recovery_slices.items.len < missing_indices.items.len) {
+        recordInsufficient(missing_indices.items.len, recovery_slices.items.len);
+        return error.InsufficientRecovery;
+    }
 
     const recovered = if (missing_indices.items.len == 0)
         try allocator.alloc([]u8, 0)
@@ -443,7 +469,10 @@ pub fn recoverStreams(
         }
         return;
     }
-    if (missing_indices.items.len > 0 and recovery_slices.items.len < missing_indices.items.len) return error.InvalidInput;
+    if (missing_indices.items.len > 0 and recovery_slices.items.len < missing_indices.items.len) {
+        recordInsufficient(missing_indices.items.len, recovery_slices.items.len);
+        return error.InsufficientRecovery;
+    }
 
     const recovered = if (missing_indices.items.len == 0)
         try allocator.alloc([]u8, 0)

@@ -13,6 +13,7 @@ pub const Par2Error = enum(c_int) {
     unsupported = 5,
     not_found = 6,
     data_corrupt = 7,
+    insufficient_recovery = 8,
 };
 
 pub const Par2CreateHandle = opaque {};
@@ -155,7 +156,26 @@ fn anyErrorFromPar2(code: Par2Error) anyerror {
         .unsupported => error.Unsupported,
         .not_found => error.NotFound,
         .data_corrupt => error.DataCorrupt,
+        .insufficient_recovery => error.InsufficientRecovery,
     };
+}
+
+fn setRecoverError(allocator: std.mem.Allocator, slot: *?[]u8, err: anyerror) void {
+    if (err == error.InsufficientRecovery) {
+        if (ops.takeLastInsufficientRecovery()) |details| {
+            const plural = if (details.needed_blocks == 1) "" else "s";
+            const msg = std.fmt.allocPrint(allocator, "Repair is not possible.\nYou need {d} more recovery block{s} to be able to repair.", .{ details.needed_blocks, plural }) catch {
+                setLastError(allocator, slot, "Repair is not possible.");
+                return;
+            };
+            defer allocator.free(msg);
+            setLastError(allocator, slot, msg);
+            return;
+        }
+        setLastError(allocator, slot, "Repair is not possible.");
+        return;
+    }
+    setLastError(allocator, slot, @errorName(err));
 }
 
 fn cOutputWrite(ctx: *anyopaque, data: []const u8) anyerror!usize {
@@ -354,8 +374,15 @@ fn errorCodeFrom(err: anyerror) Par2Error {
     switch (err) {
         error.OutOfMemory => return .out_of_memory,
         error.InvalidInput => return .invalid_argument,
+        error.InsufficientRecovery => return .insufficient_recovery,
+        error.DataCorrupt => return .data_corrupt,
+        error.StoreError => return .io_error,
         error.IoError => return .io_error,
         error.NotFound => return .not_found,
+        error.FileNotFound => return .not_found,
+        error.AccessDenied, error.PermissionDenied => return .io_error,
+        error.NotDir, error.IsDir => return .io_error,
+        error.NameTooLong, error.BadPathName => return .io_error,
         else => return .internal_error,
     }
 }
@@ -1176,7 +1203,7 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
             .output_open = output_open,
         };
         ops.recoverStreams(h.allocator, h.allocator, par2_bytes.?, volumes, opts, inputs_items) catch |e| {
-            setLastError(h.allocator, &h.last_error, @errorName(e));
+            setRecoverError(h.allocator, &h.last_error, e);
             if (par2_alloc) |buf| h.allocator.free(buf);
             return errorCodeFrom(e);
         };
@@ -1202,7 +1229,7 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
         .output_open = output_open,
     };
     ops.recover(h.allocator, h.allocator, opts) catch |e| {
-        setLastError(h.allocator, &h.last_error, @errorName(e));
+        setRecoverError(h.allocator, &h.last_error, e);
         return errorCodeFrom(e);
     };
     return .ok;

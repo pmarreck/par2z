@@ -15,6 +15,7 @@ pub const ApiError = error{
     StoreError,
     NotFound,
     RsError,
+    DataCorrupt,
 };
 
 pub const Par2Context = struct {
@@ -104,7 +105,10 @@ pub fn verifyStore(allocator: std.mem.Allocator, ctx: *Par2Context, store: stora
         if (entry.ifsc) |ifsc| {
             const file = store.files[file_i];
             const computed = slices.computeIfscEntries(allocator, file, slice_size) catch return error.SliceError;
-            slices.verifyIfsc(computed, ifsc.entries) catch return error.SliceError;
+            slices.verifyIfsc(computed, ifsc.entries) catch |e| switch (e) {
+                error.Mismatch => return error.DataCorrupt,
+                else => return error.SliceError,
+            };
         }
     }
 }
@@ -129,12 +133,12 @@ fn verifyStoreSlices(allocator: std.mem.Allocator, ctx: *Par2Context, store: any
             if (expected.len == 0) continue;
             var slice_i: usize = 0;
             while (slice_i < expected.len) : (slice_i += 1) {
-                const slice = store.readSlice(allocator, file_i, slice_size, slice_i) catch return error.SliceError;
+                const slice = store.readSlice(allocator, file_i, slice_size, slice_i) catch return error.StoreError;
                 defer allocator.free(slice);
                 var computed: types.IfscEntry = undefined;
                 slices.computeIfscEntry(slice, &computed) catch return error.SliceError;
-                if (!std.mem.eql(u8, &computed.md5, &expected[slice_i].md5)) return error.SliceError;
-                if (computed.crc32 != expected[slice_i].crc32) return error.SliceError;
+                if (!std.mem.eql(u8, &computed.md5, &expected[slice_i].md5)) return error.DataCorrupt;
+                if (computed.crc32 != expected[slice_i].crc32) return error.DataCorrupt;
             }
         }
     }

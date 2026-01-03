@@ -22,6 +22,7 @@ typedef enum Par2Error {
 	PAR2_ERR_UNSUPPORTED = 5,
 	PAR2_ERR_NOT_FOUND = 6,
 	PAR2_ERR_DATA_CORRUPT = 7,
+	PAR2_ERR_INSUFFICIENT_RECOVERY = 8,
 } Par2Error;
 
 typedef void *(*Par2AllocFn)(void *ctx, size_t size, size_t align);
