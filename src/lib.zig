@@ -617,6 +617,7 @@ pub export fn par2_create_destroy(handle: ?*Par2CreateHandle) void {
         _ = std.fs.cwd().deleteTree(d) catch {};
         allocator.free(d);
     }
+    if (h.par2_path) |p| allocator.free(p);
     if (h.basepath) |bp| allocator.free(bp);
     if (h.comment) |c| allocator.free(c);
     h.data_paths.deinit(allocator);
@@ -689,6 +690,7 @@ pub export fn par2_create_set_output_path(handle: ?*Par2CreateHandle, par2_path:
     if (handle == null or par2_path == null) return .invalid_argument;
     var h = castCreate(handle.?);
     const p = h.allocator.dupe(u8, std.mem.span(par2_path.?)) catch return .out_of_memory;
+    if (h.par2_path) |old| h.allocator.free(old);
     h.par2_path = p;
     return .ok;
 }
@@ -808,6 +810,7 @@ pub export fn par2_verify_destroy(handle: ?*Par2VerifyHandle) void {
         _ = std.fs.cwd().deleteTree(d) catch {};
         allocator.free(d);
     }
+    if (h.par2_path) |p| allocator.free(p);
     if (h.basepath) |bp| allocator.free(bp);
     h.data_paths.deinit(allocator);
     h.stream_inputs.deinit(allocator);
@@ -822,6 +825,7 @@ pub export fn par2_verify_set_par2_path(handle: ?*Par2VerifyHandle, par2_path: ?
     var h = castVerify(handle.?);
     if (h.par2_blobs.items.len != 0) return .invalid_argument;
     const p = h.allocator.dupe(u8, std.mem.span(par2_path.?)) catch return .out_of_memory;
+    if (h.par2_path) |old| h.allocator.free(old);
     h.par2_path = p;
     return .ok;
 }
@@ -1072,6 +1076,7 @@ pub export fn par2_recover_destroy(handle: ?*Par2RecoverHandle) void {
         _ = std.fs.cwd().deleteTree(d) catch {};
         allocator.free(d);
     }
+    if (h.par2_path) |p| allocator.free(p);
     if (h.basepath) |bp| allocator.free(bp);
     if (h.output_dir) |d| allocator.free(d);
     h.data_paths.deinit(allocator);
@@ -1087,6 +1092,7 @@ pub export fn par2_recover_set_par2_path(handle: ?*Par2RecoverHandle, par2_path:
     var h = castRecover(handle.?);
     if (h.par2_blobs.items.len != 0) return .invalid_argument;
     const p = h.allocator.dupe(u8, std.mem.span(par2_path.?)) catch return .out_of_memory;
+    if (h.par2_path) |old| h.allocator.free(old);
     h.par2_path = p;
     return .ok;
 }
@@ -1170,6 +1176,7 @@ pub export fn par2_recover_set_output_dir(handle: ?*Par2RecoverHandle, out_dir: 
     if (handle == null or out_dir == null) return .invalid_argument;
     var h = castRecover(handle.?);
     const p = h.allocator.dupe(u8, std.mem.span(out_dir.?)) catch return .out_of_memory;
+    if (h.output_dir) |old| h.allocator.free(old);
     h.output_dir = p;
     return .ok;
 }

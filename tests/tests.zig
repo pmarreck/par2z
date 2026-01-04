@@ -4024,3 +4024,114 @@ test "multi-file randomized roundtrip" {
         try std.testing.expectEqualSlices(u8, original_data[i], recovered);
     }
 }
+
+// Memory leak regression tests for C API
+test "par2_create handle lifecycle - no leaks" {
+    // Use a tracking allocator to detect leaks
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer {
+        const check = gpa.deinit();
+        if (check == .leak) {
+            @panic("Memory leak detected in par2_create lifecycle");
+        }
+    }
+    const allocator = gpa.allocator();
+
+    // Create temp directory
+    var tmp_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = std.fs.cwd().realpath(".", &tmp_buf) catch return;
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    // Write test data
+    const data = "test data for memory leak test";
+    const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "test_leak.bin" });
+    defer allocator.free(data_path);
+    try tmp_dir.dir.writeFile(.{ .sub_path = "test_leak.bin", .data = data });
+
+    const full_data_path = try tmp_dir.dir.realpathAlloc(allocator, "test_leak.bin");
+    defer allocator.free(full_data_path);
+
+    const par2_out = try tmp_dir.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(par2_out);
+    const par2_path = try std.fmt.allocPrintSentinel(allocator, "{s}/test_leak.par2", .{par2_out}, 0);
+    defer allocator.free(par2_path);
+
+    // Create and destroy handle multiple times
+    for (0..10) |_| {
+        var handle: ?*lib.Par2CreateHandle = null;
+        const result = lib.par2_create_new(null, &handle);
+        try std.testing.expectEqual(lib.Par2Error.ok, result);
+        try std.testing.expect(handle != null);
+
+        // Set output path multiple times (tests for leak in overwrite)
+        _ = lib.par2_create_set_output_path(handle, par2_path.ptr);
+        _ = lib.par2_create_set_output_path(handle, par2_path.ptr);
+        _ = lib.par2_create_set_output_path(handle, par2_path.ptr);
+
+        lib.par2_create_destroy(handle);
+    }
+}
+
+test "par2_verify handle lifecycle - no leaks" {
+    for (0..10) |_| {
+        var handle: ?*lib.Par2VerifyHandle = null;
+        const result = lib.par2_verify_new(null, &handle);
+        try std.testing.expectEqual(lib.Par2Error.ok, result);
+        try std.testing.expect(handle != null);
+
+        // Set path multiple times
+        _ = lib.par2_verify_set_par2_path(handle, "test1.par2");
+        _ = lib.par2_verify_set_par2_path(handle, "test2.par2");
+        _ = lib.par2_verify_set_par2_path(handle, "test3.par2");
+
+        lib.par2_verify_destroy(handle);
+    }
+}
+
+test "par2_recover handle lifecycle - no leaks" {
+    for (0..10) |_| {
+        var handle: ?*lib.Par2RecoverHandle = null;
+        const result = lib.par2_recover_new(null, &handle);
+        try std.testing.expectEqual(lib.Par2Error.ok, result);
+        try std.testing.expect(handle != null);
+
+        // Set paths multiple times
+        _ = lib.par2_recover_set_par2_path(handle, "test1.par2");
+        _ = lib.par2_recover_set_par2_path(handle, "test2.par2");
+        _ = lib.par2_recover_set_output_dir(handle, "/tmp/out1");
+        _ = lib.par2_recover_set_output_dir(handle, "/tmp/out2");
+
+        lib.par2_recover_destroy(handle);
+    }
+}
+
+test "par2_create with memory inputs - no leaks" {
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    const par2_out = try tmp_dir.dir.realpathAlloc(std.testing.allocator, ".");
+    defer std.testing.allocator.free(par2_out);
+    const par2_path = try std.fmt.allocPrintSentinel(std.testing.allocator, "{s}/mem_test.par2", .{par2_out}, 0);
+    defer std.testing.allocator.free(par2_path);
+
+    const data = "test data for memory input leak test - some content here";
+
+    // Run multiple create cycles with memory inputs
+    for (0..5) |_| {
+        var handle: ?*lib.Par2CreateHandle = null;
+        const result = lib.par2_create_new(null, &handle);
+        try std.testing.expectEqual(lib.Par2Error.ok, result);
+
+        _ = lib.par2_create_set_output_path(handle, par2_path.ptr);
+        _ = lib.par2_create_add_memory(handle, "test.bin", data.ptr, data.len);
+
+        const run_result = lib.par2_create_run(handle);
+        try std.testing.expectEqual(lib.Par2Error.ok, run_result);
+
+        lib.par2_create_destroy(handle);
+
+        // Clean up generated par2 files for next iteration
+        tmp_dir.dir.deleteFile("mem_test.par2") catch {};
+    }
+}
