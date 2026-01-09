@@ -534,6 +534,71 @@ fn capiReadAt(ctx: ?*anyopaque, offset: u64, out: [*]u8, len: usize) callconv(.c
     return n;
 }
 
+test "ops extractSourceMetadata finds SFMD packet" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    const payload = "metadata";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "a.bin",
+        .length = payload.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    const meta = ops.SourceMetadataPacket{
+        .version = 1,
+        .flags = 0,
+        .source_mtime_ns = 111,
+        .source_ctime_ns = 222,
+        .source_size = payload.len,
+        .reserved = std.mem.zeroes([32]u8),
+    };
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = meta,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+
+    const main_buf = cap.map.getPtr("set.par2") orelse return error.NotFound;
+    const found = try ops.extractSourceMetadata(main_buf.data.items);
+    try std.testing.expect(found != null);
+    const got = found.?;
+    try std.testing.expectEqual(meta.version, got.version);
+    try std.testing.expectEqual(meta.flags, got.flags);
+    try std.testing.expectEqual(meta.source_mtime_ns, got.source_mtime_ns);
+    try std.testing.expectEqual(meta.source_ctime_ns, got.source_ctime_ns);
+    try std.testing.expectEqual(meta.source_size, got.source_size);
+    try std.testing.expect(std.mem.eql(u8, &meta.reserved, &got.reserved));
+}
+
 test "ops streaming create/verify/recover" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
