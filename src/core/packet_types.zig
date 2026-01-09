@@ -20,6 +20,15 @@ pub const MainPacket = struct {
     is_packed: bool,
 };
 
+pub const SourceMetadataPacket = struct {
+    version: u16,
+    flags: u16,
+    source_mtime_ns: i64,
+    source_ctime_ns: i64,
+    source_size: u64,
+    reserved: [32]u8,
+};
+
 pub const FileDescPacket = struct {
     file_id: [16]u8,
     file_hash: [16]u8,
@@ -74,6 +83,9 @@ const fileslic_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'F', 'i', 'l'
 const rfsc_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'R', 'F', 'S', 'C', 0, 0, 0, 0 };
 const pkdmain_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'M', 'a', 'i', 'n', 0 };
 const pkdrecvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'R', 'e', 'c', 'v', 'S' };
+const sfmd_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'M', 'D', 0, 0, 0, 0 };
+
+pub const source_metadata_type = sfmd_type;
 
 pub fn parseCreator(buf: []const u8) PacketTypeError!CreatorPacket {
     const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
@@ -120,6 +132,25 @@ pub fn parseMain(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!
         .non_recovery_file_ids = non_recovery_ids,
         .is_packed = false,
     };
+}
+
+pub fn parseSourceMetadata(buf: []const u8) PacketTypeError!SourceMetadataPacket {
+    const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
+    if (!std.mem.eql(u8, &hdr.packet_type, &sfmd_type)) return error.InvalidInput;
+    if (hdr.length < 64 + 60) return error.InvalidInput;
+    const end: usize = @intCast(hdr.length);
+    const body = buf[64..end];
+    if (body.len < 60) return error.InvalidInput;
+    var out: SourceMetadataPacket = undefined;
+    out.version = bytes.readU16Le(body, 0) catch return error.OutOfBounds;
+    out.flags = bytes.readU16Le(body, 2) catch return error.OutOfBounds;
+    const mtime = bytes.readU64Le(body, 4) catch return error.OutOfBounds;
+    const ctime = bytes.readU64Le(body, 12) catch return error.OutOfBounds;
+    out.source_mtime_ns = @bitCast(mtime);
+    out.source_ctime_ns = @bitCast(ctime);
+    out.source_size = bytes.readU64Le(body, 20) catch return error.OutOfBounds;
+    @memcpy(&out.reserved, body[28..60]);
+    return out;
 }
 
 pub fn parsePackedMain(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!MainPacket {

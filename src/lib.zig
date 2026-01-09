@@ -81,6 +81,12 @@ pub const Par2RecoverOptions = extern struct {
     allocator: Par2Allocator = .{},
 };
 
+pub const Par2SourceMetadata = extern struct {
+    mtime_ns: i64 = 0,
+    ctime_ns: i64 = 0,
+    size: u64 = 0,
+};
+
 const ThreadPoolHandle = struct {
     pool: std.Thread.Pool,
     max_jobs: ?usize,
@@ -287,6 +293,54 @@ fn fileReadAt(ctx: *anyopaque, offset: u64, out: []u8) usize {
     return n;
 }
 
+fn readFileAllocExact(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+    var file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+    const info = try file.stat();
+    const size = std.math.cast(usize, info.size) orelse return error.InvalidInput;
+    const buf = try allocator.alloc(u8, size);
+    errdefer allocator.free(buf);
+    const n = try file.readAll(buf);
+    if (n != size) return error.IoError;
+    return buf;
+}
+
+fn findSourceMetadata(bytes: []const u8) !?core.packet_types.SourceMetadataPacket {
+    var offset: usize = 0;
+    while (offset + 64 <= bytes.len) : (offset += 1) {
+        const remaining = bytes[offset..];
+        const hdr = core.packet.parseHeader(remaining) catch {
+            continue;
+        };
+        const end: usize = @intCast(hdr.length);
+        if (end > remaining.len) break;
+        const pkt = remaining[0..end];
+        core.packet.verifyPacketHash(pkt) catch {
+            offset += end - 1;
+            continue;
+        };
+        if (std.mem.eql(u8, &hdr.packet_type, &core.packet_types.source_metadata_type)) {
+            const meta = core.packet_types.parseSourceMetadata(pkt) catch return error.DataCorrupt;
+            return meta;
+        }
+        offset += end - 1;
+    }
+    return null;
+}
+
+fn loadVerifyMetadata(handle: *VerifyHandle) !?core.packet_types.SourceMetadataPacket {
+    if (handle.par2_blobs.items.len > 0) {
+        for (handle.par2_blobs.items) |blob| {
+            if (try findSourceMetadata(blob.bytes)) |meta| return meta;
+        }
+        return null;
+    }
+    if (handle.par2_path == null) return error.InvalidInput;
+    const bytes = try readFileAllocExact(handle.allocator, handle.par2_path.?);
+    defer handle.allocator.free(bytes);
+    return try findSourceMetadata(bytes);
+}
+
 const CreateHandle = struct {
     alloc_state: AllocState,
     allocator: std.mem.Allocator,
@@ -298,6 +352,7 @@ const CreateHandle = struct {
     par2_path: ?[]const u8,
     basepath: ?[]const u8,
     comment: ?[]const u8,
+    metadata: ?core.packet_types.SourceMetadataPacket,
     memory_inputs: bool,
     par2_data: ?[]const u8,
     output_open: ?Par2OpenOutputFn,
@@ -567,6 +622,7 @@ pub export fn par2_create_new(opts: ?*const Par2CreateOptions, out_handle: ?*?*P
             .data_paths = &.{},
             .mute_defaults = true,
             .comment = null,
+            .metadata = null,
             .include_input_slices = include_input_slices,
             .emit_packed = emit_packed,
             .emit_rfsc = emit_rfsc,
@@ -585,6 +641,7 @@ pub export fn par2_create_new(opts: ?*const Par2CreateOptions, out_handle: ?*?*P
         .par2_path = null,
         .basepath = null,
         .comment = null,
+        .metadata = null,
         .memory_inputs = false,
         .par2_data = null,
         .output_open = null,
@@ -686,6 +743,20 @@ pub export fn par2_create_add_stream(handle: ?*Par2CreateHandle, name: ?[*:0]con
     return .ok;
 }
 
+pub export fn par2_create_set_metadata(handle: ?*Par2CreateHandle, metadata: ?*const Par2SourceMetadata) Par2Error {
+    if (handle == null or metadata == null) return .invalid_argument;
+    var h = castCreate(handle.?);
+    h.metadata = .{
+        .version = 1,
+        .flags = 0,
+        .source_mtime_ns = metadata.?.mtime_ns,
+        .source_ctime_ns = metadata.?.ctime_ns,
+        .source_size = metadata.?.size,
+        .reserved = std.mem.zeroes([32]u8),
+    };
+    return .ok;
+}
+
 pub export fn par2_create_set_output_path(handle: ?*Par2CreateHandle, par2_path: ?[*:0]const u8) Par2Error {
     if (handle == null or par2_path == null) return .invalid_argument;
     var h = castCreate(handle.?);
@@ -727,6 +798,7 @@ pub export fn par2_create_run(handle: ?*Par2CreateHandle) Par2Error {
         .data_paths = h.data_paths.items,
         .mute_defaults = h.options.mute_defaults,
         .comment = h.options.comment,
+        .metadata = h.metadata,
         .include_input_slices = h.options.include_input_slices,
         .emit_packed = h.options.emit_packed,
         .emit_rfsc = h.options.emit_rfsc,
@@ -1002,6 +1074,35 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
     };
     setLastStatus(h.allocator, &h.last_status, "OK");
     return .ok;
+}
+
+pub export fn par2_get_metadata(handle: ?*Par2VerifyHandle, out_metadata: ?*Par2SourceMetadata) Par2Error {
+    if (handle == null or out_metadata == null) return .invalid_argument;
+    var h = castVerify(handle.?);
+    const meta = loadVerifyMetadata(h) catch |e| {
+        setLastError(h.allocator, &h.last_error, @errorName(e));
+        return errorCodeFrom(e);
+    };
+    if (meta) |m| {
+        out_metadata.?.* = .{
+            .mtime_ns = m.source_mtime_ns,
+            .ctime_ns = m.source_ctime_ns,
+            .size = m.source_size,
+        };
+    } else {
+        out_metadata.?.* = .{};
+    }
+    return .ok;
+}
+
+pub export fn par2_has_metadata(handle: ?*Par2VerifyHandle) bool {
+    if (handle == null) return false;
+    var h = castVerify(handle.?);
+    const meta = loadVerifyMetadata(h) catch |e| {
+        setLastError(h.allocator, &h.last_error, @errorName(e));
+        return false;
+    };
+    return meta != null;
 }
 
 pub export fn par2_verify_last_error(handle: ?*Par2VerifyHandle) ?[*:0]const u8 {

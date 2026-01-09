@@ -15,6 +15,7 @@ pub const CreateOptions = struct {
     data_paths: []const []const u8,
     mute_defaults: bool,
     comment: ?[]const u8,
+    metadata: ?core.packet_types.SourceMetadataPacket,
     include_input_slices: bool,
     emit_packed: bool,
     emit_rfsc: bool,

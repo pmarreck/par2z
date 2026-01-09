@@ -51,6 +51,10 @@ Document a cleanroom-derivable PAR2 file format specification and algorithm (imp
 - [x] Entropy Shield: expand error codes (parity missing file, parity corrupt) and map source-missing vs parity-missing.
 - [x] Entropy Shield: update verify/recover stream APIs + tests for multi-blob parity inputs.
 - [x] Entropy Shield: document any global/shared state for concurrency expectations.
+- [x] Entropy Shield: add ESMd metadata packet (create + parse + C API + tests + spec).
+- [ ] Entropy Shield: investigate C API create memory growth and report (looped create/destroy + output callbacks).
+- [ ] Entropy Shield: add no-leak regression test for C API create (paths/memory + output callback) if needed.
+- [ ] Entropy Shield: report peak RSS per run for synthetic loop (if no leak found).
 
 ## TODO: par2cmdline-turbo Flags (Compatibility)
 - [x] Empirically verify par2cmdline-turbo flag behavior (no source code).

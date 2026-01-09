@@ -137,6 +137,24 @@ Body:
 - Exponent (4 bytes).
 - Packed recovery data (slice size bytes).
 
+## Source File Metadata Extension (Non-Standard)
+### Source File Metadata Packet (SFMD)
+Packet Type: "PAR 2.0\0SFMD\0\0\0\0"
+Body (little-endian):
+- Version (u16). Current version: 1.
+- Flags (u16). Reserved for future use (0).
+- Source mtime (i64) in nanoseconds since Unix epoch.
+- Source ctime (i64) in nanoseconds since Unix epoch (0 if unavailable).
+- Source size (u64) in bytes.
+- Reserved (32 bytes, zero).
+
+Placement (par2z convention):
+- Written immediately after the Main packet and before any Packed Main packet.
+- Stored only in the main `.par2` file (not volume files).
+- Single-file recovery sets only.
+
+Other PAR2 implementations should ignore unknown packet types per the PAR2 spec.
+
 ## File Naming Conventions (Non-Normative)
 Common naming patterns observed in PAR2 tools:
 - Base parity file: name.par2

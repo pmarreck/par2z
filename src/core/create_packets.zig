@@ -14,6 +14,7 @@ const fileslic_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'F', 'i', 'l'
 const rfsc_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'R', 'F', 'S', 'C', 0, 0, 0, 0 };
 const pkdmain_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'M', 'a', 'i', 'n', 0 };
 const pkdrecvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'R', 'e', 'c', 'v', 'S' };
+const sfmd_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'M', 'D', 0, 0, 0, 0 };
 
 pub fn buildCreatorPacket(allocator: std.mem.Allocator, recovery_set_id: [16]u8, text: []const u8) ![]u8 {
     return packet_write.buildPacket(allocator, recovery_set_id, creator_type, text);
@@ -34,6 +35,22 @@ pub fn buildMainBody(allocator: std.mem.Allocator, slice_size: u64, file_ids: []
 
 pub fn buildMainPacket(allocator: std.mem.Allocator, recovery_set_id: [16]u8, body: []const u8) ![]u8 {
     return packet_write.buildPacket(allocator, recovery_set_id, main_type, body);
+}
+
+pub fn buildSourceMetadataPacket(
+    allocator: std.mem.Allocator,
+    recovery_set_id: [16]u8,
+    meta: types.SourceMetadataPacket,
+) ![]u8 {
+    const body_len: usize = 60;
+    var body = try allocator.alloc(u8, body_len);
+    writeU16Le(body, 0, meta.version);
+    writeU16Le(body, 2, meta.flags);
+    writeI64Le(body, 4, meta.source_mtime_ns);
+    writeI64Le(body, 12, meta.source_ctime_ns);
+    writeU64Le(body, 20, meta.source_size);
+    @memcpy(body[28..60], &meta.reserved);
+    return packet_write.buildPacket(allocator, recovery_set_id, sfmd_type, body);
 }
 
 pub fn buildPackedMainBody(
@@ -230,9 +247,18 @@ fn writeU64Le(buf: []u8, offset: usize, value: u64) void {
     buf[offset + 7] = @as(u8, @intCast((value >> 56) & 0xFF));
 }
 
+fn writeI64Le(buf: []u8, offset: usize, value: i64) void {
+    writeU64Le(buf, offset, @bitCast(value));
+}
+
 fn writeU32Le(buf: []u8, offset: usize, value: u32) void {
     buf[offset + 0] = @as(u8, @intCast(value & 0xFF));
     buf[offset + 1] = @as(u8, @intCast((value >> 8) & 0xFF));
     buf[offset + 2] = @as(u8, @intCast((value >> 16) & 0xFF));
     buf[offset + 3] = @as(u8, @intCast((value >> 24) & 0xFF));
+}
+
+fn writeU16Le(buf: []u8, offset: usize, value: u16) void {
+    buf[offset + 0] = @as(u8, @intCast(value & 0xFF));
+    buf[offset + 1] = @as(u8, @intCast((value >> 8) & 0xFF));
 }

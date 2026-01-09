@@ -194,6 +194,7 @@ test "ops verifyStreams rejects missing inputs" {
         .data_paths = &.{},
         .mute_defaults = true,
         .comment = null,
+        .metadata = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -245,6 +246,7 @@ test "ops createStreams is deterministic across thread counts" {
         .data_paths = &.{},
         .mute_defaults = true,
         .comment = null,
+        .metadata = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -273,6 +275,7 @@ test "ops createStreams is deterministic across thread counts" {
         .data_paths = &.{},
         .mute_defaults = true,
         .comment = null,
+        .metadata = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -561,6 +564,7 @@ test "ops streaming create/verify/recover" {
         .data_paths = &.{},
         .mute_defaults = true,
         .comment = null,
+        .metadata = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -2715,6 +2719,163 @@ test "c api create/verify with memory input" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_run(verify_handle));
 }
 
+test "c api create writes SFMD after Main and only in main file" {
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "meta.par2" });
+
+    var opts: par2.Par2CreateOptions = .{};
+    opts.block_size = 1024;
+    opts.recovery_blocks = 1;
+
+    var create_handle: ?*par2.Par2CreateHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(&opts, &create_handle));
+    defer par2.par2_create_destroy(create_handle);
+
+    const payload = "entropy-shield-metadata";
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_memory(create_handle, "meta.bin", payload, payload.len));
+    var meta = par2.Par2SourceMetadata{
+        .mtime_ns = 1234,
+        .ctime_ns = 5678,
+        .size = payload.len,
+    };
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_metadata(create_handle, &meta));
+    const par2_path_z = try allocator.dupeZ(u8, par2_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
+
+    const main_bytes = try std.fs.cwd().readFileAlloc(allocator, par2_path, 1 << 20);
+    const main_hdr = try core.packet.parseHeader(main_bytes);
+    const main_end: usize = @intCast(main_hdr.length);
+    try std.testing.expect(main_end <= main_bytes.len);
+    try core.packet.verifyPacketHash(main_bytes[0..main_end]);
+    try std.testing.expect(std.mem.eql(u8, &main_hdr.packet_type, &mainType()));
+
+    const next_hdr = try core.packet.parseHeader(main_bytes[main_end..]);
+    const next_end: usize = @intCast(next_hdr.length);
+    try std.testing.expect(main_end + next_end <= main_bytes.len);
+    try core.packet.verifyPacketHash(main_bytes[main_end .. main_end + next_end]);
+    try std.testing.expect(std.mem.eql(u8, &next_hdr.packet_type, &sfmdType()));
+
+    const vol_path = try findFirstVolume(allocator, tmp_path);
+    const vol_bytes = try std.fs.cwd().readFileAlloc(allocator, vol_path, 1 << 20);
+    try std.testing.expect(!fileHasPacketType(vol_bytes, sfmdType()));
+}
+
+test "c api get metadata round trip" {
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "meta-rt.par2" });
+
+    var opts: par2.Par2CreateOptions = .{};
+    opts.block_size = 512;
+    opts.recovery_blocks = 1;
+
+    var create_handle: ?*par2.Par2CreateHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(&opts, &create_handle));
+    defer par2.par2_create_destroy(create_handle);
+
+    const payload = "metadata-roundtrip";
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_memory(create_handle, "meta-rt.bin", payload, payload.len));
+    var meta = par2.Par2SourceMetadata{
+        .mtime_ns = 987654321,
+        .ctime_ns = 123456789,
+        .size = payload.len,
+    };
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_metadata(create_handle, &meta));
+    const par2_path_z = try allocator.dupeZ(u8, par2_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
+
+    var verify_handle: ?*par2.Par2VerifyHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &verify_handle));
+    defer par2.par2_verify_destroy(verify_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_set_par2_path(verify_handle, par2_path_z));
+    try std.testing.expect(par2.par2_has_metadata(verify_handle));
+    var out_meta = par2.Par2SourceMetadata{};
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_get_metadata(verify_handle, &out_meta));
+    try std.testing.expectEqual(meta.mtime_ns, out_meta.mtime_ns);
+    try std.testing.expectEqual(meta.ctime_ns, out_meta.ctime_ns);
+    try std.testing.expectEqual(meta.size, out_meta.size);
+}
+
+test "c api get metadata missing returns zero" {
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "meta-none.par2" });
+
+    var opts: par2.Par2CreateOptions = .{};
+    opts.block_size = 512;
+    opts.recovery_blocks = 1;
+
+    var create_handle: ?*par2.Par2CreateHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(&opts, &create_handle));
+    defer par2.par2_create_destroy(create_handle);
+
+    const payload = "metadata-missing";
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_memory(create_handle, "meta-none.bin", payload, payload.len));
+    const par2_path_z = try allocator.dupeZ(u8, par2_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
+
+    var verify_handle: ?*par2.Par2VerifyHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &verify_handle));
+    defer par2.par2_verify_destroy(verify_handle);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_set_par2_path(verify_handle, par2_path_z));
+    try std.testing.expect(!par2.par2_has_metadata(verify_handle));
+    var out_meta = par2.Par2SourceMetadata{};
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_get_metadata(verify_handle, &out_meta));
+    try std.testing.expectEqual(@as(i64, 0), out_meta.mtime_ns);
+    try std.testing.expectEqual(@as(i64, 0), out_meta.ctime_ns);
+    try std.testing.expectEqual(@as(u64, 0), out_meta.size);
+}
+
+test "c api create rejects metadata with multiple inputs" {
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "meta-multi.par2" });
+
+    var opts: par2.Par2CreateOptions = .{};
+    opts.block_size = 512;
+    opts.recovery_blocks = 1;
+
+    var create_handle: ?*par2.Par2CreateHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(&opts, &create_handle));
+    defer par2.par2_create_destroy(create_handle);
+
+    var meta = par2.Par2SourceMetadata{ .mtime_ns = 1, .ctime_ns = 2, .size = 3 };
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_metadata(create_handle, &meta));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_memory(create_handle, "a.bin", "aaa", 3));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_memory(create_handle, "b.bin", "bbb", 3));
+    const par2_path_z = try allocator.dupeZ(u8, par2_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.invalid_argument, par2.par2_create_run(create_handle));
+}
+
 test "c api verify/recover with in-memory par2 blobs" {
     const par2 = @import("par2");
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -3461,6 +3622,10 @@ fn mainType() [16]u8 {
     return .{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'M', 'a', 'i', 'n', 0, 0, 0, 0 };
 }
 
+fn sfmdType() [16]u8 {
+    return .{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'M', 'D', 0, 0, 0, 0 };
+}
+
 fn filedescType() [16]u8 {
     return .{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'F', 'i', 'l', 'e', 'D', 'e', 's', 'c' };
 }
@@ -3859,6 +4024,45 @@ test "par2cmdline cross-validation: par2cmdline create, par2z verify" {
     // Verify with par2z - also run from tmp dir
     const verify_result = try std.process.Child.run(.{
         .argv = &.{ cli_path, "verify", "-q", par2_path, data_path },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+}
+
+test "par2cmdline verify tolerates SFMD metadata packet" {
+    if (!commandAvailable(std.testing.allocator, "par2")) return;
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+
+    const data = "metadata compatibility data";
+    const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfmd.bin" });
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfmd.par2" });
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+    var opts: par2.Par2CreateOptions = .{};
+    opts.block_size = 4;
+    opts.recovery_blocks = 1;
+    var create_handle: ?*par2.Par2CreateHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(&opts, &create_handle));
+    defer par2.par2_create_destroy(create_handle);
+
+    const data_path_z = try allocator.dupeZ(u8, data_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_path(create_handle, data_path_z));
+    var meta = par2.Par2SourceMetadata{ .mtime_ns = 42, .ctime_ns = 77, .size = data.len };
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_metadata(create_handle, &meta));
+    const par2_path_z = try allocator.dupeZ(u8, par2_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
+
+    const verify_result = try std.process.Child.run(.{
+        .argv = &.{ "par2", "verify", "-q", par2_path },
         .allocator = allocator,
         .cwd = tmp_path,
     });

@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,6 +85,12 @@ typedef struct Par2RecoverOptions {
 	Par2Allocator allocator;
 } Par2RecoverOptions;
 
+typedef struct par2_source_metadata_t {
+	int64_t mtime_ns;
+	int64_t ctime_ns;
+	uint64_t size;
+} par2_source_metadata_t;
+
 const char *par2_version(void);
 
 Par2Error par2_create_new(const Par2CreateOptions *opts, Par2CreateHandle **out_handle);
@@ -91,6 +98,7 @@ void par2_create_destroy(Par2CreateHandle *handle);
 Par2Error par2_create_add_path(Par2CreateHandle *handle, const char *path);
 Par2Error par2_create_add_memory(Par2CreateHandle *handle, const char *name, const uint8_t *data, size_t len);
 Par2Error par2_create_add_stream(Par2CreateHandle *handle, const char *name, uint64_t len, Par2ReadAtFn read_at, void *ctx);
+Par2Error par2_create_set_metadata(Par2CreateHandle *handle, const par2_source_metadata_t *metadata);
 Par2Error par2_create_set_output_path(Par2CreateHandle *handle, const char *par2_path);
 Par2Error par2_create_set_output_open(Par2CreateHandle *handle, Par2OpenOutputFn open_fn, void *ctx);
 Par2Error par2_create_run(Par2CreateHandle *handle);
@@ -105,6 +113,8 @@ Par2Error par2_verify_add_path(Par2VerifyHandle *handle, const char *path);
 Par2Error par2_verify_add_memory(Par2VerifyHandle *handle, const char *name, const uint8_t *data, size_t len);
 Par2Error par2_verify_add_stream(Par2VerifyHandle *handle, const char *name, uint64_t len, Par2ReadAtFn read_at, void *ctx);
 Par2Error par2_verify_run(Par2VerifyHandle *handle);
+Par2Error par2_get_metadata(Par2VerifyHandle *handle, par2_source_metadata_t *out_metadata);
+bool par2_has_metadata(Par2VerifyHandle *handle);
 const char *par2_verify_last_error(Par2VerifyHandle *handle);
 const char *par2_verify_last_status(Par2VerifyHandle *handle);
 

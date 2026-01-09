@@ -111,6 +111,11 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
     var volume_meta_packets = std.ArrayList([]const u8).empty;
     defer volume_meta_packets.deinit(arena_alloc);
     try main_packets.append(arena_alloc, main_pkt);
+    if (opts.metadata) |meta| {
+        if (files.len != 1) return error.InvalidInput;
+        const meta_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
+        try main_packets.append(arena_alloc, meta_pkt);
+    }
     if (opts.include_volume_meta) {
         try volume_meta_packets.append(arena_alloc, main_pkt);
     }
@@ -388,6 +393,11 @@ pub fn createStreams(
     var volume_meta_packets = std.ArrayList([]const u8).empty;
     defer volume_meta_packets.deinit(arena_alloc);
     try main_packets.append(arena_alloc, main_pkt);
+    if (opts.metadata) |meta| {
+        if (files.len != 1) return error.InvalidInput;
+        const meta_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
+        try main_packets.append(arena_alloc, meta_pkt);
+    }
     if (opts.include_volume_meta) {
         try volume_meta_packets.append(arena_alloc, main_pkt);
     }

@@ -12,6 +12,12 @@ pub fn readU32Le(buf: []const u8, offset: usize) BytesError!u32 {
         (@as(u32, buf[offset + 3]) << 24);
 }
 
+pub fn readU16Le(buf: []const u8, offset: usize) BytesError!u16 {
+    try ensureRange(buf.len, offset, 2);
+    return @as(u16, buf[offset]) |
+        (@as(u16, buf[offset + 1]) << 8);
+}
+
 pub fn readU64Le(buf: []const u8, offset: usize) BytesError!u64 {
     try ensureRange(buf.len, offset, 8);
     return @as(u64, buf[offset]) |
