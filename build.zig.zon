@@ -1,0 +1,12 @@
+.{
+    .name = .par2z,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.15.0",
+    .fingerprint = 0xb6bff7d917e55e66,
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "include",
+    },
+}
