@@ -2,7 +2,7 @@
     .name = .par2z,
     .version = "0.1.0",
     .minimum_zig_version = "0.15.0",
-    .fingerprint = 0xa7cee8ca28f66f77,
+    .fingerprint = 0xb6bff7d97df7152a,
     .paths = .{
         "build.zig",
         "build.zig.zon",
