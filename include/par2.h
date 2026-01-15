@@ -85,10 +85,20 @@ typedef struct Par2RecoverOptions {
 	Par2Allocator allocator;
 } Par2RecoverOptions;
 
+// Metadata flags for SFMD v2 packet
+#define PAR2_MFLAG_HAS_UID   0x0001  // uid field is valid
+#define PAR2_MFLAG_HAS_GID   0x0002  // gid field is valid
+#define PAR2_MFLAG_HAS_MODE  0x0004  // mode field is valid
+#define PAR2_MFLAG_HAS_CTIME 0x0008  // ctime field is valid
+
 typedef struct par2_source_metadata_t {
 	int64_t mtime_ns;
 	int64_t ctime_ns;
 	uint64_t size;
+	uint32_t uid;      // POSIX user ID, 0xFFFFFFFF if unavailable
+	uint32_t gid;      // POSIX group ID, 0xFFFFFFFF if unavailable
+	uint16_t mode;     // POSIX permission bits, 0xFFFF if unavailable
+	uint16_t flags;    // Bitmask of PAR2_MFLAG_* indicating valid fields
 } par2_source_metadata_t;
 
 // Validation flags for SFVS packet

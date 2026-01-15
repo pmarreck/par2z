@@ -196,6 +196,7 @@ test "ops verifyStreams rejects missing inputs" {
         .comment = null,
         .metadata = null,
         .validation_state = null,
+        .aapl_packet = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -249,6 +250,7 @@ test "ops createStreams is deterministic across thread counts" {
         .comment = null,
         .metadata = null,
         .validation_state = null,
+        .aapl_packet = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -279,6 +281,7 @@ test "ops createStreams is deterministic across thread counts" {
         .comment = null,
         .metadata = null,
         .validation_state = null,
+        .aapl_packet = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -555,12 +558,16 @@ test "ops extractSourceMetadata finds SFMD packet" {
     }};
 
     const meta = ops.SourceMetadataPacket{
-        .version = 1,
+        .version = 2,
         .flags = 0,
         .source_mtime_ns = 111,
         .source_ctime_ns = 222,
         .source_size = payload.len,
-        .reserved = std.mem.zeroes([32]u8),
+        .uid = 0xFFFFFFFF,
+        .gid = 0xFFFFFFFF,
+        .mode = 0xFFFF,
+        .reserved1 = 0,
+        .reserved2 = std.mem.zeroes([24]u8),
     };
 
     const create_opts = ops.CreateOptions{
@@ -578,6 +585,7 @@ test "ops extractSourceMetadata finds SFMD packet" {
         .comment = null,
         .metadata = meta,
         .validation_state = null,
+        .aapl_packet = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -600,7 +608,10 @@ test "ops extractSourceMetadata finds SFMD packet" {
     try std.testing.expectEqual(meta.source_mtime_ns, got.source_mtime_ns);
     try std.testing.expectEqual(meta.source_ctime_ns, got.source_ctime_ns);
     try std.testing.expectEqual(meta.source_size, got.source_size);
-    try std.testing.expect(std.mem.eql(u8, &meta.reserved, &got.reserved));
+    try std.testing.expectEqual(meta.uid, got.uid);
+    try std.testing.expectEqual(meta.gid, got.gid);
+    try std.testing.expectEqual(meta.mode, got.mode);
+    try std.testing.expect(std.mem.eql(u8, &meta.reserved2, &got.reserved2));
 }
 
 test "ops updateSourceMetadataCtime modifies ctime in place" {
@@ -624,12 +635,16 @@ test "ops updateSourceMetadataCtime modifies ctime in place" {
     const new_ctime: i64 = 2000000000; // New ctime after update
 
     const meta = ops.SourceMetadataPacket{
-        .version = 1,
+        .version = 2,
         .flags = 0,
         .source_mtime_ns = 500000000,
         .source_ctime_ns = original_ctime,
         .source_size = payload.len,
-        .reserved = std.mem.zeroes([32]u8),
+        .uid = 0xFFFFFFFF,
+        .gid = 0xFFFFFFFF,
+        .mode = 0xFFFF,
+        .reserved1 = 0,
+        .reserved2 = std.mem.zeroes([24]u8),
     };
 
     const create_opts = ops.CreateOptions{
@@ -647,6 +662,7 @@ test "ops updateSourceMetadataCtime modifies ctime in place" {
         .comment = null,
         .metadata = meta,
         .validation_state = null,
+        .aapl_packet = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -734,6 +750,7 @@ test "SFVS packet round-trip" {
         .comment = null,
         .metadata = null,
         .validation_state = vstate,
+        .aapl_packet = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -805,6 +822,7 @@ test "SFVS packet ignored by verify - compatible with standard PAR2" {
         .comment = null,
         .metadata = null,
         .validation_state = vstate,
+        .aapl_packet = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -862,6 +880,7 @@ test "ops streaming create/verify/recover" {
         .comment = null,
         .metadata = null,
         .validation_state = null,
+        .aapl_packet = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -4683,4 +4702,222 @@ test "par2_create with memory inputs - no leaks" {
         // Clean up generated par2 files for next iteration
         tmp_dir.dir.deleteFile("mem_test.par2") catch {};
     }
+}
+
+test "AAPL packet round-trip" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Create test xattrs
+    const xattrs = [_]core.packet_types.XattrEntry{
+        .{ .name = "com.apple.FinderInfo", .value = &([_]u8{0} ** 32) },
+        .{ .name = "user.custom", .value = "test value" },
+    };
+
+    const aapl = core.packet_types.AaplPacket{
+        .file_id = [_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 },
+        .version = 1,
+        .xattrs = &xattrs,
+    };
+
+    const recovery_set_id = [_]u8{ 0xAA } ** 16;
+
+    // Build packet
+    const pkt = try core.create_packets.buildAaplPacket(allocator, recovery_set_id, aapl);
+
+    // Parse it back
+    const parsed = try core.packet_types.parseAapl(pkt, allocator);
+
+    // Verify
+    try std.testing.expectEqual(@as(u16, 1), parsed.version);
+    try std.testing.expectEqual(@as(usize, 2), parsed.xattrs.len);
+    try std.testing.expectEqualStrings("com.apple.FinderInfo", parsed.xattrs[0].name);
+    try std.testing.expectEqual(@as(usize, 32), parsed.xattrs[0].value.len);
+    try std.testing.expectEqualStrings("user.custom", parsed.xattrs[1].name);
+    try std.testing.expectEqualStrings("test value", parsed.xattrs[1].value);
+}
+
+test "AAPL packet extraction from PAR2 data" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    const payload = "xattr test payload";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "xattr_test.bin",
+        .length = payload.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    // Create test xattrs
+    const xattrs = [_]core.packet_types.XattrEntry{
+        .{ .name = "com.apple.FinderInfo", .value = &([_]u8{ 'T', 'E', 'S', 'T' } ++ [_]u8{0} ** 28) },
+    };
+
+    const aapl = core.packet_types.AaplPacket{
+        .file_id = std.mem.zeroes([16]u8), // Will be filled by create
+        .version = 1,
+        .xattrs = &xattrs,
+    };
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "xattr_set.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = null,
+        .validation_state = null,
+        .aapl_packet = aapl,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = false,
+        .include_volume_meta = false,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+
+    const par2_data = cap.map.getPtr("xattr_set.par2") orelse return error.NotFound;
+
+    // Extract AAPL packet
+    const extracted = try ops.extractAapl(allocator, par2_data.data.items);
+    try std.testing.expect(extracted != null);
+    const aapl_result = extracted.?;
+    try std.testing.expectEqual(@as(u16, 1), aapl_result.version);
+    try std.testing.expectEqual(@as(usize, 1), aapl_result.xattrs.len);
+    try std.testing.expectEqualStrings("com.apple.FinderInfo", aapl_result.xattrs[0].name);
+    try std.testing.expectEqual(@as(usize, 32), aapl_result.xattrs[0].value.len);
+}
+
+test "directory metadata (.par2d) creation" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const meta = ops.SourceMetadataPacket{
+        .version = 2,
+        .flags = core.packet_types.MetadataFlags.HAS_UID |
+            core.packet_types.MetadataFlags.HAS_GID |
+            core.packet_types.MetadataFlags.HAS_MODE,
+        .source_mtime_ns = 1234567890,
+        .source_ctime_ns = 987654321,
+        .source_size = 0, // directories have no size
+        .uid = 501,
+        .gid = 20,
+        .mode = 0o755, // typical directory permissions
+        .reserved1 = 0,
+        .reserved2 = std.mem.zeroes([24]u8),
+    };
+
+    const opts = ops.DirectoryMetadataOptions{
+        .dir_path = "photos/vacation",
+        .metadata = meta,
+        .aapl_packet = null,
+    };
+
+    const par2d_data = try ops.createDirectoryMetadata(allocator, opts);
+    defer allocator.free(par2d_data);
+
+    // Verify we can extract the metadata back
+    const extracted_meta = try ops.extractSourceMetadata(par2d_data);
+    try std.testing.expect(extracted_meta != null);
+    const sfmd = extracted_meta.?;
+    try std.testing.expectEqual(@as(u16, 2), sfmd.version);
+    try std.testing.expectEqual(@as(u32, 501), sfmd.uid);
+    try std.testing.expectEqual(@as(u32, 20), sfmd.gid);
+    try std.testing.expectEqual(@as(u16, 0o755), sfmd.mode);
+}
+
+test "SFMD v2 with uid/gid/mode round-trip" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    const payload = "sfmd v2 test";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "sfmd_v2.bin",
+        .length = payload.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    const meta = ops.SourceMetadataPacket{
+        .version = 2,
+        .flags = core.packet_types.MetadataFlags.HAS_UID |
+            core.packet_types.MetadataFlags.HAS_GID |
+            core.packet_types.MetadataFlags.HAS_MODE,
+        .source_mtime_ns = 1234567890,
+        .source_ctime_ns = 987654321,
+        .source_size = payload.len,
+        .uid = 501,
+        .gid = 20,
+        .mode = 0o644,
+        .reserved1 = 0,
+        .reserved2 = std.mem.zeroes([24]u8),
+    };
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "sfmd_v2.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = meta,
+        .validation_state = null,
+        .aapl_packet = null,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = false,
+        .include_volume_meta = false,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+
+    const par2_data = cap.map.getPtr("sfmd_v2.par2") orelse return error.NotFound;
+
+    // Extract metadata
+    const extracted = try ops.extractSourceMetadata(par2_data.data.items);
+    try std.testing.expect(extracted != null);
+    const sfmd = extracted.?;
+    try std.testing.expectEqual(@as(u16, 2), sfmd.version);
+    try std.testing.expectEqual(meta.flags, sfmd.flags);
+    try std.testing.expectEqual(@as(i64, 1234567890), sfmd.source_mtime_ns);
+    try std.testing.expectEqual(@as(i64, 987654321), sfmd.source_ctime_ns);
+    try std.testing.expectEqual(@as(u32, 501), sfmd.uid);
+    try std.testing.expectEqual(@as(u32, 20), sfmd.gid);
+    try std.testing.expectEqual(@as(u16, 0o644), sfmd.mode);
 }

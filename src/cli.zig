@@ -471,6 +471,7 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
         .comment = comment,
         .metadata = null,
         .validation_state = null,
+        .aapl_packet = null,
         .include_input_slices = include_input_slices,
         .emit_packed = emit_packed,
         .emit_rfsc = emit_rfsc,

@@ -85,6 +85,10 @@ pub const Par2SourceMetadata = extern struct {
     mtime_ns: i64 = 0,
     ctime_ns: i64 = 0,
     size: u64 = 0,
+    uid: u32 = 0xFFFFFFFF, // POSIX user ID, 0xFFFFFFFF if unavailable
+    gid: u32 = 0xFFFFFFFF, // POSIX group ID, 0xFFFFFFFF if unavailable
+    mode: u16 = 0xFFFF, // POSIX permission bits, 0xFFFF if unavailable
+    flags: u16 = 0, // MetadataFlags indicating which fields are valid
 };
 
 pub const Par2ValidationState = extern struct {
@@ -92,6 +96,14 @@ pub const Par2ValidationState = extern struct {
     reserved: u8 = 0,
     container: [4]u8 = .{ 0, 0, 0, 0 },
     subtype: [4]u8 = .{ 0, 0, 0, 0 },
+};
+
+/// Extended attribute for C API
+pub const Par2Xattr = extern struct {
+    name: [*c]const u8 = null,
+    name_len: usize = 0,
+    value: [*c]const u8 = null,
+    value_len: usize = 0,
 };
 
 const ThreadPoolHandle = struct {
@@ -397,6 +409,7 @@ const CreateHandle = struct {
     comment: ?[]const u8,
     metadata: ?core.packet_types.SourceMetadataPacket,
     validation_state: ?core.packet_types.ValidationStatePacket,
+    aapl_packet: ?core.packet_types.AaplPacket,
     memory_inputs: bool,
     par2_data: ?[]const u8,
     output_open: ?Par2OpenOutputFn,
@@ -668,6 +681,7 @@ pub export fn par2_create_new(opts: ?*const Par2CreateOptions, out_handle: ?*?*P
             .comment = null,
             .metadata = null,
             .validation_state = null,
+            .aapl_packet = null,
             .include_input_slices = include_input_slices,
             .emit_packed = emit_packed,
             .emit_rfsc = emit_rfsc,
@@ -688,6 +702,7 @@ pub export fn par2_create_new(opts: ?*const Par2CreateOptions, out_handle: ?*?*P
         .comment = null,
         .metadata = null,
         .validation_state = null,
+        .aapl_packet = null,
         .memory_inputs = false,
         .par2_data = null,
         .output_open = null,
@@ -793,12 +808,16 @@ pub export fn par2_create_set_metadata(handle: ?*Par2CreateHandle, metadata: ?*c
     if (handle == null or metadata == null) return .invalid_argument;
     var h = castCreate(handle.?);
     h.metadata = .{
-        .version = 1,
-        .flags = 0,
+        .version = 2,
+        .flags = metadata.?.flags,
         .source_mtime_ns = metadata.?.mtime_ns,
         .source_ctime_ns = metadata.?.ctime_ns,
         .source_size = metadata.?.size,
-        .reserved = std.mem.zeroes([32]u8),
+        .uid = metadata.?.uid,
+        .gid = metadata.?.gid,
+        .mode = metadata.?.mode,
+        .reserved1 = 0,
+        .reserved2 = std.mem.zeroes([24]u8),
     };
     return .ok;
 }
@@ -862,6 +881,7 @@ pub export fn par2_create_run(handle: ?*Par2CreateHandle) Par2Error {
         .comment = h.options.comment,
         .metadata = h.metadata,
         .validation_state = h.validation_state,
+        .aapl_packet = h.aapl_packet,
         .include_input_slices = h.options.include_input_slices,
         .emit_packed = h.options.emit_packed,
         .emit_rfsc = h.options.emit_rfsc,
@@ -1151,6 +1171,10 @@ pub export fn par2_get_metadata(handle: ?*Par2VerifyHandle, out_metadata: ?*Par2
             .mtime_ns = m.source_mtime_ns,
             .ctime_ns = m.source_ctime_ns,
             .size = m.source_size,
+            .uid = m.uid,
+            .gid = m.gid,
+            .mode = m.mode,
+            .flags = m.flags,
         };
     } else {
         out_metadata.?.* = .{};

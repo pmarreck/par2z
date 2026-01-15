@@ -17,6 +17,7 @@ pub const CreateOptions = struct {
     comment: ?[]const u8,
     metadata: ?core.packet_types.SourceMetadataPacket,
     validation_state: ?core.packet_types.ValidationStatePacket,
+    aapl_packet: ?core.packet_types.AaplPacket,
     include_input_slices: bool,
     emit_packed: bool,
     emit_rfsc: bool,

@@ -20,13 +20,27 @@ pub const MainPacket = struct {
     is_packed: bool,
 };
 
+/// Metadata flags for SFMD v2 packet
+pub const MetadataFlags = struct {
+    pub const HAS_UID: u16 = 0x0001; // uid field is valid
+    pub const HAS_GID: u16 = 0x0002; // gid field is valid
+    pub const HAS_MODE: u16 = 0x0004; // mode field is valid
+    pub const HAS_CTIME: u16 = 0x0008; // ctime field is valid (not just zero)
+};
+
+/// Source File Metadata Packet (SFMD v2)
+/// Records source file metadata for change detection and permission restoration.
 pub const SourceMetadataPacket = struct {
-    version: u16,
-    flags: u16,
+    version: u16, // Current version: 2
+    flags: u16, // MetadataFlags bitmask
     source_mtime_ns: i64,
     source_ctime_ns: i64,
     source_size: u64,
-    reserved: [32]u8,
+    uid: u32, // POSIX owner user ID, 0xFFFFFFFF if unavailable
+    gid: u32, // POSIX owner group ID, 0xFFFFFFFF if unavailable
+    mode: u16, // POSIX permission bits, 0xFFFF if unavailable
+    reserved1: u16,
+    reserved2: [24]u8,
 };
 
 /// Validation flags for SFVS packet
@@ -97,6 +111,20 @@ pub const PackedRecvSlicPacket = struct {
     data: []const u8,
 };
 
+/// Extended attribute entry for AAPL packet
+pub const XattrEntry = struct {
+    name: []const u8, // xattr name (UTF-8, e.g., "com.apple.FinderInfo")
+    value: []const u8, // xattr value (raw bytes)
+};
+
+/// Apple Extended Attributes Packet (AAPL)
+/// Preserves macOS/HFS+ extended attributes including Finder Info.
+pub const AaplPacket = struct {
+    file_id: [16]u8,
+    version: u16, // Current version: 1
+    xattrs: []const XattrEntry,
+};
+
 const creator_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'C', 'r', 'e', 'a', 't', 'o', 'r', 0 };
 const main_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'M', 'a', 'i', 'n', 0, 0, 0, 0 };
 const filedesc_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'F', 'i', 'l', 'e', 'D', 'e', 's', 'c' };
@@ -108,9 +136,11 @@ const pkdmain_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd',
 const pkdrecvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'R', 'e', 'c', 'v', 'S' };
 const sfmd_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'M', 'D', 0, 0, 0, 0 };
 const sfvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'V', 'S', 0, 0, 0, 0 };
+const aapl_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'A', 'A', 'P', 'L', 0, 0, 0, 0 };
 
 pub const source_metadata_type = sfmd_type;
 pub const validation_state_type = sfvs_type;
+pub const apple_xattr_type = aapl_type;
 
 pub fn parseCreator(buf: []const u8) PacketTypeError!CreatorPacket {
     const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
@@ -162,10 +192,9 @@ pub fn parseMain(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!
 pub fn parseSourceMetadata(buf: []const u8) PacketTypeError!SourceMetadataPacket {
     const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
     if (!std.mem.eql(u8, &hdr.packet_type, &sfmd_type)) return error.InvalidInput;
-    if (hdr.length < 64 + 60) return error.InvalidInput;
     const end: usize = @intCast(hdr.length);
     const body = buf[64..end];
-    if (body.len < 60) return error.InvalidInput;
+
     var out: SourceMetadataPacket = undefined;
     out.version = bytes.readU16Le(body, 0) catch return error.OutOfBounds;
     out.flags = bytes.readU16Le(body, 2) catch return error.OutOfBounds;
@@ -174,7 +203,23 @@ pub fn parseSourceMetadata(buf: []const u8) PacketTypeError!SourceMetadataPacket
     out.source_mtime_ns = @bitCast(mtime);
     out.source_ctime_ns = @bitCast(ctime);
     out.source_size = bytes.readU64Le(body, 20) catch return error.OutOfBounds;
-    @memcpy(&out.reserved, body[28..60]);
+
+    // Handle v1 vs v2 packet format
+    if (out.version >= 2 and body.len >= 64) {
+        // V2 format: includes uid, gid, mode
+        out.uid = bytes.readU32Le(body, 28) catch return error.OutOfBounds;
+        out.gid = bytes.readU32Le(body, 32) catch return error.OutOfBounds;
+        out.mode = bytes.readU16Le(body, 36) catch return error.OutOfBounds;
+        out.reserved1 = bytes.readU16Le(body, 38) catch return error.OutOfBounds;
+        @memcpy(&out.reserved2, body[40..64]);
+    } else {
+        // V1 format: no uid/gid/mode, mark as unavailable
+        out.uid = 0xFFFFFFFF;
+        out.gid = 0xFFFFFFFF;
+        out.mode = 0xFFFF;
+        out.reserved1 = 0;
+        @memset(&out.reserved2, 0);
+    }
     return out;
 }
 
@@ -329,5 +374,64 @@ pub fn parseValidationState(buf: []const u8) PacketTypeError!ValidationStatePack
     @memcpy(&out.container, body[20..24]);
     @memcpy(&out.subtype, body[24..28]);
     @memcpy(&out.reserved2, body[28..36]);
+    return out;
+}
+
+/// Parse an Apple Extended Attributes (AAPL) packet.
+/// Body format: File ID (16) + Version (2) + xattr_count (2) + xattr entries
+pub fn parseAapl(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!AaplPacket {
+    const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
+    if (!std.mem.eql(u8, &hdr.packet_type, &aapl_type)) return error.InvalidInput;
+    // Minimum body: 16 (file_id) + 2 (version) + 2 (xattr_count) = 20 bytes
+    if (hdr.length < 64 + 20) return error.InvalidInput;
+    const end: usize = @intCast(hdr.length);
+    const body = buf[64..end];
+    if (body.len < 20) return error.InvalidInput;
+
+    var out: AaplPacket = undefined;
+    @memcpy(&out.file_id, body[0..16]);
+    out.version = bytes.readU16Le(body, 16) catch return error.OutOfBounds;
+    const xattr_count = bytes.readU16Le(body, 18) catch return error.OutOfBounds;
+
+    // Parse xattr entries
+    var entries = try allocator.alloc(XattrEntry, xattr_count);
+    var offset: usize = 20;
+    var i: usize = 0;
+    while (i < xattr_count) : (i += 1) {
+        if (offset + 6 > body.len) {
+            allocator.free(entries);
+            return error.OutOfBounds;
+        }
+        const name_len = bytes.readU16Le(body, offset) catch {
+            allocator.free(entries);
+            return error.OutOfBounds;
+        };
+        const value_len = bytes.readU32Le(body, offset + 2) catch {
+            allocator.free(entries);
+            return error.OutOfBounds;
+        };
+        offset += 6;
+
+        if (offset + name_len > body.len) {
+            allocator.free(entries);
+            return error.OutOfBounds;
+        }
+        const name = try allocator.alloc(u8, name_len);
+        @memcpy(name, body[offset .. offset + name_len]);
+        offset += name_len;
+
+        if (offset + value_len > body.len) {
+            allocator.free(name);
+            allocator.free(entries);
+            return error.OutOfBounds;
+        }
+        const value = try allocator.alloc(u8, value_len);
+        @memcpy(value, body[offset .. offset + value_len]);
+        offset += value_len;
+
+        entries[i] = .{ .name = name, .value = value };
+    }
+
+    out.xattrs = entries;
     return out;
 }

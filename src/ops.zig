@@ -211,3 +211,118 @@ pub fn extractValidationState(par2_bytes: []const u8) !?ValidationStatePacket {
     }
     return null;
 }
+
+pub const AaplPacket = core.packet_types.AaplPacket;
+pub const XattrEntry = core.packet_types.XattrEntry;
+
+/// Extracts Apple extended attributes (AAPL packet) from PAR2 data.
+/// Returns null if no AAPL packet is found.
+/// Caller owns the returned memory (xattr names and values).
+pub fn extractAapl(allocator: std.mem.Allocator, par2_bytes: []const u8) !?AaplPacket {
+    var offset: usize = 0;
+    while (offset + 64 <= par2_bytes.len) : (offset += 1) {
+        const remaining = par2_bytes[offset..];
+        const hdr = core.packet.parseHeader(remaining) catch {
+            continue;
+        };
+        const end: usize = @intCast(hdr.length);
+        if (end > remaining.len) break;
+        const pkt = remaining[0..end];
+        core.packet.verifyPacketHash(pkt) catch {
+            offset += end - 1;
+            continue;
+        };
+        if (std.mem.eql(u8, &hdr.packet_type, &core.packet_types.apple_xattr_type)) {
+            const aapl = core.packet_types.parseAapl(pkt, allocator) catch return error.DataCorrupt;
+            return aapl;
+        }
+        offset += end - 1;
+    }
+    return null;
+}
+
+/// Options for creating directory metadata (.par2d) files.
+pub const DirectoryMetadataOptions = struct {
+    dir_path: []const u8, // Path with trailing slash, e.g., "photos/vacation/"
+    metadata: ?SourceMetadataPacket,
+    aapl_packet: ?AaplPacket,
+};
+
+/// Creates a directory metadata container (.par2d).
+/// Contains Main, FileDesc, SFMD, and optionally AAPL packets.
+/// No recovery data since directories have no content.
+pub fn createDirectoryMetadata(allocator: std.mem.Allocator, opts: DirectoryMetadataOptions) ![]u8 {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_alloc = arena.allocator();
+
+    // Ensure path has trailing slash
+    const dir_path = if (opts.dir_path.len > 0 and opts.dir_path[opts.dir_path.len - 1] != '/')
+        try std.fmt.allocPrint(arena_alloc, "{s}/", .{opts.dir_path})
+    else
+        opts.dir_path;
+
+    // Compute file ID for directory
+    const file_id = try core.file_id.directoryId(arena_alloc, dir_path);
+
+    // Build Main packet body (slice_size = 0, 1 file)
+    const main_body = try core.create_packets.buildMainBody(arena_alloc, 0, &.{file_id});
+
+    // Compute recovery set ID (MD5 of main body)
+    var recovery_set_id: [16]u8 = undefined;
+    try core.md5.md5Digest(main_body, &recovery_set_id);
+
+    // Build packets
+    var packets = std.ArrayList([]const u8).empty;
+    defer packets.deinit(arena_alloc);
+
+    // Creator packet
+    const creator_pkt = try core.create_packets.buildCreatorPacket(arena_alloc, recovery_set_id, "par2z");
+    try packets.append(arena_alloc, creator_pkt);
+
+    // Main packet
+    const main_pkt = try core.create_packets.buildMainPacket(arena_alloc, recovery_set_id, main_body);
+    try packets.append(arena_alloc, main_pkt);
+
+    // FileDesc packet (size = 0 for directory)
+    const empty_md5: [16]u8 = .{ 0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x04, 0xe9, 0x80, 0x09, 0x98, 0xec, 0xf8, 0x42, 0x7e };
+    const filedesc_pkt = try core.create_packets.buildFileDescPacket(
+        arena_alloc,
+        recovery_set_id,
+        file_id,
+        empty_md5,
+        empty_md5,
+        0,
+        dir_path,
+    );
+    try packets.append(arena_alloc, filedesc_pkt);
+
+    // SFMD packet if metadata provided
+    if (opts.metadata) |meta| {
+        const sfmd_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
+        try packets.append(arena_alloc, sfmd_pkt);
+    }
+
+    // AAPL packet if xattrs provided
+    if (opts.aapl_packet) |aapl| {
+        var ap = aapl;
+        ap.file_id = file_id;
+        const aapl_pkt = try core.create_packets.buildAaplPacket(arena_alloc, recovery_set_id, ap);
+        try packets.append(arena_alloc, aapl_pkt);
+    }
+
+    // Concatenate all packets
+    var total_len: usize = 0;
+    for (packets.items) |pkt| {
+        total_len += pkt.len;
+    }
+
+    var output = try allocator.alloc(u8, total_len);
+    var offset: usize = 0;
+    for (packets.items) |pkt| {
+        @memcpy(output[offset .. offset + pkt.len], pkt);
+        offset += pkt.len;
+    }
+
+    return output;
+}

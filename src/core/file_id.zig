@@ -36,3 +36,11 @@ pub fn fileIdFromHash16k(allocator: std.mem.Allocator, hash16k: [16]u8, file_len
     md5.md5Digest(buf, &out) catch return error.CryptoUnavailable;
     return out;
 }
+
+/// Compute file ID for a directory (size = 0, content = empty).
+/// Directory paths should include a trailing slash per the .par2d spec.
+pub fn directoryId(allocator: std.mem.Allocator, dir_path: []const u8) FileIdError![16]u8 {
+    // MD5 of empty data
+    const empty_md5: [16]u8 = .{ 0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x04, 0xe9, 0x80, 0x09, 0x98, 0xec, 0xf8, 0x42, 0x7e };
+    return fileIdFromHash16k(allocator, empty_md5, 0, dir_path);
+}

@@ -16,6 +16,7 @@ const pkdmain_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd',
 const pkdrecvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'R', 'e', 'c', 'v', 'S' };
 const sfmd_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'M', 'D', 0, 0, 0, 0 };
 const sfvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'V', 'S', 0, 0, 0, 0 };
+const aapl_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'A', 'A', 'P', 'L', 0, 0, 0, 0 };
 
 pub fn buildCreatorPacket(allocator: std.mem.Allocator, recovery_set_id: [16]u8, text: []const u8) ![]u8 {
     return packet_write.buildPacket(allocator, recovery_set_id, creator_type, text);
@@ -43,14 +44,19 @@ pub fn buildSourceMetadataPacket(
     recovery_set_id: [16]u8,
     meta: types.SourceMetadataPacket,
 ) ![]u8 {
-    const body_len: usize = 60;
+    // V2 format: 64 bytes body
+    const body_len: usize = 64;
     var body = try allocator.alloc(u8, body_len);
     writeU16Le(body, 0, meta.version);
     writeU16Le(body, 2, meta.flags);
     writeI64Le(body, 4, meta.source_mtime_ns);
     writeI64Le(body, 12, meta.source_ctime_ns);
     writeU64Le(body, 20, meta.source_size);
-    @memcpy(body[28..60], &meta.reserved);
+    writeU32Le(body, 28, meta.uid);
+    writeU32Le(body, 32, meta.gid);
+    writeU16Le(body, 36, meta.mode);
+    writeU16Le(body, 38, meta.reserved1);
+    @memcpy(body[40..64], &meta.reserved2);
     return packet_write.buildPacket(allocator, recovery_set_id, sfmd_type, body);
 }
 
@@ -72,6 +78,45 @@ pub fn buildValidationStatePacket(
     @memcpy(body[24..28], &state.subtype);
     @memcpy(body[28..36], &state.reserved2);
     return packet_write.buildPacket(allocator, recovery_set_id, sfvs_type, body);
+}
+
+/// Build an Apple Extended Attributes (AAPL) packet.
+/// Preserves macOS/HFS+ extended attributes.
+pub fn buildAaplPacket(
+    allocator: std.mem.Allocator,
+    recovery_set_id: [16]u8,
+    aapl: types.AaplPacket,
+) ![]u8 {
+    // Calculate body size: 16 (file_id) + 2 (version) + 2 (xattr_count) + xattr entries
+    var body_len: usize = 20;
+    for (aapl.xattrs) |entry| {
+        // Each entry: 2 (name_len) + 4 (value_len) + name + value
+        body_len += 6 + entry.name.len + entry.value.len;
+    }
+    // Pad to 4-byte alignment
+    const padded_len = (body_len + 3) & ~@as(usize, 3);
+
+    var body = try allocator.alloc(u8, padded_len);
+    @memcpy(body[0..16], &aapl.file_id);
+    writeU16Le(body, 16, aapl.version);
+    writeU16Le(body, 18, @as(u16, @intCast(aapl.xattrs.len)));
+
+    var offset: usize = 20;
+    for (aapl.xattrs) |entry| {
+        writeU16Le(body, offset, @as(u16, @intCast(entry.name.len)));
+        writeU32Le(body, offset + 2, @as(u32, @intCast(entry.value.len)));
+        offset += 6;
+        @memcpy(body[offset .. offset + entry.name.len], entry.name);
+        offset += entry.name.len;
+        @memcpy(body[offset .. offset + entry.value.len], entry.value);
+        offset += entry.value.len;
+    }
+    // Zero-pad remaining bytes
+    if (offset < padded_len) {
+        @memset(body[offset..padded_len], 0);
+    }
+
+    return packet_write.buildPacket(allocator, recovery_set_id, aapl_type, body);
 }
 
 pub fn buildPackedMainBody(
