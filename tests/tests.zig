@@ -195,6 +195,7 @@ test "ops verifyStreams rejects missing inputs" {
         .mute_defaults = true,
         .comment = null,
         .metadata = null,
+        .validation_state = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -247,6 +248,7 @@ test "ops createStreams is deterministic across thread counts" {
         .mute_defaults = true,
         .comment = null,
         .metadata = null,
+        .validation_state = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -276,6 +278,7 @@ test "ops createStreams is deterministic across thread counts" {
         .mute_defaults = true,
         .comment = null,
         .metadata = null,
+        .validation_state = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -574,6 +577,7 @@ test "ops extractSourceMetadata finds SFMD packet" {
         .mute_defaults = true,
         .comment = null,
         .metadata = meta,
+        .validation_state = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -642,6 +646,7 @@ test "ops updateSourceMetadataCtime modifies ctime in place" {
         .mute_defaults = true,
         .comment = null,
         .metadata = meta,
+        .validation_state = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -683,6 +688,148 @@ test "ops updateSourceMetadataCtime returns error when no SFMD packet" {
     try std.testing.expectError(error.NotFound, result);
 }
 
+test "SFVS packet round-trip" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    const payload = "PNG validation test data";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "image.png",
+        .length = payload.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    // Create validation state representing a PNG with structure+checksum+complete
+    const vstate = core.packet_types.ValidationStatePacket{
+        .file_id = std.mem.zeroes([16]u8), // Will be set by create
+        .version = 1,
+        .flags = core.packet_types.ValidationFlags.MAGIC |
+            core.packet_types.ValidationFlags.STRUCTURE |
+            core.packet_types.ValidationFlags.CHECKSUM |
+            core.packet_types.ValidationFlags.COMPLETE,
+        .reserved1 = 0,
+        .container = .{ 0, 0, 0, 0 }, // No container
+        .subtype = .{ 'P', 'N', 'G', 0 },
+        .reserved2 = std.mem.zeroes([8]u8),
+    };
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "sfvs.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = null,
+        .validation_state = vstate,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+
+    const main_buf = cap.map.getPtr("sfvs.par2") orelse return error.NotFound;
+
+    // Parse the SFVS packet back from the PAR2 data
+    const found = ops.extractValidationState(main_buf.data.items) catch |e| {
+        std.debug.print("extractValidationState failed: {s}\n", .{@errorName(e)});
+        return e;
+    };
+    try std.testing.expect(found != null);
+    const got = found.?;
+    try std.testing.expectEqual(@as(u16, 1), got.version);
+    try std.testing.expectEqual(vstate.flags, got.flags);
+    try std.testing.expectEqualSlices(u8, &vstate.container, &got.container);
+    try std.testing.expectEqualSlices(u8, &vstate.subtype, &got.subtype);
+}
+
+test "SFVS packet ignored by verify - compatible with standard PAR2" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    const payload = "ABCDEFGHIJKLMNOP";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "test.bin",
+        .length = payload.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    // Create with SFVS packet
+    const vstate = core.packet_types.ValidationStatePacket{
+        .file_id = std.mem.zeroes([16]u8),
+        .version = 1,
+        .flags = core.packet_types.ValidationFlags.MAGIC,
+        .reserved1 = 0,
+        .container = .{ 0, 0, 0, 0 },
+        .subtype = .{ 'T', 'E', 'S', 'T' },
+        .reserved2 = std.mem.zeroes([8]u8),
+    };
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "sfvs_compat.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = null,
+        .validation_state = vstate,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+    const main_buf = cap.map.getPtr("sfvs_compat.par2") orelse return error.NotFound;
+
+    // Verify that standard verify still works (SFVS is ignored)
+    const verify_opts = ops.VerifyOptions{
+        .par2_path = "sfvs_compat.par2",
+        .data_paths = &.{},
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+    };
+    try ops.verifyStreams(allocator, &.{main_buf.data.items}, verify_opts, &inputs);
+}
+
 test "ops streaming create/verify/recover" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -714,6 +861,7 @@ test "ops streaming create/verify/recover" {
         .mute_defaults = true,
         .comment = null,
         .metadata = null,
+        .validation_state = null,
         .include_input_slices = false,
         .emit_packed = false,
         .emit_rfsc = true,
@@ -4210,6 +4358,54 @@ test "par2cmdline verify tolerates SFMD metadata packet" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
 
+    const verify_result = try std.process.Child.run(.{
+        .argv = &.{ "par2", "verify", "-q", par2_path },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+}
+
+test "par2cmdline verify tolerates SFVS validation state packet" {
+    if (!commandAvailable(std.testing.allocator, "par2")) return;
+    const par2 = @import("par2");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+
+    const data = "SFVS validation state compatibility test data";
+    const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfvs.bin" });
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfvs.par2" });
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+    var opts: par2.Par2CreateOptions = .{};
+    opts.block_size = 4;
+    opts.recovery_blocks = 1;
+    var create_handle: ?*par2.Par2CreateHandle = null;
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(&opts, &create_handle));
+    defer par2.par2_create_destroy(create_handle);
+
+    const data_path_z = try allocator.dupeZ(u8, data_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_add_path(create_handle, data_path_z));
+
+    // Set validation state (PNG-like validation: MAGIC + STRUCTURE + CHECKSUM + COMPLETE)
+    var vstate = par2.Par2ValidationState{
+        .flags = 0x87, // MAGIC | STRUCTURE | CHECKSUM | COMPLETE
+        .reserved = 0,
+        .container = .{ 0, 0, 0, 0 },
+        .subtype = .{ 'P', 'N', 'G', 0 },
+    };
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_validation_state(create_handle, &vstate));
+
+    const par2_path_z = try allocator.dupeZ(u8, par2_path);
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
+    try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
+
+    // par2cmdline should ignore the unknown SFVS packet and verify successfully
     const verify_result = try std.process.Child.run(.{
         .argv = &.{ "par2", "verify", "-q", par2_path },
         .allocator = allocator,

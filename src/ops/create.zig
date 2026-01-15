@@ -116,6 +116,13 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
         const meta_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
         try main_packets.append(arena_alloc, meta_pkt);
     }
+    if (opts.validation_state) |state| {
+        if (files.len != 1) return error.InvalidInput;
+        var vs = state;
+        vs.file_id = file_ids[0];
+        const sfvs_pkt = try core.create_packets.buildValidationStatePacket(arena_alloc, recovery_set_id, vs);
+        try main_packets.append(arena_alloc, sfvs_pkt);
+    }
     if (opts.include_volume_meta) {
         try volume_meta_packets.append(arena_alloc, main_pkt);
     }
@@ -397,6 +404,13 @@ pub fn createStreams(
         if (files.len != 1) return error.InvalidInput;
         const meta_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
         try main_packets.append(arena_alloc, meta_pkt);
+    }
+    if (opts.validation_state) |state| {
+        if (files.len != 1) return error.InvalidInput;
+        var vs = state;
+        vs.file_id = file_ids[0];
+        const sfvs_pkt = try core.create_packets.buildValidationStatePacket(arena_alloc, recovery_set_id, vs);
+        try main_packets.append(arena_alloc, sfvs_pkt);
     }
     if (opts.include_volume_meta) {
         try volume_meta_packets.append(arena_alloc, main_pkt);

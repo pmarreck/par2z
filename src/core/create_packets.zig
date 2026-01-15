@@ -15,6 +15,7 @@ const rfsc_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'R', 'F', 'S', 'C
 const pkdmain_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'M', 'a', 'i', 'n', 0 };
 const pkdrecvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'R', 'e', 'c', 'v', 'S' };
 const sfmd_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'M', 'D', 0, 0, 0, 0 };
+const sfvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'V', 'S', 0, 0, 0, 0 };
 
 pub fn buildCreatorPacket(allocator: std.mem.Allocator, recovery_set_id: [16]u8, text: []const u8) ![]u8 {
     return packet_write.buildPacket(allocator, recovery_set_id, creator_type, text);
@@ -51,6 +52,26 @@ pub fn buildSourceMetadataPacket(
     writeU64Le(body, 20, meta.source_size);
     @memcpy(body[28..60], &meta.reserved);
     return packet_write.buildPacket(allocator, recovery_set_id, sfmd_type, body);
+}
+
+/// Build a Source File Validation State (SFVS) packet.
+/// Records format validation state achieved when parity was created.
+pub fn buildValidationStatePacket(
+    allocator: std.mem.Allocator,
+    recovery_set_id: [16]u8,
+    state: types.ValidationStatePacket,
+) ![]u8 {
+    // Body: 16 (file_id) + 2 (version) + 1 (flags) + 1 (reserved) + 4 (container) + 4 (subtype) + 8 (reserved) = 36 bytes
+    const body_len: usize = 36;
+    var body = try allocator.alloc(u8, body_len);
+    @memcpy(body[0..16], &state.file_id);
+    writeU16Le(body, 16, state.version);
+    body[18] = state.flags;
+    body[19] = state.reserved1;
+    @memcpy(body[20..24], &state.container);
+    @memcpy(body[24..28], &state.subtype);
+    @memcpy(body[28..36], &state.reserved2);
+    return packet_write.buildPacket(allocator, recovery_set_id, sfvs_type, body);
 }
 
 pub fn buildPackedMainBody(

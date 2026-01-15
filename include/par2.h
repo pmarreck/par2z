@@ -91,6 +91,22 @@ typedef struct par2_source_metadata_t {
 	uint64_t size;
 } par2_source_metadata_t;
 
+// Validation flags for SFVS packet
+#define PAR2_VFLAG_MAGIC     0x01  // Magic bytes / file signature validated
+#define PAR2_VFLAG_STRUCTURE 0x02  // Container/chunk structure validated
+#define PAR2_VFLAG_CHECKSUM  0x04  // Internal checksums verified
+#define PAR2_VFLAG_DECODE    0x08  // Decompression/decode succeeded
+#define PAR2_VFLAG_CHARSET   0x10  // Character encoding validated
+#define PAR2_VFLAG_SEMANTIC  0x20  // Content semantically valid
+#define PAR2_VFLAG_COMPLETE  0x80  // Every byte covered by integrity check
+
+typedef struct par2_validation_state_t {
+	uint8_t flags;           // Validation flags (bitmask of PAR2_VFLAG_*)
+	uint8_t reserved;        // Reserved, must be 0
+	uint8_t container[4];    // FourCC of container format (e.g., "FORM", "RIFF"), or zeros
+	uint8_t subtype[4];      // FourCC of format subtype (e.g., "PNG\0", "JPEG")
+} par2_validation_state_t;
+
 const char *par2_version(void);
 
 Par2Error par2_create_new(const Par2CreateOptions *opts, Par2CreateHandle **out_handle);
@@ -99,6 +115,7 @@ Par2Error par2_create_add_path(Par2CreateHandle *handle, const char *path);
 Par2Error par2_create_add_memory(Par2CreateHandle *handle, const char *name, const uint8_t *data, size_t len);
 Par2Error par2_create_add_stream(Par2CreateHandle *handle, const char *name, uint64_t len, Par2ReadAtFn read_at, void *ctx);
 Par2Error par2_create_set_metadata(Par2CreateHandle *handle, const par2_source_metadata_t *metadata);
+Par2Error par2_create_set_validation_state(Par2CreateHandle *handle, const par2_validation_state_t *state);
 Par2Error par2_create_set_output_path(Par2CreateHandle *handle, const char *par2_path);
 Par2Error par2_create_set_output_open(Par2CreateHandle *handle, Par2OpenOutputFn open_fn, void *ctx);
 Par2Error par2_create_run(Par2CreateHandle *handle);
@@ -115,6 +132,8 @@ Par2Error par2_verify_add_stream(Par2VerifyHandle *handle, const char *name, uin
 Par2Error par2_verify_run(Par2VerifyHandle *handle);
 Par2Error par2_get_metadata(Par2VerifyHandle *handle, par2_source_metadata_t *out_metadata);
 bool par2_has_metadata(Par2VerifyHandle *handle);
+Par2Error par2_get_validation_state(Par2VerifyHandle *handle, par2_validation_state_t *out_state);
+bool par2_has_validation_state(Par2VerifyHandle *handle);
 const char *par2_verify_last_error(Par2VerifyHandle *handle);
 const char *par2_verify_last_status(Par2VerifyHandle *handle);
 

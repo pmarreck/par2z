@@ -29,6 +29,29 @@ pub const SourceMetadataPacket = struct {
     reserved: [32]u8,
 };
 
+/// Validation flags for SFVS packet
+pub const ValidationFlags = struct {
+    pub const MAGIC: u8 = 0x01; // Magic bytes / file signature validated
+    pub const STRUCTURE: u8 = 0x02; // Container/chunk structure validated
+    pub const CHECKSUM: u8 = 0x04; // Internal checksums verified
+    pub const DECODE: u8 = 0x08; // Decompression/decode succeeded
+    pub const CHARSET: u8 = 0x10; // Character encoding validated
+    pub const SEMANTIC: u8 = 0x20; // Content semantically valid
+    pub const COMPLETE: u8 = 0x80; // Every byte covered by integrity check
+};
+
+/// Source File Validation State Packet (SFVS)
+/// Records format validation state achieved when parity was created.
+pub const ValidationStatePacket = struct {
+    file_id: [16]u8,
+    version: u16,
+    flags: u8,
+    reserved1: u8,
+    container: [4]u8, // FourCC of container format
+    subtype: [4]u8, // FourCC of format subtype
+    reserved2: [8]u8,
+};
+
 pub const FileDescPacket = struct {
     file_id: [16]u8,
     file_hash: [16]u8,
@@ -84,8 +107,10 @@ const rfsc_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'R', 'F', 'S', 'C
 const pkdmain_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'M', 'a', 'i', 'n', 0 };
 const pkdrecvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd', 'R', 'e', 'c', 'v', 'S' };
 const sfmd_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'M', 'D', 0, 0, 0, 0 };
+const sfvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'V', 'S', 0, 0, 0, 0 };
 
 pub const source_metadata_type = sfmd_type;
+pub const validation_state_type = sfvs_type;
 
 pub fn parseCreator(buf: []const u8) PacketTypeError!CreatorPacket {
     const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
@@ -285,5 +310,24 @@ pub fn parseRfsc(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!
         entries[i].exponent = bytes.readU32Le(data, off + 20) catch return error.OutOfBounds;
     }
     out.entries = entries;
+    return out;
+}
+
+pub fn parseValidationState(buf: []const u8) PacketTypeError!ValidationStatePacket {
+    const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
+    if (!std.mem.eql(u8, &hdr.packet_type, &sfvs_type)) return error.InvalidInput;
+    // Body is 36 bytes: 16 (file_id) + 2 (version) + 1 (flags) + 1 (reserved) + 4 (container) + 4 (subtype) + 8 (reserved)
+    if (hdr.length < 64 + 36) return error.InvalidInput;
+    const end: usize = @intCast(hdr.length);
+    const body = buf[64..end];
+    if (body.len < 36) return error.InvalidInput;
+    var out: ValidationStatePacket = undefined;
+    @memcpy(&out.file_id, body[0..16]);
+    out.version = bytes.readU16Le(body, 16) catch return error.OutOfBounds;
+    out.flags = body[18];
+    out.reserved1 = body[19];
+    @memcpy(&out.container, body[20..24]);
+    @memcpy(&out.subtype, body[24..28]);
+    @memcpy(&out.reserved2, body[28..36]);
     return out;
 }

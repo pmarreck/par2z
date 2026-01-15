@@ -155,6 +155,81 @@ Placement (par2z convention):
 
 Other PAR2 implementations should ignore unknown packet types per the PAR2 spec.
 
+### Source File Validation State Packet (SFVS)
+Packet Type: "PAR 2.0\0SFVS\0\0\0\0"
+
+Records the format validation state achieved when parity was created. Enables detection of
+validator improvements (triggering re-validation) and preserves format identification even
+if the source file's magic bytes become corrupted.
+
+Body (little-endian, 36 bytes total):
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 16 | File ID | MD5 identifying the source file (matches FileDesc) |
+| 16 | 2 | Version | Packet format version. Current version: 1. |
+| 18 | 1 | Flags | Validation flags (see below) |
+| 19 | 1 | Reserved | Padding, must be zero |
+| 20 | 4 | Container | FourCC of container format (e.g., "FORM", "RIFF"), or 0x00000000 if none |
+| 24 | 4 | Subtype | FourCC of format subtype/variant (e.g., "IFRS", "WEBP", "PNG\0") |
+| 28 | 8 | Reserved | Future expansion, must be zero |
+
+Validation Flags (u8 bitmask):
+| Bit | Mask | Name | Description |
+|-----|------|------|-------------|
+| 0 | 0x01 | MAGIC | Magic bytes / file signature validated |
+| 1 | 0x02 | STRUCTURE | Container/chunk structure validated |
+| 2 | 0x04 | CHECKSUM | Internal checksums verified (CRC, MD5, etc.) |
+| 3 | 0x08 | DECODE | Decompression/decode succeeded |
+| 4 | 0x10 | CHARSET | Character encoding validated (UTF-8, etc.) |
+| 5 | 0x20 | SEMANTIC | Content semantically valid (XML well-formed, JSON parses, etc.) |
+| 6 | 0x40 | Reserved | Reserved for future use, must be zero |
+| 7 | 0x80 | COMPLETE | Every byte covered by integrity check |
+
+COMPLETE Flag Semantics:
+- COMPLETE (0x80) indicates that every byte in the file is covered by at least one integrity
+  mechanism (checksum, hash, structural parse) such that corruption would be detected.
+- For container formats with entry checksums (ZIP CRC32, PNG chunk CRCs), the container's
+  checksums covering payload bytes satisfies COMPLETE - semantic validity of payloads
+  (e.g., XML well-formedness inside DOCX) is not required.
+- For text formats at top level (XML, JSON, UTF-8), successful parse implies COMPLETE
+  since corruption would typically break the parse.
+- COMPLETE should NOT be set for formats lacking internal integrity mechanisms (e.g., plain
+  IFF with only length fields, arbitrary binary blobs) unless external validation is applied.
+
+Container/Subtype Encoding:
+- Use native FourCC codes where available (IFF: "FORM"/"AIFF", RIFF: "RIFF"/"WAVE")
+- For non-container formats, Container = 0x00000000, Subtype = format identifier
+- Suggested subtypes for common formats:
+  - PNG: "PNG\0" (0x504E4700)
+  - JPEG: "JPEG" (0x4A504547)
+  - PDF: "PDF\0" (0x50444600)
+  - ZIP: "ZIP\0" (0x5A495000)
+  - FLAC: "fLaC" (0x664C6143)
+  - Unknown: 0x00000000
+
+Examples:
+| File Type | Container | Subtype | Flags | Meaning |
+|-----------|-----------|---------|-------|---------|
+| PNG image | 0x00000000 | "PNG\0" | 0x87 | MAGIC\|STRUCTURE\|CHECKSUM\|COMPLETE |
+| FLAC audio | 0x00000000 | "fLaC" | 0x8F | MAGIC\|STRUCTURE\|CHECKSUM\|DECODE\|COMPLETE |
+| DOCX | "PK\x03\x04" | "DOCX" | 0x8F | MAGIC\|STRUCTURE\|CHECKSUM\|DECODE\|COMPLETE |
+| Blorb (IF) | "FORM" | "IFRS" | 0x03 | MAGIC\|STRUCTURE (no COMPLETE - no checksums) |
+| MP4 video | "ftyp" | "mp42" | 0x03 | MAGIC\|STRUCTURE (no deep validation) |
+| UTF-8 text | 0x00000000 | "UTF8" | 0x90 | CHARSET\|COMPLETE |
+| Unknown | 0x00000000 | 0x00000000 | 0x00 | No validation performed |
+
+Placement (par2z convention):
+- Written immediately after the SFMD packet (if present) or after Main packet.
+- One SFVS packet per source file in the recovery set.
+- Stored only in the main `.par2` file (not volume files).
+
+Use Cases:
+1. **Validator evolution**: Compare stored flags/format against current validator capabilities
+   to identify files that would benefit from re-validation with improved validators.
+2. **Corruption recovery**: If source file magic bytes are corrupted, Container/Subtype fields
+   preserve format identification for recovery or reporting.
+3. **Validation auditing**: Track validation coverage across a file collection over time.
+
 ## File Naming Conventions (Non-Normative)
 Common naming patterns observed in PAR2 tools:
 - Base parity file: name.par2

@@ -183,3 +183,31 @@ pub fn extractSourceMetadata(par2_bytes: []const u8) !?SourceMetadataPacket {
     }
     return null;
 }
+
+pub const ValidationStatePacket = core.packet_types.ValidationStatePacket;
+
+/// Extracts source file validation state (SFVS packet) from PAR2 data.
+/// Returns null if no SFVS packet is found.
+/// This scans the PAR2 bytes for the SFVS packet and returns its contents.
+pub fn extractValidationState(par2_bytes: []const u8) !?ValidationStatePacket {
+    var offset: usize = 0;
+    while (offset + 64 <= par2_bytes.len) : (offset += 1) {
+        const remaining = par2_bytes[offset..];
+        const hdr = core.packet.parseHeader(remaining) catch {
+            continue;
+        };
+        const end: usize = @intCast(hdr.length);
+        if (end > remaining.len) break;
+        const pkt = remaining[0..end];
+        core.packet.verifyPacketHash(pkt) catch {
+            offset += end - 1;
+            continue;
+        };
+        if (std.mem.eql(u8, &hdr.packet_type, &core.packet_types.validation_state_type)) {
+            const state = core.packet_types.parseValidationState(pkt) catch return error.DataCorrupt;
+            return state;
+        }
+        offset += end - 1;
+    }
+    return null;
+}

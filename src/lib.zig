@@ -87,6 +87,13 @@ pub const Par2SourceMetadata = extern struct {
     size: u64 = 0,
 };
 
+pub const Par2ValidationState = extern struct {
+    flags: u8 = 0,
+    reserved: u8 = 0,
+    container: [4]u8 = .{ 0, 0, 0, 0 },
+    subtype: [4]u8 = .{ 0, 0, 0, 0 },
+};
+
 const ThreadPoolHandle = struct {
     pool: std.Thread.Pool,
     max_jobs: ?usize,
@@ -341,6 +348,42 @@ fn loadVerifyMetadata(handle: *VerifyHandle) !?core.packet_types.SourceMetadataP
     return try findSourceMetadata(bytes);
 }
 
+fn findValidationState(bytes: []const u8) !?core.packet_types.ValidationStatePacket {
+    var offset: usize = 0;
+    while (offset + 64 <= bytes.len) : (offset += 1) {
+        const remaining = bytes[offset..];
+        const hdr = core.packet.parseHeader(remaining) catch {
+            continue;
+        };
+        const end: usize = @intCast(hdr.length);
+        if (end > remaining.len) break;
+        const pkt = remaining[0..end];
+        core.packet.verifyPacketHash(pkt) catch {
+            offset += end - 1;
+            continue;
+        };
+        if (std.mem.eql(u8, &hdr.packet_type, &core.packet_types.validation_state_type)) {
+            const state = core.packet_types.parseValidationState(pkt) catch return error.DataCorrupt;
+            return state;
+        }
+        offset += end - 1;
+    }
+    return null;
+}
+
+fn loadVerifyValidationState(handle: *VerifyHandle) !?core.packet_types.ValidationStatePacket {
+    if (handle.par2_blobs.items.len > 0) {
+        for (handle.par2_blobs.items) |blob| {
+            if (try findValidationState(blob.bytes)) |state| return state;
+        }
+        return null;
+    }
+    if (handle.par2_path == null) return error.InvalidInput;
+    const bytes = try readFileAllocExact(handle.allocator, handle.par2_path.?);
+    defer handle.allocator.free(bytes);
+    return try findValidationState(bytes);
+}
+
 const CreateHandle = struct {
     alloc_state: AllocState,
     allocator: std.mem.Allocator,
@@ -353,6 +396,7 @@ const CreateHandle = struct {
     basepath: ?[]const u8,
     comment: ?[]const u8,
     metadata: ?core.packet_types.SourceMetadataPacket,
+    validation_state: ?core.packet_types.ValidationStatePacket,
     memory_inputs: bool,
     par2_data: ?[]const u8,
     output_open: ?Par2OpenOutputFn,
@@ -623,6 +667,7 @@ pub export fn par2_create_new(opts: ?*const Par2CreateOptions, out_handle: ?*?*P
             .mute_defaults = true,
             .comment = null,
             .metadata = null,
+            .validation_state = null,
             .include_input_slices = include_input_slices,
             .emit_packed = emit_packed,
             .emit_rfsc = emit_rfsc,
@@ -642,6 +687,7 @@ pub export fn par2_create_new(opts: ?*const Par2CreateOptions, out_handle: ?*?*P
         .basepath = null,
         .comment = null,
         .metadata = null,
+        .validation_state = null,
         .memory_inputs = false,
         .par2_data = null,
         .output_open = null,
@@ -757,6 +803,22 @@ pub export fn par2_create_set_metadata(handle: ?*Par2CreateHandle, metadata: ?*c
     return .ok;
 }
 
+pub export fn par2_create_set_validation_state(handle: ?*Par2CreateHandle, state: ?*const Par2ValidationState) Par2Error {
+    if (handle == null or state == null) return .invalid_argument;
+    var h = castCreate(handle.?);
+    // File ID will be set during create when we know the file
+    h.validation_state = .{
+        .file_id = std.mem.zeroes([16]u8), // Placeholder, set during create
+        .version = 1,
+        .flags = state.?.flags,
+        .reserved1 = 0,
+        .container = state.?.container,
+        .subtype = state.?.subtype,
+        .reserved2 = std.mem.zeroes([8]u8),
+    };
+    return .ok;
+}
+
 pub export fn par2_create_set_output_path(handle: ?*Par2CreateHandle, par2_path: ?[*:0]const u8) Par2Error {
     if (handle == null or par2_path == null) return .invalid_argument;
     var h = castCreate(handle.?);
@@ -799,6 +861,7 @@ pub export fn par2_create_run(handle: ?*Par2CreateHandle) Par2Error {
         .mute_defaults = h.options.mute_defaults,
         .comment = h.options.comment,
         .metadata = h.metadata,
+        .validation_state = h.validation_state,
         .include_input_slices = h.options.include_input_slices,
         .emit_packed = h.options.emit_packed,
         .emit_rfsc = h.options.emit_rfsc,
@@ -1103,6 +1166,36 @@ pub export fn par2_has_metadata(handle: ?*Par2VerifyHandle) bool {
         return false;
     };
     return meta != null;
+}
+
+pub export fn par2_get_validation_state(handle: ?*Par2VerifyHandle, out_state: ?*Par2ValidationState) Par2Error {
+    if (handle == null or out_state == null) return .invalid_argument;
+    var h = castVerify(handle.?);
+    const state = loadVerifyValidationState(h) catch |e| {
+        setLastError(h.allocator, &h.last_error, @errorName(e));
+        return errorCodeFrom(e);
+    };
+    if (state) |s| {
+        out_state.?.* = .{
+            .flags = s.flags,
+            .reserved = s.reserved1,
+            .container = s.container,
+            .subtype = s.subtype,
+        };
+    } else {
+        out_state.?.* = .{};
+    }
+    return .ok;
+}
+
+pub export fn par2_has_validation_state(handle: ?*Par2VerifyHandle) bool {
+    if (handle == null) return false;
+    var h = castVerify(handle.?);
+    const state = loadVerifyValidationState(h) catch |e| {
+        setLastError(h.allocator, &h.last_error, @errorName(e));
+        return false;
+    };
+    return state != null;
 }
 
 pub export fn par2_verify_last_error(handle: ?*Par2VerifyHandle) ?[*:0]const u8 {

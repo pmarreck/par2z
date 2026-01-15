@@ -470,6 +470,7 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
         .mute_defaults = mute_defaults,
         .comment = comment,
         .metadata = null,
+        .validation_state = null,
         .include_input_slices = include_input_slices,
         .emit_packed = emit_packed,
         .emit_rfsc = emit_rfsc,

@@ -16,6 +16,7 @@ pub const CreateOptions = struct {
     mute_defaults: bool,
     comment: ?[]const u8,
     metadata: ?core.packet_types.SourceMetadataPacket,
+    validation_state: ?core.packet_types.ValidationStatePacket,
     include_input_slices: bool,
     emit_packed: bool,
     emit_rfsc: bool,
