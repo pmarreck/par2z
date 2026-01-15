@@ -140,13 +140,40 @@ Body:
 ## Source File Metadata Extension (Non-Standard)
 ### Source File Metadata Packet (SFMD)
 Packet Type: "PAR 2.0\0SFMD\0\0\0\0"
-Body (little-endian):
-- Version (u16). Current version: 1.
-- Flags (u16). Reserved for future use (0).
-- Source mtime (i64) in nanoseconds since Unix epoch.
-- Source ctime (i64) in nanoseconds since Unix epoch (0 if unavailable).
-- Source size (u64) in bytes.
-- Reserved (32 bytes, zero).
+
+Records source file metadata for change detection and permission restoration.
+
+Body (little-endian, 64 bytes total):
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 2 | Version | Packet format version. Current version: 2. |
+| 2 | 2 | Flags | Metadata flags (see below) |
+| 4 | 8 | mtime | Modification time in nanoseconds since Unix epoch |
+| 12 | 8 | ctime | Change time in nanoseconds since Unix epoch (0 if unavailable) |
+| 20 | 8 | size | File size in bytes |
+| 28 | 4 | uid | Owner user ID (POSIX). 0xFFFFFFFF if unavailable. |
+| 32 | 4 | gid | Owner group ID (POSIX). 0xFFFFFFFF if unavailable. |
+| 36 | 2 | mode | POSIX permission bits (e.g., 0o644 = 0x01A4). 0xFFFF if unavailable. |
+| 38 | 2 | Reserved | Padding, must be zero |
+| 40 | 24 | Reserved | Future expansion, must be zero |
+
+Metadata Flags (u16 bitmask):
+| Bit | Mask | Name | Description |
+|-----|------|------|-------------|
+| 0 | 0x0001 | HAS_UID | uid field is valid |
+| 1 | 0x0002 | HAS_GID | gid field is valid |
+| 2 | 0x0004 | HAS_MODE | mode field is valid |
+| 3 | 0x0008 | HAS_CTIME | ctime field is valid (not just zero) |
+| 4-15 | | Reserved | Reserved for future use, must be zero |
+
+Version History:
+- Version 1: mtime, ctime, size only (original Entropy Shield release)
+- Version 2: Added uid, gid, mode fields for complete POSIX metadata
+
+Backward Compatibility:
+- Readers should check the version field and ignore unknown fields
+- Version 1 packets have uid=0xFFFFFFFF, gid=0xFFFFFFFF, mode=0xFFFF (unavailable)
+- Writers should set appropriate HAS_* flags when fields contain valid data
 
 Placement (par2z convention):
 - Written immediately after the Main packet and before any Packed Main packet.
@@ -229,6 +256,87 @@ Use Cases:
 2. **Corruption recovery**: If source file magic bytes are corrupted, Container/Subtype fields
    preserve format identification for recovery or reporting.
 3. **Validation auditing**: Track validation coverage across a file collection over time.
+
+### Directory Metadata Files (.par2d)
+
+PAR2 is file-oriented and has no native directory concept. To preserve directory metadata
+(permissions, timestamps, xattrs), we treat directories as special "files" with their own
+parity containers using the `.par2d` extension.
+
+**Naming Convention:**
+- Directory path uses trailing slash: `photos/vacation/`
+- Sidecar file: `.vacation.par2d` (in parity store, mirroring directory structure)
+- SQLite relative_path: `"photos/vacation/"` (trailing slash indicates directory)
+
+**File Structure:**
+A `.par2d` file contains standard PAR2 packets but represents a directory, not a file:
+
+| Packet | Contents |
+|--------|----------|
+| Main | Slice size = 0, single "file" (the directory) |
+| FileDesc | File ID (MD5 of path), size = 0, name = "vacation/" |
+| SFMD | Directory's uid, gid, mode, mtime, ctime |
+| AAPL | Directory's extended attributes (optional, if present) |
+
+**No recovery data**: Directories have no content, so no IFSC or RecvSlic packets.
+The `.par2d` file is purely metadata. Packet MD5 hashes provide integrity checking.
+
+**File ID for Directories:**
+Since directories have no content, the File ID is computed as:
+- MD5 of: MD5(empty) + length(0) + path_with_trailing_slash
+
+**Tool Compatibility:**
+- Standard PAR2 tools will ignore `.par2d` files (unknown extension)
+- Our tools recognize the extension and trailing-slash path convention
+- SQLite storage uses the same schema - just a different path pattern
+
+**Use Cases:**
+1. **Permission restoration**: Restore directory permissions after recovery.
+2. **Access auditing**: Detect if directory permissions changed.
+3. **Complete backup**: Combined with file SFMD, provides full POSIX metadata tree.
+
+### Apple Extended Attributes Packet (AAPL)
+Packet Type: "PAR 2.0\0AAPL\0\0\0\0"
+
+Preserves macOS/HFS+ extended attributes including Finder Info (type/creator codes,
+Finder flags, icon position) and other xattrs.
+
+Body (little-endian, variable length):
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 16 | File ID | MD5 identifying the source file (matches FileDesc) |
+| 16 | 2 | Version | Packet format version. Current version: 1. |
+| 18 | 2 | xattr_count | Number of extended attributes |
+| 20 | ... | xattrs | Xattr entries (see below) |
+
+Each xattr entry:
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 2 | name_len | Length of xattr name in bytes |
+| 2 | 4 | value_len | Length of xattr value in bytes |
+| 6 | name_len | name | Xattr name (UTF-8, e.g., "com.apple.FinderInfo") |
+| 6+name_len | value_len | value | Xattr value (raw bytes) |
+
+Common xattrs preserved:
+- `com.apple.FinderInfo` (32 bytes): Type code, creator code, Finder flags (including
+  label color, custom icon, stationery, invisible, alias, and the infamous "BOZO bit"),
+  icon location, extended flags.
+- `com.apple.quarantine`: Gatekeeper quarantine info (configurable).
+- `com.apple.metadata:*`: Spotlight metadata (configurable).
+- Custom xattrs: User/application-defined attributes.
+
+Platform Behavior:
+- **macOS**: Always attempt to read/write xattrs.
+- **Non-Apple platforms**: Skip AAPL packet creation to save space.
+- **HFS+ on Linux/Windows**: Attempt if xattrs accessible via POSIX APIs.
+
+Placement:
+- One AAPL packet per source file with extended attributes.
+- Written after DIRD packets, before recovery data.
+- Stored only in the main `.par2` file (not volume files).
+
+Note: Resource forks are handled separately as virtual files (large, benefit from own
+recovery blocks). AAPL packet is for small metadata only.
 
 ## File Naming Conventions (Non-Normative)
 Common naming patterns observed in PAR2 tools:
