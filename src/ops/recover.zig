@@ -222,6 +222,7 @@ pub fn recover(
         return error.InsufficientRecovery;
     }
 
+    const max_threads: ?usize = if (opts.thread_count) |tc| if (tc == 0) null else tc else null;
     const recovered = if (missing_indices.items.len == 0)
         try allocator.alloc([]u8, 0)
     else
@@ -232,6 +233,7 @@ pub fn recover(
             missing_indices.items,
             recovery_slices.items[0..missing_indices.items.len],
             slice_size,
+            max_threads,
         );
     defer {
         if (cap_bytes != null) {
@@ -481,6 +483,7 @@ pub fn recoverStreams(
         return error.InsufficientRecovery;
     }
 
+    const max_threads: ?usize = if (opts.thread_count) |tc| if (tc == 0) null else tc else null;
     const recovered = if (missing_indices.items.len == 0)
         try allocator.alloc([]u8, 0)
     else
@@ -491,6 +494,7 @@ pub fn recoverStreams(
             missing_indices.items,
             recovery_slices.items[0..missing_indices.items.len],
             slice_size,
+            max_threads,
         );
     defer {
         if (cap_bytes != null) {

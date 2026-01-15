@@ -20,11 +20,12 @@ pub fn computeRecoverySliceMemory(
     files: []const layout.FileInfo,
     slice_size: usize,
     exponent: u32,
+    max_threads: ?usize,
 ) BlockError![]u8 {
     const slices = try loadSlices(allocator, store, files, slice_size);
     defer freeSlices(allocator, slices);
     const out = try allocator.alloc(u8, slice_size);
-    rs.encodeRecoverySlice(allocator, out, slices, exponent) catch return error.RsError;
+    rs.encodeRecoverySlice(allocator, out, slices, exponent, max_threads) catch return error.RsError;
     return out;
 }
 

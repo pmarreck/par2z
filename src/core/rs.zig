@@ -29,8 +29,16 @@ pub fn accumulateRecoverySlice(out: []u8, data_slice: []const u8, factor: u16) R
     }
 }
 
-pub fn encodeRecoverySlice(allocator: std.mem.Allocator, out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
-    return encodeRecoverySliceParallel(allocator, out, data_slices, exponent);
+/// Encodes a recovery slice using Reed-Solomon.
+/// If max_threads is 1, uses single-threaded serial encoding (thread-safe for concurrent callers).
+/// If max_threads is null, uses automatic thread detection with the global pool.
+pub fn encodeRecoverySlice(allocator: std.mem.Allocator, out: []u8, data_slices: []const []const u8, exponent: u32, max_threads: ?usize) RsError!void {
+    if (max_threads) |mt| {
+        if (mt == 1) {
+            return encodeRecoverySliceSerial(allocator, out, data_slices, exponent);
+        }
+    }
+    return encodeRecoverySliceParallel(allocator, out, data_slices, exponent, max_threads);
 }
 
 pub fn encodeRecoverySliceSerial(allocator: std.mem.Allocator, out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
@@ -51,7 +59,7 @@ pub fn encodeRecoverySliceSerial(allocator: std.mem.Allocator, out: []u8, data_s
     encodeRange(out, data_slices, factors, slice_size, 0, slice_size / 2);
 }
 
-fn encodeRecoverySliceParallel(allocator: std.mem.Allocator, out: []u8, data_slices: []const []const u8, exponent: u32) RsError!void {
+fn encodeRecoverySliceParallel(allocator: std.mem.Allocator, out: []u8, data_slices: []const []const u8, exponent: u32, max_threads: ?usize) RsError!void {
     if (data_slices.len == 0) return;
     if (data_slices.len > gf.maxValidIndexCount()) return error.TooManySlices;
     const slice_size = data_slices[0].len;
@@ -68,7 +76,7 @@ fn encodeRecoverySliceParallel(allocator: std.mem.Allocator, out: []u8, data_sli
         factors[i] = gf.pow(c, exponent);
     }
 
-    const thread_count = threadCount(word_count);
+    const thread_count = threadCountWithMax(word_count, max_threads);
     if (thread_count == 1) {
         encodeRange(out, data_slices, factors, slice_size, 0, word_count);
         return;
@@ -99,12 +107,16 @@ fn encodeRecoverySliceParallel(allocator: std.mem.Allocator, out: []u8, data_sli
     wg.wait();
 }
 
+/// Decodes missing data slices using Reed-Solomon recovery.
+/// If max_threads is 1, uses single-threaded decoding (thread-safe for concurrent callers).
+/// If max_threads is null, uses automatic thread detection with the global pool.
 pub fn decodeMissingSlices(
     allocator: std.mem.Allocator,
     data_slices: []const ?[]const u8,
     missing_indices: []const usize,
     recovery_slices: []const RecoverySlice,
     slice_size: usize,
+    max_threads: ?usize,
 ) RsError![][]u8 {
     const n = missing_indices.len;
     if (n == 0) return allocator.alloc([]u8, 0);
@@ -178,7 +190,7 @@ pub fn decodeMissingSlices(
         }
     }
 
-    const thread_count = threadCount(word_count);
+    const thread_count = threadCountWithMax(word_count, max_threads);
     var rhs_buf = try allocator.alloc(u16, n * thread_count);
     defer allocator.free(rhs_buf);
     if (thread_count == 1) {
@@ -342,17 +354,34 @@ fn decodeRange(
     }
 }
 
-fn threadCount(word_count: usize) usize {
+/// Determines thread count, respecting an optional max_threads override.
+/// If max_threads is 1, returns 1 (single-threaded mode).
+/// If max_threads is null, uses automatic detection based on CPU count and pool config.
+fn threadCountWithMax(word_count: usize, max_threads: ?usize) usize {
+    // If caller explicitly requested single-threaded mode, honor it
+    if (max_threads) |mt| {
+        if (mt == 1) return 1;
+    }
     const min_words_per_thread: usize = 1024;
     if (word_count < min_words_per_thread) return 1;
     const cpu = std.Thread.getCpuCount() catch return 1;
     const desired = @max(@as(usize, 1), word_count / min_words_per_thread);
     var cap = cpu;
+    // Apply caller's max_threads limit if specified
+    if (max_threads) |mt| {
+        if (mt > 0) cap = @min(cap, mt);
+    }
+    // Also respect global pool configuration
     if (thread_pool.maxJobs()) |max_jobs| {
         if (max_jobs > 0) cap = @min(cap, max_jobs);
     }
     if (cap == 0) cap = 1;
     return @min(cap, desired);
+}
+
+/// Legacy function for backwards compatibility - uses automatic thread detection.
+fn threadCount(word_count: usize) usize {
+    return threadCountWithMax(word_count, null);
 }
 
 fn invertMatrix(mat: []u16, inv: []u16, n: usize) RsError!void {

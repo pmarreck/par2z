@@ -37,6 +37,7 @@ pub const RecoverOptions = struct {
     basepath: ?[]const u8,
     verbosity: i32,
     memory_mb: ?u64,
+    thread_count: ?u32 = null,
     output_open: ?OutputOpener,
 };
 

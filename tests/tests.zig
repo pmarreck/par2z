@@ -599,6 +599,90 @@ test "ops extractSourceMetadata finds SFMD packet" {
     try std.testing.expect(std.mem.eql(u8, &meta.reserved, &got.reserved));
 }
 
+test "ops updateSourceMetadataCtime modifies ctime in place" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    const payload = "testdata";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "test.bin",
+        .length = payload.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    const original_ctime: i64 = 1000000000; // Original ctime
+    const new_ctime: i64 = 2000000000; // New ctime after update
+
+    const meta = ops.SourceMetadataPacket{
+        .version = 1,
+        .flags = 0,
+        .source_mtime_ns = 500000000,
+        .source_ctime_ns = original_ctime,
+        .source_size = payload.len,
+        .reserved = std.mem.zeroes([32]u8),
+    };
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "test.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = meta,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+
+    const main_buf = cap.map.getPtr("test.par2") orelse return error.NotFound;
+
+    // Verify original ctime
+    const before = try ops.extractSourceMetadata(main_buf.data.items);
+    try std.testing.expect(before != null);
+    try std.testing.expectEqual(original_ctime, before.?.source_ctime_ns);
+
+    // Update ctime in place
+    try ops.updateSourceMetadataCtime(main_buf.data.items, new_ctime);
+
+    // Verify ctime was updated
+    const after = try ops.extractSourceMetadata(main_buf.data.items);
+    try std.testing.expect(after != null);
+    try std.testing.expectEqual(new_ctime, after.?.source_ctime_ns);
+
+    // Verify other fields unchanged
+    try std.testing.expectEqual(before.?.source_mtime_ns, after.?.source_mtime_ns);
+    try std.testing.expectEqual(before.?.source_size, after.?.source_size);
+    try std.testing.expectEqual(before.?.version, after.?.version);
+}
+
+test "ops updateSourceMetadataCtime returns error when no SFMD packet" {
+    // Create some invalid/empty par2 data
+    var invalid_data = [_]u8{ 0, 0, 0, 0 };
+    const result = ops.updateSourceMetadataCtime(&invalid_data, 12345);
+    try std.testing.expectError(error.NotFound, result);
+}
+
 test "ops streaming create/verify/recover" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1021,7 +1105,7 @@ test "rs encode serial matches parallel" {
     var out_serial: [4]u8 = undefined;
     var out_parallel: [4]u8 = undefined;
     try core.rs.encodeRecoverySliceSerial(std.testing.allocator, &out_serial, &slices, 7);
-    try core.rs.encodeRecoverySlice(std.testing.allocator, &out_parallel, &slices, 7);
+    try core.rs.encodeRecoverySlice(std.testing.allocator, &out_parallel, &slices, 7, null);
     try std.testing.expectEqualSlices(u8, &out_serial, &out_parallel);
 }
 
@@ -1086,7 +1170,7 @@ test "rs encode rejects too many slices" {
         slices[i] = "aa";
     }
     var out: [2]u8 = undefined;
-    try std.testing.expectError(error.TooManySlices, core.rs.encodeRecoverySlice(std.testing.allocator, &out, slices, 1));
+    try std.testing.expectError(error.TooManySlices, core.rs.encodeRecoverySlice(std.testing.allocator, &out, slices, 1, null));
 }
 
 test "block size heuristic rounds to 4 and decreases with size" {
@@ -1758,7 +1842,7 @@ test "api recoverMissingSlicesMemory recovers fixture slice" {
     const files = [_]core.layout.FileInfo{.{ .length = @intCast(data_bytes.len) }};
     const missing = [_]usize{1};
     const recs = [_]core.rs.RecoverySlice{.{ .exponent = rec.exponent, .data = rec.data }};
-    const recovered = try core.api.recoverMissingSlicesMemory(arena.allocator(), &files, store, &missing, &recs, slice_size);
+    const recovered = try core.api.recoverMissingSlicesMemory(arena.allocator(), &files, store, &missing, &recs, slice_size, null);
     const expect_slice: [4]u8 = .{ 'W', 'X', 'Y', 'Z' };
     try std.testing.expectEqualSlices(u8, &expect_slice, recovered[0]);
 }
@@ -1770,12 +1854,12 @@ test "api recoverMissingSlicesMemory skips missing slice reads" {
     const data_s0 = "ABCD";
     const data_s1 = "WXYZ";
     var rec_buf: [4]u8 = undefined;
-    try core.rs.encodeRecoverySlice(std.testing.allocator, &rec_buf, &.{ data_s0, data_s1 }, 1);
+    try core.rs.encodeRecoverySlice(std.testing.allocator, &rec_buf, &.{ data_s0, data_s1 }, 1, null);
     const files = [_]core.layout.FileInfo{.{ .length = 8 }};
     const store = core.storage.MemoryStore{ .files = &.{data_s0} };
     const missing = [_]usize{1};
     const recs = [_]core.rs.RecoverySlice{.{ .exponent = 1, .data = &rec_buf }};
-    const recovered = try core.api.recoverMissingSlicesMemory(arena.allocator(), &files, store, &missing, &recs, slice_size);
+    const recovered = try core.api.recoverMissingSlicesMemory(arena.allocator(), &files, store, &missing, &recs, slice_size, null);
     try std.testing.expectEqualSlices(u8, data_s1, recovered[0]);
 }
 
@@ -1783,7 +1867,7 @@ test "rs encodeRecoverySlice shape" {
     var s1: [4]u8 = .{ 1, 2, 3, 4 };
     var s2: [4]u8 = .{ 5, 6, 7, 8 };
     var out: [4]u8 = undefined;
-    try core.rs.encodeRecoverySlice(std.testing.allocator, &out, &.{ &s1, &s2 }, 1);
+    try core.rs.encodeRecoverySlice(std.testing.allocator, &out, &.{ &s1, &s2 }, 1, null);
     try std.testing.expect(out[0] != 0 or out[1] != 0 or out[2] != 0 or out[3] != 0);
 }
 
@@ -1841,7 +1925,7 @@ test "rs matches par2cmdline fixture" {
     }
 
     var out: [4]u8 = undefined;
-    try core.rs.encodeRecoverySlice(std.testing.allocator, &out, slices, exponent);
+    try core.rs.encodeRecoverySlice(std.testing.allocator, &out, slices, exponent, null);
     try std.testing.expectEqualSlices(u8, rec_data, &out);
 }
 
@@ -1921,7 +2005,7 @@ test "block_api computeRecoverySliceMemory matches fixture" {
 
     const store = core.storage.MemoryStore{ .files = &.{data_bytes} };
     const files = [_]core.layout.FileInfo{.{ .length = @intCast(data_bytes.len) }};
-    const out = try core.block_api.computeRecoverySliceMemory(arena.allocator(), store, &files, slice_size, rec.exponent);
+    const out = try core.block_api.computeRecoverySliceMemory(arena.allocator(), store, &files, slice_size, rec.exponent, null);
     try std.testing.expectEqualSlices(u8, rec.data, out);
 }
 
@@ -1978,7 +2062,7 @@ test "rs decodeMissingSlices recovers missing slice (fixture)" {
     const recs = [_]core.rs.RecoverySlice{.{ .exponent = rec.exponent, .data = rec.data }};
     slices[missing_index] = null;
 
-    const recovered = try core.rs.decodeMissingSlices(arena.allocator(), slices, &missing, &recs, slice_size);
+    const recovered = try core.rs.decodeMissingSlices(arena.allocator(), slices, &missing, &recs, slice_size, null);
     try std.testing.expectEqual(@as(usize, 1), recovered.len);
     const expect_slice: [4]u8 = .{ 'W', 'X', 'Y', 'Z' };
     try std.testing.expectEqualSlices(u8, &expect_slice, recovered[0]);

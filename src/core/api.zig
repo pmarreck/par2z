@@ -151,6 +151,7 @@ pub fn recoverMissingSlicesMemory(
     missing_indices: []const usize,
     recovery_slices: []const rs.RecoverySlice,
     slice_size: usize,
+    max_threads: ?usize,
 ) ApiError![][]u8 {
     const order = layout.buildSliceOrder(allocator, files, slice_size) catch return error.SliceError;
     defer allocator.free(order);
@@ -178,6 +179,6 @@ pub fn recoverMissingSlicesMemory(
             }
         }
     }
-    const recovered = rs.decodeMissingSlices(allocator, slices_list, missing_indices, recovery_slices, slice_size) catch return error.RsError;
+    const recovered = rs.decodeMissingSlices(allocator, slices_list, missing_indices, recovery_slices, slice_size, max_threads) catch return error.RsError;
     return recovered;
 }
