@@ -4433,6 +4433,172 @@ test "par2cmdline verify tolerates SFVS validation state packet" {
     try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
 }
 
+test "par2cmdline verify tolerates AAPL xattr packet" {
+    if (!commandAvailable(std.testing.allocator, "par2")) return;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+
+    const data = "AAPL xattr compatibility test data for par2cmdline";
+    const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "aapl_test.bin" });
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "aapl_test.par2" });
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    var mem_ctx = StreamMemCtx{ .data = data };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "aapl_test.bin",
+        .length = data.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    // Create test xattrs (simulating FinderInfo)
+    const finder_info = [_]u8{0} ** 32;
+    const xattrs = [_]core.packet_types.XattrEntry{
+        .{ .name = "com.apple.FinderInfo", .value = &finder_info },
+        .{ .name = "user.test", .value = "test value" },
+    };
+
+    const aapl = core.packet_types.AaplPacket{
+        .file_id = std.mem.zeroes([16]u8),
+        .version = 1,
+        .xattrs = &xattrs,
+    };
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "aapl_test.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = null,
+        .validation_state = null,
+        .aapl_packet = aapl,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = false,
+        .include_volume_meta = false,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+
+    // Write the par2 file to disk for par2cmdline
+    const par2_data = cap.map.getPtr("aapl_test.par2") orelse return error.NotFound;
+    try std.fs.cwd().writeFile(.{ .sub_path = par2_path, .data = par2_data.data.items });
+
+    // par2cmdline should ignore the unknown AAPL packet and verify successfully
+    const verify_result = try std.process.Child.run(.{
+        .argv = &.{ "par2", "verify", "-q", par2_path },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+}
+
+test "par2cmdline verify tolerates SFMD v2 with uid/gid/mode" {
+    if (!commandAvailable(std.testing.allocator, "par2")) return;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+
+    const data = "SFMD v2 compatibility test with extended fields";
+    const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfmd_v2.bin" });
+    const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfmd_v2.par2" });
+    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    var mem_ctx = StreamMemCtx{ .data = data };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "sfmd_v2.bin",
+        .length = data.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    // SFMD v2 with full POSIX metadata
+    const meta = ops.SourceMetadataPacket{
+        .version = 2,
+        .flags = core.packet_types.MetadataFlags.HAS_UID |
+            core.packet_types.MetadataFlags.HAS_GID |
+            core.packet_types.MetadataFlags.HAS_MODE |
+            core.packet_types.MetadataFlags.HAS_CTIME,
+        .source_mtime_ns = 1700000000000000000,
+        .source_ctime_ns = 1699000000000000000,
+        .source_size = data.len,
+        .uid = 501,
+        .gid = 20,
+        .mode = 0o644,
+        .reserved1 = 0,
+        .reserved2 = std.mem.zeroes([24]u8),
+    };
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "sfmd_v2.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = meta,
+        .validation_state = null,
+        .aapl_packet = null,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = false,
+        .include_volume_meta = false,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+
+    // Write the par2 file to disk for par2cmdline
+    const par2_data = cap.map.getPtr("sfmd_v2.par2") orelse return error.NotFound;
+    try std.fs.cwd().writeFile(.{ .sub_path = par2_path, .data = par2_data.data.items });
+
+    // par2cmdline should ignore the unknown SFMD v2 packet (larger than expected) and verify successfully
+    const verify_result = try std.process.Child.run(.{
+        .argv = &.{ "par2", "verify", "-q", par2_path },
+        .allocator = allocator,
+        .cwd = tmp_path,
+    });
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+}
+
 test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
