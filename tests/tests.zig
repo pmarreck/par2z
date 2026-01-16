@@ -5087,3 +5087,8 @@ test "SFMD v2 with uid/gid/mode round-trip" {
     try std.testing.expectEqual(@as(u32, 20), sfmd.gid);
     try std.testing.expectEqual(@as(u16, 0o644), sfmd.mode);
 }
+
+// Include tests from core modules
+test {
+    _ = core.packet_types;
+}

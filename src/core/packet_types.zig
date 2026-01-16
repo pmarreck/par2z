@@ -51,6 +51,7 @@ pub const ValidationFlags = struct {
     pub const DECODE: u8 = 0x08; // Decompression/decode succeeded
     pub const CHARSET: u8 = 0x10; // Character encoding validated
     pub const SEMANTIC: u8 = 0x20; // Content semantically valid
+    pub const ENCRYPTED: u8 = 0x40; // Content is encrypted (validation limited)
     pub const COMPLETE: u8 = 0x80; // Every byte covered by integrity check
 };
 
@@ -434,4 +435,38 @@ pub fn parseAapl(buf: []const u8, allocator: std.mem.Allocator) PacketTypeError!
 
     out.xattrs = entries;
     return out;
+}
+
+test "ValidationFlags values are distinct and correct" {
+    // Each flag should have a unique bit position
+    try std.testing.expectEqual(@as(u8, 0x01), ValidationFlags.MAGIC);
+    try std.testing.expectEqual(@as(u8, 0x02), ValidationFlags.STRUCTURE);
+    try std.testing.expectEqual(@as(u8, 0x04), ValidationFlags.CHECKSUM);
+    try std.testing.expectEqual(@as(u8, 0x08), ValidationFlags.DECODE);
+    try std.testing.expectEqual(@as(u8, 0x10), ValidationFlags.CHARSET);
+    try std.testing.expectEqual(@as(u8, 0x20), ValidationFlags.SEMANTIC);
+    try std.testing.expectEqual(@as(u8, 0x40), ValidationFlags.ENCRYPTED);
+    try std.testing.expectEqual(@as(u8, 0x80), ValidationFlags.COMPLETE);
+
+    // Verify flags don't overlap
+    const all_flags = ValidationFlags.MAGIC | ValidationFlags.STRUCTURE |
+        ValidationFlags.CHECKSUM | ValidationFlags.DECODE |
+        ValidationFlags.CHARSET | ValidationFlags.SEMANTIC |
+        ValidationFlags.ENCRYPTED | ValidationFlags.COMPLETE;
+    try std.testing.expectEqual(@as(u8, 0xFF), all_flags);
+}
+
+test "ENCRYPTED flag can be combined with validation depth flags" {
+    // Encrypted file with structural validation only
+    const encrypted_structural = ValidationFlags.MAGIC | ValidationFlags.STRUCTURE | ValidationFlags.ENCRYPTED;
+    try std.testing.expectEqual(@as(u8, 0x43), encrypted_structural);
+
+    // Encrypted file with checksum validation (e.g., ZIP with some encrypted entries)
+    const encrypted_checksum = ValidationFlags.MAGIC | ValidationFlags.STRUCTURE |
+        ValidationFlags.CHECKSUM | ValidationFlags.ENCRYPTED;
+    try std.testing.expectEqual(@as(u8, 0x47), encrypted_checksum);
+
+    // Verify ENCRYPTED flag is set in combined flags
+    try std.testing.expect((encrypted_structural & ValidationFlags.ENCRYPTED) != 0);
+    try std.testing.expect((encrypted_checksum & ValidationFlags.ENCRYPTED) != 0);
 }
