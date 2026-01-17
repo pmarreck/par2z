@@ -338,6 +338,50 @@ Placement:
 Note: Resource forks are handled separately as virtual files (large, benefit from own
 recovery blocks). AAPL packet is for small metadata only.
 
+### Windows ACL Packet (WACL)
+Packet Type: "PAR 2.0\0WACL\0\0\0\0"
+
+Preserves Windows NTFS access control lists (DACLs) and ownership information.
+
+Body (little-endian, variable length):
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 16 | File ID | MD5 identifying the source file (matches FileDesc) |
+| 16 | 2 | Version | Packet format version (current: 1) |
+| 18 | 2 | flags | Control flags (see below) |
+| 20 | 4 | owner_len | Length of owner SID string (SDDL format) |
+| 24 | 4 | group_len | Length of group SID string |
+| 28 | 4 | dacl_len | Length of serialized DACL |
+| 32 | owner_len | owner | Owner SID in SDDL format (e.g., "S-1-5-21-...") |
+| ... | group_len | group | Group SID in SDDL format |
+| ... | dacl_len | dacl | Serialized DACL (binary blob from GetSecurityDescriptorDacl) |
+
+Flags (16-bit):
+| Bit | Name | Description |
+|-----|------|-------------|
+| 0 | OWNER_PRESENT | Owner SID is included |
+| 1 | GROUP_PRESENT | Group SID is included |
+| 2 | DACL_PRESENT | DACL is included |
+| 3 | DACL_PROTECTED | SE_DACL_PROTECTED - don't inherit from parent |
+| 4-15 | Reserved | Must be zero |
+
+Design Notes:
+- SACL (audit ACLs) is intentionally excluded - requires elevated privileges (SeSecurityPrivilege)
+  and is rarely user-configurable
+- Owner/Group stored as SDDL strings for human readability and cross-version portability
+- DACL stored as binary blob to preserve exact ACE ordering and flags
+- Skip files with only inherited ACLs (no custom permissions set)
+
+Platform Behavior:
+- **Windows**: Read/write ACLs via GetFileSecurity/SetFileSecurity with
+  OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION
+- **Non-Windows platforms**: Skip WACL packet creation entirely
+
+Placement:
+- One WACL packet per source file with custom (non-inherited) ACLs
+- Written after AAPL packets, before recovery data
+- Stored only in the main `.par2` file (not volume files)
+
 ## File Naming Conventions (Non-Normative)
 Common naming patterns observed in PAR2 tools:
 - Base parity file: name.par2
