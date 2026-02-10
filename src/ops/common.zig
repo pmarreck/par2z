@@ -700,9 +700,12 @@ pub fn loadVolumeFiles(
     path: []const u8,
     expected_id: *?[16]u8,
 ) !void {
+    // Detect extension from the input path (works with .par2, .foe, or any extension)
     var base = path;
-    if (std.mem.endsWith(u8, path, ".par2")) {
-        base = path[0 .. path.len - 5];
+    var ext: []const u8 = ".par2"; // fallback
+    if (std.mem.lastIndexOfScalar(u8, path, '.')) |dot| {
+        ext = path[dot..];
+        base = path[0..dot];
     }
     if (std.mem.indexOf(u8, base, ".vol")) |idx| {
         base = base[0..idx];
@@ -713,7 +716,7 @@ pub fn loadVolumeFiles(
     var it = dir.iterate();
     while (try it.next()) |entry| {
         if (entry.kind != .file) continue;
-        if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
+        if (!std.mem.endsWith(u8, entry.name, ext)) continue;
         if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
         const full = try path_util.join(allocator, path_util.dirNameOrDot(path), entry.name);
         if (std.mem.eql(u8, full, path)) {

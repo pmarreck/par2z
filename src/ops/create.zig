@@ -791,14 +791,18 @@ fn computeFileInfoAndMaybeWriteSlicesStream(
 }
 
 fn volumePath(allocator: std.mem.Allocator, par2_path: []const u8, start: u64, count: u64, width: usize) ![]const u8 {
+    // Strip the file extension (everything after the last '.') to form the base,
+    // then reattach it after the volume suffix. Works with any extension (.par2, .foe, etc.)
     var base = par2_path;
-    if (std.mem.endsWith(u8, par2_path, ".par2")) {
-        base = par2_path[0 .. par2_path.len - 5];
+    var ext: []const u8 = ".par2"; // fallback if no extension found
+    if (std.mem.lastIndexOfScalar(u8, par2_path, '.')) |dot| {
+        base = par2_path[0..dot];
+        ext = par2_path[dot..];
     }
     const start_s = try indexPadded(allocator, start, width);
     var count_buf: [32]u8 = undefined;
     const count_s = try std.fmt.bufPrint(&count_buf, "{d}", .{count});
-    const suffix = try std.mem.concat(allocator, u8, &.{ ".vol", start_s, "+", count_s, ".par2" });
+    const suffix = try std.mem.concat(allocator, u8, &.{ ".vol", start_s, "+", count_s, ext });
     return try std.mem.concat(allocator, u8, &.{ base, suffix });
 }
 
@@ -851,6 +855,9 @@ test "volumePath formats base and padded start index" {
     try std.testing.expectEqualStrings("set.vol0007+3.par2", out);
     const out2 = try volumePath(arena.allocator(), "set", 7, 3, 2);
     try std.testing.expectEqualStrings("set.vol07+3.par2", out2);
+    // .foe extension preserved
+    const out3 = try volumePath(arena.allocator(), ".sample.bin.foe", 0, 1, 2);
+    try std.testing.expectEqualStrings(".sample.bin.vol00+1.foe", out3);
 }
 
 const VolumeShared = struct {

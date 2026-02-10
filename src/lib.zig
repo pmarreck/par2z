@@ -603,9 +603,12 @@ fn writeTempFileFromStream(allocator: std.mem.Allocator, temp_dir: []const u8, n
 fn loadVolumeBytes(allocator: std.mem.Allocator, par2_path: []const u8) ![][]u8 {
     var list = std.ArrayList([]u8).empty;
     defer list.deinit(allocator);
+    // Detect extension from the input path (works with .par2, .foe, or any extension)
     var base = par2_path;
-    if (std.mem.endsWith(u8, par2_path, ".par2")) {
-        base = par2_path[0 .. par2_path.len - 5];
+    var ext: []const u8 = ".par2"; // fallback
+    if (std.mem.lastIndexOfScalar(u8, par2_path, '.')) |dot| {
+        ext = par2_path[dot..];
+        base = par2_path[0..dot];
     }
     if (std.mem.indexOf(u8, base, ".vol")) |idx| {
         base = base[0..idx];
@@ -616,7 +619,7 @@ fn loadVolumeBytes(allocator: std.mem.Allocator, par2_path: []const u8) ![][]u8 
     var it = dir.iterate();
     while (try it.next()) |entry| {
         if (entry.kind != .file) continue;
-        if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
+        if (!std.mem.endsWith(u8, entry.name, ext)) continue;
         if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
         if (!std.mem.startsWith(u8, entry.name, base_name)) continue;
         const full = try std.fs.path.join(allocator, &.{ std.fs.path.dirname(par2_path) orelse ".", entry.name });
