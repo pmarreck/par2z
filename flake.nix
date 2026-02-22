@@ -10,6 +10,52 @@
 			systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
 			forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
 		in {
+			packages = forAllSystems (system:
+				let
+					pkgs = import nixpkgs { inherit system; };
+				in {
+					default = pkgs.stdenv.noCC.mkDerivation {
+						name = "par2z";
+						src = self;
+						nativeBuildInputs = [ pkgs.zig ];
+						buildPhase = ''
+							export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
+							zig build -Doptimize=ReleaseFast
+						'';
+						installPhase = ''
+							mkdir -p $out
+							cp -r zig-out/* $out/
+						'';
+					};
+				});
+
+			checks = forAllSystems (system:
+				let
+					pkgs = import nixpkgs { inherit system; };
+				in {
+					fmt = pkgs.stdenv.noCC.mkDerivation {
+						name = "par2z-fmt";
+						src = self;
+						nativeBuildInputs = [ pkgs.zig ];
+						buildPhase = ''
+							zig fmt --check src/ tests/ fuzz/
+						'';
+						installPhase = "touch $out";
+					};
+
+					test = pkgs.stdenv.noCC.mkDerivation {
+						name = "par2z-test";
+						src = self;
+						nativeBuildInputs = [ pkgs.zig ];
+						buildPhase = ''
+							export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
+							# Use test-direct to avoid any hang issues with the Zig test runner
+							zig build test-direct
+						'';
+						installPhase = "touch $out";
+					};
+				});
+
 			devShells = forAllSystems (system:
 				let
 					pkgs = import nixpkgs { inherit system; };

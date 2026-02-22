@@ -4887,7 +4887,7 @@ test "AAPL packet round-trip" {
         .xattrs = &xattrs,
     };
 
-    const recovery_set_id = [_]u8{ 0xAA } ** 16;
+    const recovery_set_id = [_]u8{0xAA} ** 16;
 
     // Build packet
     const pkt = try core.create_packets.buildAaplPacket(allocator, recovery_set_id, aapl);

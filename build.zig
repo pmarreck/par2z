@@ -220,6 +220,14 @@ pub fn build(b: *std.Build) void {
         .os_tag = .linux,
         .abi = .musl,
     }, "bin-static/linux-aarch64", build_options);
+    addStaticCliVariant(b, optimize, .{
+        .cpu_arch = .x86_64,
+        .os_tag = .windows,
+    }, "bin-static/windows-x86_64", build_options);
+    addStaticCliVariant(b, optimize, .{
+        .cpu_arch = .aarch64,
+        .os_tag = .windows,
+    }, "bin-static/windows-aarch64", build_options);
 }
 
 fn addStaticCliVariant(

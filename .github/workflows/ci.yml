@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-macos
+            os: macos-latest
+          - target: x86_64-linux-musl
+            os: ubuntu-latest
+          - target: aarch64-linux-musl
+            os: ubuntu-latest
+          - target: x86_64-windows
+            os: windows-latest
+          - target: aarch64-windows
+            os: windows-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: 0.15.2
+
+      - name: Check Formatting
+        run: zig fmt --check src/ tests/ fuzz/
+
+      - name: Build
+        run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
+
+      - name: Test (Native Only)
+        if: (matrix.target == 'x86_64-linux-musl' && matrix.os == 'ubuntu-latest') || (matrix.target == 'aarch64-macos' && matrix.os == 'macos-latest') || (matrix.target == 'x86_64-windows' && matrix.os == 'windows-latest')
+        run: zig build test-direct -Dtarget=${{ matrix.target }}
+
+      - name: Prepare Artifact
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cp -r zig-out/bin/* artifacts/ || true
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: par2z-cli-${{ matrix.target }}
+          path: artifacts/

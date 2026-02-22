@@ -1,5 +1,8 @@
 # par2z
 
+[![Garnix](https://garnix.io/repo/pmarreck/par2z/status.svg)](https://garnix.io/repo/pmarreck/par2z)
+[![CI](https://github.com/pmarreck/par2z/actions/workflows/ci.yml/badge.svg)](https://github.com/pmarreck/par2z/actions/workflows/ci.yml)
+
 ## Overview
 Cleanroom PAR2 implementation with a Zig core, C ABI for FFI (Swift/LuaJIT), and a standalone CLI.
 

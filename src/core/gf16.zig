@@ -246,8 +246,7 @@ inline fn clmul16_x86(a: u16, b: u16) u32 {
     // Load into XMM registers and perform PCLMULQDQ
     const va: u128 = a;
     const vb: u128 = b;
-    const result: u128 = asm (
-        "pclmulqdq $0, %[b], %[a]"
+    const result: u128 = asm ("pclmulqdq $0, %[b], %[a]"
         : [a] "+x" (va),
         : [b] "x" (vb),
     );
@@ -262,8 +261,7 @@ inline fn clmul16_arm(a: u16, b: u16) u32 {
     const va: u64 = a;
     const vb: u64 = b;
     var result: u128 = undefined;
-    asm (
-        "pmull %[out].1q, %[a].1d, %[b].1d"
+    asm ("pmull %[out].1q, %[a].1d, %[b].1d"
         : [out] "=w" (result),
         : [a] "w" (va),
           [b] "w" (vb),
