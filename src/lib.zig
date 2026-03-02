@@ -557,10 +557,15 @@ fn ensureTempDir(allocator: std.mem.Allocator, temp_dir: *?[]const u8) ![]const 
 }
 
 fn hasTraversalSegment(path: []const u8) bool {
-    var it = std.mem.splitScalar(u8, path, '/');
-    while (it.next()) |seg| {
-        if (seg.len == 0) continue;
-        if (std.mem.eql(u8, seg, ".") or std.mem.eql(u8, seg, "..")) return true;
+    if (path.len == 0) return false;
+    var start: usize = 0;
+    var i: usize = 0;
+    while (i <= path.len) : (i += 1) {
+        if (i == path.len or path[i] == '/' or path[i] == '\\') {
+            const seg = path[start..i];
+            if (seg.len == 2 and seg[0] == '.' and seg[1] == '.') return true;
+            start = i + 1;
+        }
     }
     return false;
 }
