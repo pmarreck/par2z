@@ -41,7 +41,7 @@ jobs:
 
       - name: Test (Native Only)
         if: (matrix.target == 'x86_64-linux-musl' && matrix.os == 'ubuntu-latest') || (matrix.target == 'aarch64-macos' && matrix.os == 'macos-latest') || (matrix.target == 'x86_64-windows' && matrix.os == 'windows-latest')
-        run: zig build test-direct -Dtarget=${{ matrix.target }}
+        run: zig build test-direct
 
       - name: Prepare Artifact
         shell: bash
