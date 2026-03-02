@@ -4283,6 +4283,7 @@ test "boundary conditions: file exactly one block" {
 }
 
 test "par2cmdline cross-validation: par2z create, par2cmdline verify" {
+    if (!commandAvailable(std.testing.allocator, "par2")) return;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4314,6 +4315,7 @@ test "par2cmdline cross-validation: par2z create, par2cmdline verify" {
 }
 
 test "par2cmdline cross-validation: par2cmdline create, par2z verify" {
+    if (!commandAvailable(std.testing.allocator, "par2")) return;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4600,6 +4602,7 @@ test "par2cmdline verify tolerates SFMD v2 with uid/gid/mode" {
 }
 
 test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
+    if (!commandAvailable(std.testing.allocator, "par2")) return;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

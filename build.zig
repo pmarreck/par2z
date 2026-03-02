@@ -39,6 +39,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "core", .module = core_mod },
         },
     });
+    lib_mod.link_libc = true;
     const lib = b.addLibrary(.{
         .name = "par2",
         .root_module = lib_mod,
