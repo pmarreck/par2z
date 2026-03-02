@@ -8,11 +8,13 @@ const c_std = @cImport({
 const ops = @import("ops");
 
 fn cliPath(allocator: std.mem.Allocator) ![]const u8 {
-    return try std.fs.cwd().realpathAlloc(allocator, "zig-out/bin/par2z-cli");
+    const name = if (builtin.os.tag == .windows) "zig-out/bin/par2z-cli.exe" else "zig-out/bin/par2z-cli";
+    return try std.fs.cwd().realpathAlloc(allocator, name);
 }
 
 fn prngPath(allocator: std.mem.Allocator) ![]const u8 {
-    return try std.fs.cwd().realpathAlloc(allocator, "zig-out/bin/prng-gen");
+    const name = if (builtin.os.tag == .windows) "zig-out/bin/prng-gen.exe" else "zig-out/bin/prng-gen";
+    return try std.fs.cwd().realpathAlloc(allocator, name);
 }
 
 test "version string" {
@@ -383,9 +385,11 @@ fn commandAvailable(allocator: std.mem.Allocator, name: []const u8) bool {
 fn sharedLibPath(allocator: std.mem.Allocator) ![]const u8 {
     const ext = switch (builtin.os.tag) {
         .macos => "dylib",
+        .windows => "dll",
         else => "so",
     };
-    const rel = try std.fmt.allocPrint(allocator, "zig-out/lib/libpar2.{s}", .{ext});
+    const prefix = if (builtin.os.tag == .windows) "" else "lib";
+    const rel = try std.fmt.allocPrint(allocator, "zig-out/lib/{s}par2.{s}", .{ prefix, ext });
     defer allocator.free(rel);
     return try std.fs.cwd().realpathAlloc(allocator, rel);
 }
