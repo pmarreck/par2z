@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: aarch64-macos
@@ -32,6 +33,7 @@ jobs:
           version: 0.15.2
 
       - name: Check Formatting
+        if: matrix.target == 'x86_64-linux-musl'
         run: zig fmt --check src/ tests/ fuzz/
 
       - name: Build
