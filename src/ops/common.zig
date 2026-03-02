@@ -267,10 +267,12 @@ pub fn relativePathUnderBase(allocator: std.mem.Allocator, base_abs: []const u8,
 
 pub fn safeFileName(path: []const u8) ![]const u8 {
     if (hasTraversalSegment(path)) return error.InvalidInput;
-    if (hasWindowsDrivePrefix(path)) return error.InvalidInput;
     if (std.fs.path.isAbsolute(path)) {
         return path_util.baseName(path);
     }
+    // Reject relative paths with drive prefix (e.g. "C:foo") — these are
+    // Windows-specific relative paths that could escape the current directory.
+    if (hasWindowsDrivePrefix(path)) return error.InvalidInput;
     return path;
 }
 
