@@ -335,8 +335,10 @@ pub inline fn mulAccVec8Shuffle(tbl: *const MulTables, input: [8]u16, acc: *[8]u
 }
 
 /// Check if shuffle-based SIMD GF16 multiply is available on this target.
+/// Note: x86_64 PSHUFB disabled due to Zig 0.15.2 codegen bug (XMM/YMM mismatch).
+/// ARM NEON TBL path is unaffected.
 pub fn hasShuffleMul() bool {
-    return hasSsse3() or hasNeonShuffle();
+    return hasNeonShuffle();
 }
 
 // =============================================================================
