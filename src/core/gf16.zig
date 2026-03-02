@@ -222,17 +222,17 @@ inline fn tableLookup16(table: Vec16u8, indices: Vec16u8) Vec16u8 {
         // PSHUFB: result[i] = (indices[i] & 0x80) ? 0 : table[indices[i] & 0x0F]
         var result = table;
         asm ("pshufb %[idx], %[out]"
-            : [out] "+x" (result),
-            : [idx] "x" (indices),
+            : [out] "+x" (result)
+            : [idx] "x" (indices)
         );
         return result;
     } else if (comptime hasNeonShuffle()) {
         // TBL: result[i] = (indices[i] >= 16) ? 0 : table[indices[i]]
         var result: Vec16u8 = undefined;
         asm ("tbl %[out].16b, {%[tbl].16b}, %[idx].16b"
-            : [out] "=w" (result),
-            : [tbl] "w" (table),
-              [idx] "w" (indices),
+            : [out] "=w" (result)
+            : [tbl] "w" (table)
+            , [idx] "w" (indices)
         );
         return result;
     } else {
