@@ -244,13 +244,13 @@ pub fn hasArmCrypto() bool {
 /// Returns the full 32-bit unreduced product
 inline fn clmul16_x86(a: u16, b: u16) u32 {
     // Load into XMM registers and perform PCLMULQDQ
-    const va: u128 = a;
+    var va: u128 = a;
     const vb: u128 = b;
-    const result: u128 = asm ("pclmulqdq $0, %[b], %[a]"
+    va = asm ("pclmulqdq $0, %[b], %[a]"
         : [a] "+x" (va),
         : [b] "x" (vb),
     );
-    return @truncate(result);
+    return @truncate(va);
 }
 
 /// Carry-less multiply two 16-bit values using PMULL (ARM64)

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const lib = @import("par2");
 const core = @import("core");
 const c_std = @cImport({
@@ -60,6 +61,7 @@ test "fileId computes MD5 over md5-16k + length + filename" {
 }
 
 test "ops stdout-to-stderr env flag" {
+    if (builtin.os.tag == .windows) return; // setenv/unsetenv are POSIX-only
     try std.testing.expectEqual(@as(c_int, 0), c_std.setenv("STDOUT_TO_STDERR", "1", 1));
     try std.testing.expect(ops.stdoutToStderrEnabled());
     try std.testing.expectEqual(@as(c_int, 0), c_std.setenv("STDOUT_TO_STDERR", "0", 1));
@@ -379,7 +381,6 @@ fn commandAvailable(allocator: std.mem.Allocator, name: []const u8) bool {
 }
 
 fn sharedLibPath(allocator: std.mem.Allocator) ![]const u8 {
-    const builtin = @import("builtin");
     const ext = switch (builtin.os.tag) {
         .macos => "dylib",
         else => "so",
@@ -411,7 +412,6 @@ fn runCommandExpectOk(allocator: std.mem.Allocator, argv: []const []const u8, en
 }
 
 fn libPathEnvName() []const u8 {
-    const builtin = @import("builtin");
     return if (builtin.os.tag == .macos) "DYLD_LIBRARY_PATH" else "LD_LIBRARY_PATH";
 }
 
