@@ -1,6 +1,6 @@
 # par2z
 
-[![Garnix](https://garnix.io/repo/pmarreck/par2z/status.svg)](https://garnix.io/repo/pmarreck/par2z)
+[![Garnix](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Fgarnix.io%2Fapi%2Fbadges%2Fpmarreck%2Fpar2z)](https://garnix.io/repo/pmarreck/par2z)
 [![CI](https://github.com/pmarreck/par2z/actions/workflows/ci.yml/badge.svg)](https://github.com/pmarreck/par2z/actions/workflows/ci.yml)
 
 ## Overview
