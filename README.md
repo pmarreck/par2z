@@ -201,12 +201,11 @@ Recent results (16 MiB file, 4KB blocks, 10% redundancy, Apple M-series):
 
 | Tool | Create | Verify | Repair |
 |------|--------|--------|--------|
-| par2cmdline 0.8.1 | 12.2 MiB/s | 168.4 MiB/s | 85.6 MiB/s |
-| par2cmdline-turbo 1.3.0 | 172.0 MiB/s | 363.6 MiB/s | 111.9 MiB/s |
-| par2z-cli | 10.4 MiB/s | 166.7 MiB/s | 56.9 MiB/s |
+| par2cmdline-turbo 1.3.0 | 172.0 MiB/s | 330.0 MiB/s | 113.0 MiB/s |
+| par2z-cli | 50.4 MiB/s | 232.9 MiB/s | 67.3 MiB/s |
 
-See `bench-results.tsv` for the full benchmark log (last updated 2025-12-31T18:50:43Z).
-par2z performs comparably to the original par2cmdline. par2cmdline-turbo is significantly faster, likely due to hand-optimized SIMD assembly for GF(2^16) multiplication (we have not examined its source code to maintain cleanroom status). See `TODO.md` for optimization opportunities.
+See `bench-results.tsv` for the full benchmark log.
+par2z create uses PSHUFB/TBL-based SIMD vectorized GF(2^16) multiplication with split-table nibble lookups (8 parallel multiplies per instruction on x86_64 SSSE3 and aarch64 NEON). Verify and recover use ARM CRC32 hardware instructions on aarch64 (with slice-by-8 software fallback on x86_64). par2cmdline-turbo remains ~3.4x faster on create, likely due to wider SIMD, additional algorithmic optimizations, or different threading strategies (we have not examined its source code to maintain cleanroom status).
 
 Run `bench` or `bench-all` to compare implementations:
 

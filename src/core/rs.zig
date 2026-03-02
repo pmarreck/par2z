@@ -20,7 +20,21 @@ pub fn accumulateRecoverySlice(out: []u8, data_slice: []const u8, factor: u16) R
     if ((out.len % 2) != 0) return error.InvalidInput;
     if (factor == 0) return;
     const word_count = out.len / 2;
+    const lanes: usize = 8;
     var w: usize = 0;
+
+    if (comptime gf.hasShuffleMul()) {
+        const tbl = gf.MulTables.init(factor);
+        const simd_end = word_count & ~@as(usize, lanes - 1);
+        while (w < simd_end) : (w += lanes) {
+            const data_words = readWords8(data_slice, w);
+            var acc_words = readWords8(out, w);
+            gf.mulAccVec8Shuffle(&tbl, data_words, &acc_words);
+            writeWords8(out, w, acc_words);
+        }
+    }
+
+    // Scalar tail (or full path when shuffle not available)
     while (w < word_count) : (w += 1) {
         const word = readWord(data_slice, w);
         const prod = gf.mulSimd(word, factor);
@@ -265,6 +279,66 @@ fn encodeRange(out: []u8, data_slices: []const []const u8, factors: []const u16,
 }
 
 fn encodeRangeSimd(out: []u8, data_slices: []const []const u8, factors: []const u16, start_word: usize, end_word: usize) usize {
+    if (comptime gf.hasShuffleMul()) {
+        return encodeRangeShuffleMul(out, data_slices, factors, start_word, end_word);
+    }
+    return encodeRangePmull(out, data_slices, factors, start_word, end_word);
+}
+
+/// Read 8 consecutive u16 words from a byte slice (little-endian, unaligned).
+inline fn readWords8(buf: []const u8, word_index: usize) [8]u16 {
+    const off = word_index * 2;
+    return @as(*align(1) const [8]u16, @ptrCast(buf.ptr + off)).*;
+}
+
+/// Write 8 consecutive u16 words to a byte slice (little-endian, unaligned).
+inline fn writeWords8(buf: []u8, word_index: usize, words: [8]u16) void {
+    const off = word_index * 2;
+    @as(*align(1) [8]u16, @ptrCast(buf.ptr + off)).* = words;
+}
+
+/// Slices-first encode using PSHUFB/TBL byte-shuffle multiply.
+/// For each data slice, pre-computes a 128-byte MulTables (fits in L1)
+/// then streams through all position groups with hardware-accelerated
+/// parallel table lookups (8 GF(2^16) multiplies per instruction).
+fn encodeRangeShuffleMul(out: []u8, data_slices: []const []const u8, factors: []const u16, start_word: usize, end_word: usize) usize {
+    const lanes: usize = 8;
+    const word_count = end_word - start_word;
+    if (word_count < lanes) return 0;
+    const simd_end = end_word - (word_count % lanes);
+
+    if (data_slices.len == 0) return simd_end - start_word;
+
+    // First slice: multiply and write directly (no accumulator read needed)
+    {
+        const tbl = gf.MulTables.init(factors[0]);
+        var w: usize = start_word;
+        while (w < simd_end) : (w += lanes) {
+            const words = readWords8(data_slices[0], w);
+            const products = gf.mulVec8Shuffle(&tbl, words);
+            writeWords8(out, w, products);
+        }
+    }
+
+    // Remaining slices: multiply and XOR-accumulate with output
+    var i: usize = 1;
+    while (i < data_slices.len) : (i += 1) {
+        const tbl = gf.MulTables.init(factors[i]);
+        var w: usize = start_word;
+        while (w < simd_end) : (w += lanes) {
+            const words = readWords8(data_slices[i], w);
+            var acc = readWords8(out, w);
+            gf.mulAccVec8Shuffle(&tbl, words, &acc);
+            writeWords8(out, w, acc);
+        }
+    }
+
+    return simd_end - start_word;
+}
+
+/// Positions-first encode using per-element PMULL/PCLMULQDQ multiply.
+/// Fallback for targets without SSSE3/NEON shuffle support.
+fn encodeRangePmull(out: []u8, data_slices: []const []const u8, factors: []const u16, start_word: usize, end_word: usize) usize {
     const lanes: usize = 8;
     const word_count = end_word - start_word;
     if (word_count < lanes) return 0;
@@ -279,7 +353,6 @@ fn encodeRangeSimd(out: []u8, data_slices: []const []const u8, factors: []const 
             while (lane < lanes) : (lane += 1) {
                 words[lane] = readWord(data_slices[i], w + lane);
             }
-            // Use SIMD-optimized multiply when available
             const prod_arr = gf.mulVec8Simd(words, factors[i]);
             acc ^= @as(@Vector(lanes, u16), prod_arr);
         }
@@ -326,7 +399,8 @@ fn decodeRange(
     rhs: []u16,
 ) RsError!void {
     _ = word_count;
-    var w: usize = start_word;
+    const simd_done = decodeRangeSimd(n, present_slices, factors, inv, recovery_slices, out_slices, pcount, start_word, end_word);
+    var w: usize = start_word + simd_done;
     while (w < end_word) : (w += 1) {
         var r: usize = 0;
         while (r < n) : (r += 1) {
@@ -352,6 +426,62 @@ fn decodeRange(
             writeWord(out_slices[mi], w, sum);
         }
     }
+}
+
+/// SIMD-accelerated decode range. Processes 8 word positions at a time.
+/// Returns number of words processed (0 if SIMD path is not applicable).
+fn decodeRangeSimd(
+    n: usize,
+    present_slices: []const []const u8,
+    factors: []const u16,
+    inv: []const u16,
+    recovery_slices: []const RecoverySlice,
+    out_slices: [][]u8,
+    pcount: usize,
+    start_word: usize,
+    end_word: usize,
+) usize {
+    const lanes: usize = 8;
+    const total_words = end_word - start_word;
+    if (total_words < lanes) return 0;
+    // Bounded stack buffer for 8-wide RHS vectors (n ≤ 256 covers all practical cases)
+    const max_n: usize = 256;
+    if (n > max_n or n == 0) return 0;
+    const simd_end = end_word - (total_words % lanes);
+
+    var rhs_vec: [max_n][8]u16 = undefined;
+
+    var w: usize = start_word;
+    while (w < simd_end) : (w += lanes) {
+        // Phase 1: Build RHS vectors from recovery slices
+        var r: usize = 0;
+        while (r < n) : (r += 1) {
+            var acc = readWords8(recovery_slices[r].data, w);
+            var j: usize = 0;
+            while (j < pcount) : (j += 1) {
+                const words = readWords8(present_slices[j], w);
+                const prod = gf.mulVec8Simd(words, factors[r * pcount + j]);
+                const acc_v: @Vector(lanes, u16) = acc;
+                const prod_v: @Vector(lanes, u16) = prod;
+                acc = acc_v ^ prod_v;
+            }
+            rhs_vec[r] = acc;
+        }
+
+        // Phase 2: Solve via inverse matrix multiply
+        var mi: usize = 0;
+        while (mi < n) : (mi += 1) {
+            var sum: @Vector(lanes, u16) = @splat(0);
+            var mj: usize = 0;
+            while (mj < n) : (mj += 1) {
+                const coeff = inv[mi * n + mj];
+                const prod = gf.mulVec8Simd(rhs_vec[mj], coeff);
+                sum ^= @as(@Vector(lanes, u16), prod);
+            }
+            writeWords8(out_slices[mi], w, sum);
+        }
+    }
+    return simd_end - start_word;
 }
 
 /// Determines thread count, respecting an optional max_threads override.

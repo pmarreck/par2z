@@ -183,6 +183,163 @@ pub inline fn mulAccVec8(tbl: *const MulTables, input: [8]u16, acc: *[8]u16) voi
 }
 
 // =============================================================================
+// SIMD-optimized GF(2^16) multiplication using PSHUFB/TBL byte shuffles
+// =============================================================================
+//
+// This is the fastest approach for bulk GF(2^16) multiply. It uses the split-table
+// technique (MulTables) with hardware byte-shuffle instructions to perform 8
+// parallel table lookups per instruction. Each u16 multiply requires 8 PSHUFB/TBL
+// operations (4 nibble positions × 2 result bytes), processing 8 values at once.
+//
+// PSHUFB (x86_64 SSSE3): pshufb xmm1, xmm2 — byte shuffle within 128-bit register
+// TBL (aarch64 NEON): tbl Vd.16B, {Vn.16B}, Vm.16B — table lookup in 128-bit register
+//
+// Both instructions: for each byte position, use the low nibble of the index byte
+// to select from a 16-byte table. If the index has bit 7 set (PSHUFB) or is >= 16
+// (TBL), the result byte is 0.
+
+const Vec16u8 = @Vector(16, u8);
+
+/// Check if SSSE3 is available (required for PSHUFB on x86_64)
+pub fn hasSsse3() bool {
+    if (simd_disabled) return false;
+    if (builtin.cpu.arch == .x86_64) {
+        return std.Target.x86.featureSetHas(builtin.cpu.features, .ssse3);
+    }
+    return false;
+}
+
+/// Check if NEON is available (always true on aarch64, provides TBL instruction)
+pub fn hasNeonShuffle() bool {
+    if (simd_disabled) return false;
+    return builtin.cpu.arch == .aarch64;
+}
+
+/// Hardware-accelerated 16-byte table lookup.
+/// For each byte position: result[i] = table[indices[i]] if valid, else 0.
+inline fn tableLookup16(table: Vec16u8, indices: Vec16u8) Vec16u8 {
+    if (comptime hasSsse3()) {
+        // PSHUFB: result[i] = (indices[i] & 0x80) ? 0 : table[indices[i] & 0x0F]
+        var result = table;
+        asm ("pshufb %[idx], %[out]"
+            : [out] "+x" (result)
+            : [idx] "x" (indices)
+        );
+        return result;
+    } else if (comptime hasNeonShuffle()) {
+        // TBL: result[i] = (indices[i] >= 16) ? 0 : table[indices[i]]
+        var result: Vec16u8 = undefined;
+        asm ("tbl %[out].16b, {%[tbl].16b}, %[idx].16b"
+            : [out] "=w" (result)
+            : [tbl] "w" (table)
+            , [idx] "w" (indices)
+        );
+        return result;
+    } else {
+        // Scalar fallback
+        const t: [16]u8 = table;
+        const idx: [16]u8 = indices;
+        var result: [16]u8 = undefined;
+        for (0..16) |i| {
+            result[i] = if (idx[i] >= 16) 0 else t[idx[i]];
+        }
+        return result;
+    }
+}
+
+/// Sentinel value: 0x80. When used as PSHUFB index, bit 7 set → output 0.
+/// When used as TBL index, >= 16 → output 0. Used at positions 8-15 for unused lanes.
+const sentinel_80: Vec16u8 = @splat(0x80);
+
+/// Sentinel mask: positions 0-7 are 0x00, positions 8-15 are 0x80.
+const upper_sentinel: Vec16u8 = blk: {
+    var v: [16]u8 = undefined;
+    for (0..8) |i| v[i] = 0;
+    for (8..16) |i| v[i] = 0x80;
+    break :blk v;
+};
+
+/// Combined mask for low nibble extraction with sentinel preservation.
+/// Positions 0-7: 0x0F (extract low nibble), positions 8-15: 0x8F (preserve sentinel bit 7).
+const combined_lo_mask: Vec16u8 = blk: {
+    var v: [16]u8 = undefined;
+    for (0..8) |i| v[i] = 0x0F;
+    for (8..16) |i| v[i] = 0x8F;
+    break :blk v;
+};
+
+/// Deinterleave mask: extract even-indexed bytes (0,2,4,6,8,10,12,14) into positions 0-7.
+/// Positions 8-15 select from second source (sentinel_80) via negative indices: ~(-1) = 0 → src2[0] = 0x80.
+const deinterleave_even_mask = @Vector(16, i32){ 0, 2, 4, 6, 8, 10, 12, 14, -1, -1, -1, -1, -1, -1, -1, -1 };
+/// Deinterleave mask for odd-indexed bytes (1,3,5,7,9,11,13,15).
+const deinterleave_odd_mask = @Vector(16, i32){ 1, 3, 5, 7, 9, 11, 13, 15, -1, -1, -1, -1, -1, -1, -1, -1 };
+
+/// Interleave mask: weave positions 0-7 from first source (r_lo) with 0-7 from second source (r_hi)
+/// into alternating even/odd byte positions. Negative indices select from second source: b[~mask[i]].
+const interleave_mask = @Vector(16, i32){ 0, ~@as(i32, 0), 1, ~@as(i32, 1), 2, ~@as(i32, 2), 3, ~@as(i32, 3), 4, ~@as(i32, 4), 5, ~@as(i32, 5), 6, ~@as(i32, 6), 7, ~@as(i32, 7) };
+
+/// Multiply 8 u16 values by a constant using PSHUFB/TBL byte-shuffle instructions.
+/// Processes 16 input bytes (8 little-endian u16 values) through the split-table
+/// nibble lookup technique with hardware-accelerated parallel table lookups.
+///
+/// Algorithm:
+/// 1. Deinterleave input bytes into even (lo bytes of u16) and odd (hi bytes of u16)
+/// 2. Extract nibbles from each group (4 sets of 8 nibble indices)
+/// 3. Look up each nibble set in the appropriate MulTables entry via PSHUFB/TBL
+/// 4. XOR all contributions to produce result lo and hi bytes
+/// 5. Interleave result bytes back into u16 layout
+pub inline fn mulVec8Shuffle(tbl: *const MulTables, input: [8]u16) [8]u16 {
+    const bytes: Vec16u8 = @bitCast(input);
+    const shift_4: Vec16u8 = @splat(4);
+
+    // Step 1: Deinterleave with sentinel merge — separate lo bytes (even) and hi bytes (odd).
+    // Positions 8-15 get 0x80 from sentinel_80 via negative mask indices, so PSHUFB/TBL
+    // returns 0 for those unused lanes without additional masking.
+    const even = @shuffle(u8, bytes, sentinel_80, deinterleave_even_mask);
+    const odd = @shuffle(u8, bytes, sentinel_80, deinterleave_odd_mask);
+
+    // Step 2: Extract nibbles.
+    // Low nibbles: AND with combined_lo_mask preserves sentinel bit 7 at positions 8-15.
+    // High nibbles: shift right 4, then OR with upper_sentinel to restore sentinel.
+    const even_lo = even & combined_lo_mask;
+    const even_hi = (even >> shift_4) | upper_sentinel;
+    const odd_lo = odd & combined_lo_mask;
+    const odd_hi = (odd >> shift_4) | upper_sentinel;
+
+    // Step 3: 8 parallel table lookups + XOR to produce lo and hi result bytes.
+    const lo_tbl_0: Vec16u8 = tbl.lo[0];
+    const lo_tbl_1: Vec16u8 = tbl.lo[1];
+    const lo_tbl_2: Vec16u8 = tbl.lo[2];
+    const lo_tbl_3: Vec16u8 = tbl.lo[3];
+    const hi_tbl_0: Vec16u8 = tbl.hi[0];
+    const hi_tbl_1: Vec16u8 = tbl.hi[1];
+    const hi_tbl_2: Vec16u8 = tbl.hi[2];
+    const hi_tbl_3: Vec16u8 = tbl.hi[3];
+
+    const r_lo = tableLookup16(lo_tbl_0, even_lo) ^ tableLookup16(lo_tbl_1, even_hi) ^
+        tableLookup16(lo_tbl_2, odd_lo) ^ tableLookup16(lo_tbl_3, odd_hi);
+    const r_hi = tableLookup16(hi_tbl_0, even_lo) ^ tableLookup16(hi_tbl_1, even_hi) ^
+        tableLookup16(hi_tbl_2, odd_lo) ^ tableLookup16(hi_tbl_3, odd_hi);
+
+    // Step 4: Interleave lo and hi result bytes back into u16 layout.
+    return @bitCast(@shuffle(u8, r_lo, r_hi, interleave_mask));
+}
+
+/// Multiply-accumulate 8 u16 values: acc[i] ^= factor * input[i]
+/// Uses PSHUFB/TBL shuffle-based lookup when available.
+pub inline fn mulAccVec8Shuffle(tbl: *const MulTables, input: [8]u16, acc: *[8]u16) void {
+    const products = mulVec8Shuffle(tbl, input);
+    const acc_vec: @Vector(8, u16) = acc.*;
+    const prod_vec: @Vector(8, u16) = products;
+    acc.* = acc_vec ^ prod_vec;
+}
+
+/// Check if shuffle-based SIMD GF16 multiply is available on this target.
+pub fn hasShuffleMul() bool {
+    return hasSsse3() or hasNeonShuffle();
+}
+
+// =============================================================================
 // SIMD-optimized GF(2^16) multiplication using PCLMULQDQ/PMULL
 // =============================================================================
 //
@@ -417,6 +574,60 @@ test "mulVec8Simd matches scalar" {
     }
 }
 
+test "mulVec8Shuffle matches scalar" {
+    const factors = [_]u16{ 0x0000, 0x0001, 0x0002, 0x1234, 0xABCD, 0xFFFF, 0x8000, 0x100B };
+    const values = [8]u16{ 0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x1111, 0x2222, 0x3333, 0x4444 };
+
+    for (factors) |factor| {
+        const tbl = MulTables.init(factor);
+        const shuffle_result = mulVec8Shuffle(&tbl, values);
+
+        for (0..8) |i| {
+            const expected = mul(values[i], factor);
+            try std.testing.expectEqual(expected, shuffle_result[i]);
+        }
+    }
+
+    // Also test with zero inputs and edge-case inputs
+    const edge_values = [8]u16{ 0, 0, 0xFFFF, 0xFFFF, 1, 0x8000, 0x100B, 0x7FFF };
+    for (factors) |factor| {
+        const tbl = MulTables.init(factor);
+        const shuffle_result = mulVec8Shuffle(&tbl, edge_values);
+
+        for (0..8) |i| {
+            const expected = mul(edge_values[i], factor);
+            try std.testing.expectEqual(expected, shuffle_result[i]);
+        }
+    }
+}
+
+test "mulAccVec8Shuffle accumulates correctly" {
+    const factor: u16 = 0xABCD;
+    const tbl = MulTables.init(factor);
+    const values = [8]u16{ 0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x1111, 0x2222, 0x3333, 0x4444 };
+    const initial_acc = [8]u16{ 0x1000, 0x2000, 0x3000, 0x4000, 0x5000, 0x6000, 0x7000, 0x8000 };
+    var acc = initial_acc;
+
+    mulAccVec8Shuffle(&tbl, values, &acc);
+
+    for (0..8) |i| {
+        const expected = mul(values[i], factor) ^ initial_acc[i];
+        try std.testing.expectEqual(expected, acc[i]);
+    }
+}
+
+test "MulTables.mulScalar matches scalar mul" {
+    const factors = [_]u16{ 0x0000, 0x0001, 0x0002, 0x1234, 0xABCD, 0xFFFF, 0x8000, 0x100B };
+    const test_values = [_]u16{ 0, 1, 2, 0x1234, 0xABCD, 0xFFFF, 0x8000, 0x0001 };
+
+    for (factors) |factor| {
+        const tbl = MulTables.init(factor);
+        for (test_values) |val| {
+            try std.testing.expectEqual(mul(val, factor), tbl.mulScalar(val));
+        }
+    }
+}
+
 test "clmul16_arm produces correct carry-less product" {
     if (comptime !hasArmCrypto()) return error.SkipZigTest;
 
@@ -553,13 +764,56 @@ fn benchmarkPolyReduceOnly() !void {
     std.debug.print("polyReduce: {d:.2} M ops/sec (checksum: {x})\n", .{ ops_per_sec / 1_000_000.0, checksum });
 }
 
+fn benchmarkVec8(comptime name: []const u8, comptime vec_fn: anytype) !void {
+    const iterations = 1_000_000;
+    var checksum: u16 = 0;
+    const input = [8]u16{ 0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x1111, 0x2222, 0x3333, 0x4444 };
+
+    const start = std.time.nanoTimestamp();
+
+    var i: usize = 0;
+    while (i < iterations) : (i += 1) {
+        const result = vec_fn(input, @as(u16, @truncate(i)));
+        checksum +%= result[0];
+    }
+
+    const end = std.time.nanoTimestamp();
+    const elapsed_ns: u64 = @intCast(end - start);
+    const ops_per_sec = @as(f64, @floatFromInt(iterations)) * 8.0 * 1_000_000_000.0 / @as(f64, @floatFromInt(elapsed_ns));
+    std.debug.print("{s}: {d:.2} M muls/sec (checksum: {x})\n", .{ name, ops_per_sec / 1_000_000.0, checksum });
+}
+
+fn benchmarkVec8Shuffle() !void {
+    const iterations = 1_000_000;
+    var checksum: u16 = 0;
+    var input = [8]u16{ 0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x1111, 0x2222, 0x3333, 0x4444 };
+    const tbl = MulTables.init(0xABCD);
+
+    const start = std.time.nanoTimestamp();
+
+    var i: usize = 0;
+    while (i < iterations) : (i += 1) {
+        input = mulVec8Shuffle(&tbl, input);
+        checksum +%= input[0];
+    }
+
+    const end = std.time.nanoTimestamp();
+    const elapsed_ns: u64 = @intCast(end - start);
+    const ops_per_sec = @as(f64, @floatFromInt(iterations)) * 8.0 * 1_000_000_000.0 / @as(f64, @floatFromInt(elapsed_ns));
+    std.debug.print("Shuffle mul: {d:.2} M muls/sec (checksum: {x})\n", .{ ops_per_sec / 1_000_000.0, checksum });
+}
+
 test "benchmark mul vs mulSimd" {
     std.debug.print("\n--- GF16 Multiplication Benchmark ---\n", .{});
     std.debug.print("PMULL available: {}\n", .{hasArmCrypto()});
     std.debug.print("PCLMUL available: {}\n", .{hasPclmul()});
+    std.debug.print("SSSE3 available: {}\n", .{hasSsse3()});
+    std.debug.print("NEON shuffle available: {}\n", .{hasNeonShuffle()});
 
     try benchmarkMul("Table mul ", mul);
     try benchmarkMul("SIMD mul  ", mulSimd);
+    try benchmarkVec8("Vec8 SIMD ", mulVec8Simd);
+    try benchmarkVec8Shuffle();
     try benchmarkPmullOnly();
     try benchmarkPolyReduceOnly();
 }

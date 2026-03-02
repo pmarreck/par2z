@@ -34,8 +34,23 @@ test "readU32Le bounds check" {
 
 test "crc32 standard check value" {
     const data = "123456789";
-    const v = core.crc32.crc32(data);
-    try std.testing.expectEqual(@as(u32, 0xCBF43926), v);
+    const expected: u32 = 0xCBF43926;
+    // Dispatched (fastest available)
+    try std.testing.expectEqual(expected, core.crc32.crc32(data));
+    // Scalar reference
+    try std.testing.expectEqual(expected, core.crc32.crc32Scalar(data));
+}
+
+test "crc32 optimized matches scalar for all sizes" {
+    var buf: [256]u8 = undefined;
+    for (0..buf.len) |i| {
+        buf[i] = @truncate(i *% 137 +% 42);
+    }
+    for (0..buf.len + 1) |size| {
+        const expected = core.crc32.crc32Scalar(buf[0..size]);
+        const actual = core.crc32.crc32(buf[0..size]);
+        try std.testing.expectEqual(expected, actual);
+    }
 }
 
 test "md5 standard check value" {
