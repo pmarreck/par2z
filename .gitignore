@@ -4,3 +4,4 @@ zig-out/
 data.bin
 *.tmp
 tools/bitrot_guard_run
+AGENTS.md
