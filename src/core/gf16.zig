@@ -244,9 +244,10 @@ pub fn hasArmCrypto() bool {
 /// Returns the full 32-bit unreduced product
 inline fn clmul16_x86(a: u16, b: u16) u32 {
     // Load into XMM registers and perform PCLMULQDQ
+    // "+x" is read-write: pclmulqdq overwrites the first operand in-place
     var va: u128 = a;
     const vb: u128 = b;
-    va = asm ("pclmulqdq $0, %[b], %[a]"
+    asm ("pclmulqdq $0, %[b], %[a]"
         : [a] "+x" (va),
         : [b] "x" (vb),
     );
