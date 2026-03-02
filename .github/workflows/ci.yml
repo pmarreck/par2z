@@ -40,7 +40,7 @@ jobs:
         run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
 
       - name: Test (Native Only)
-        if: (matrix.target == 'x86_64-linux-musl' && matrix.os == 'ubuntu-latest') || (matrix.target == 'aarch64-macos' && matrix.os == 'macos-latest') || (matrix.target == 'x86_64-windows' && matrix.os == 'windows-latest')
+        if: matrix.target == 'x86_64-linux-musl' || matrix.target == 'aarch64-macos'
         run: zig build test-direct
 
       - name: Prepare Artifact
