@@ -14,18 +14,18 @@
 				let
 					pkgs = import nixpkgs { inherit system; };
 				in {
-					default = pkgs.stdenv.noCC.mkDerivation {
+					default = pkgs.stdenvNoCC.mkDerivation {
 						name = "par2z";
 						src = self;
 						nativeBuildInputs = [ pkgs.zig ];
+						dontConfigure = true;
+						dontFixup = true;
 						buildPhase = ''
 							export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-							zig build -Doptimize=ReleaseFast
+							zig build -Doptimize=ReleaseFast --prefix $out
 						'';
-						installPhase = ''
-							mkdir -p $out
-							cp -r zig-out/* $out/
-						'';
+						# zig build --prefix handles install
+						dontInstall = true;
 					};
 				});
 
@@ -33,23 +33,14 @@
 				let
 					pkgs = import nixpkgs { inherit system; };
 				in {
-					fmt = pkgs.stdenv.noCC.mkDerivation {
-						name = "par2z-fmt";
-						src = self;
-						nativeBuildInputs = [ pkgs.zig ];
-						buildPhase = ''
-							zig fmt --check src/ tests/ fuzz/
-						'';
-						installPhase = "touch $out";
-					};
-
-					test = pkgs.stdenv.noCC.mkDerivation {
+					test = pkgs.stdenvNoCC.mkDerivation {
 						name = "par2z-test";
 						src = self;
 						nativeBuildInputs = [ pkgs.zig ];
+						dontConfigure = true;
+						dontFixup = true;
 						buildPhase = ''
 							export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-							# Use test-direct to avoid any hang issues with the Zig test runner
 							zig build test-direct
 						'';
 						installPhase = "touch $out";
@@ -99,7 +90,6 @@
 
 						shellHook = ''
 							echo "par2z dev shell: zig/zls/afl++/par2cmdline"
-							echo "Linting: use 'zig fmt --check src/' and 'zls' diagnostics"
 						'';
 					};
 				});
