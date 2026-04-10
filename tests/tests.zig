@@ -13,7 +13,7 @@ fn cliPath(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 fn prngPath(allocator: std.mem.Allocator) ![]const u8 {
-    const name = if (builtin.os.tag == .windows) "zig-out/bin/prng-gen.exe" else "zig-out/bin/prng-gen";
+    const name = if (builtin.os.tag == .windows) "zig-out/par2z/bin/prng-gen.exe" else "zig-out/par2z/bin/prng-gen";
     return try std.fs.cwd().realpathAlloc(allocator, name);
 }
 

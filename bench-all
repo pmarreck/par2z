@@ -7,7 +7,7 @@ root_dir="$(pwd)"
 par2z_cli="${PAR2Z_CLI:-$root_dir/zig-out/bin/par2z-cli}"
 par2_cli="${PAR2_CLI:-par2}"
 par2_turbo_cli="${PAR2_TURBO_CLI:-par2-turbo}"
-prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
+prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/par2z/bin/prng-gen}"
 
 bench_size="${PAR2_BENCH_SIZE:-67108864}"  # 64 MiB default
 block_size="${PAR2_BENCH_BLOCK_SIZE:-4096}"

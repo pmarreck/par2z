@@ -9,7 +9,7 @@ rc=0
 : "${PRINTABLE_BINARY_MUTE_STATS:=}"
 
 root_dir="$(pwd)"
-prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
+prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/par2z/bin/prng-gen}"
 seed="${PAR2_TEST_SEED:-1}"
 seq=1
 
@@ -257,7 +257,7 @@ fi
 
 # LuaJIT CLI integration (optional)
 if command -v luajit >/dev/null 2>&1; then
-	luajit_cli="$root_dir/zig-out/bin/par2z-cli-luajit"
+	luajit_cli="$root_dir/zig-out/par2z/bin/par2z-cli-luajit"
 	if [ ! -x "$luajit_cli" ]; then
 		echo "par2z-cli-luajit not found at $luajit_cli" >&2
 		exit 1

@@ -143,7 +143,7 @@ lib.par2_create_destroy(handle[0])
 - Recover: `par2z-cli recover [options] <par2 file> [data files...]`
 - Recover to stdout: `par2z-cli recover --stdout [options] <par2 file> [data files...]`
 - Create: `par2z-cli create [options] <par2 file> <data files...>`
-- LuaJIT adapter CLI (FFI): `par2z-cli-luajit` (installed to `zig-out/bin/par2z-cli-luajit` by `zig build`)
+- LuaJIT adapter CLI (FFI): `par2z-cli-luajit` (installed to `zig-out/par2z/bin/par2z-cli-luajit` by `zig build`)
 
 Behavior notes:
 - `verify`/`recover` match inputs by exact path when possible, then by basename. Ambiguous basenames cause an error unless exact paths are used.
@@ -217,7 +217,7 @@ Env vars:
 - `PAR2_BENCH_REDUNDANCY` percent (default 10)
 - `PAR2_BENCH_ITERS` iterations (default 3)
 - `PAR2_BENCH_CORRUPT_BYTES` bytes to corrupt before repair (default 4096)
-- `PAR2_PRNG_GEN` path to deterministic generator (default `zig-out/bin/prng-gen`)
+- `PAR2_PRNG_GEN` path to deterministic generator (default `zig-out/par2z/bin/prng-gen`)
 - `PAR2_BENCH_SEED` seed for deterministic data (default 1)
 - `PAR2_BENCH_SEQ` stream selector for deterministic data (default 1)
 - `PAR2_BENCH_OPTIMIZE` Zig optimize mode (default ReleaseFast)

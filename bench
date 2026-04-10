@@ -9,7 +9,7 @@ par2_cli="${PAR2_CLI_BIN:-$root_dir/zig-out/bin/par2z-cli}"
 other_cli="${PAR2_OTHER_BIN:-par2}"
 other_name="${PAR2_OTHER_NAME:-par2cmdline}"
 bench_log="${PAR2_BENCH_LOG:-bench-results.tsv}"
-prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
+prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/par2z/bin/prng-gen}"
 bench_optimize="${PAR2_BENCH_OPTIMIZE:-ReleaseFast}"
 bench_build="${PAR2_BENCH_BUILD:-1}"
 

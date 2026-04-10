@@ -73,7 +73,7 @@ pub fn build(b: *std.Build) void {
     cli.linkLibrary(lib);
     const install_cli = b.addInstallArtifact(cli, .{});
     b.getInstallStep().dependOn(&install_cli.step);
-    const install_luajit = b.addInstallFile(b.path("tools/par2z-cli-luajit"), "bin/par2z-cli-luajit");
+    const install_luajit = b.addInstallFile(b.path("tools/par2z-cli-luajit"), "par2z/bin/par2z-cli-luajit");
     b.getInstallStep().dependOn(&install_luajit.step);
 
     const prng_mod = b.createModule(.{
@@ -88,7 +88,9 @@ pub fn build(b: *std.Build) void {
         .name = "prng-gen",
         .root_module = prng_mod,
     });
-    const install_prng = b.addInstallArtifact(prng, .{});
+    const install_prng = b.addInstallArtifact(prng, .{
+        .dest_dir = .{ .override = .{ .custom = "par2z/bin" } },
+    });
     b.getInstallStep().dependOn(&install_prng.step);
 
     const tests_mod = b.createModule(.{
@@ -105,7 +107,9 @@ pub fn build(b: *std.Build) void {
         .root_module = tests_mod,
         .filters = test_filters,
     });
-    const install_tests = b.addInstallArtifact(tests, .{});
+    const install_tests = b.addInstallArtifact(tests, .{
+        .dest_dir = .{ .override = .{ .custom = "par2z/bin" } },
+    });
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&install_cli.step);
@@ -116,7 +120,7 @@ pub fn build(b: *std.Build) void {
     const test_compile_step = b.step("test-compile", "Compile unit tests without running");
     test_compile_step.dependOn(&install_tests.step);
 
-    const test_direct_bin = b.pathJoin(&.{ b.install_path, "bin", "test" });
+    const test_direct_bin = b.pathJoin(&.{ b.install_path, "par2z", "bin", "test" });
     const run_tests_direct = b.addSystemCommand(&.{test_direct_bin});
     run_tests_direct.step.dependOn(&install_tests.step);
     run_tests_direct.step.dependOn(&install_cli.step);

@@ -8,7 +8,7 @@ root_dir="$(pwd)"
 par2_cli="${PAR2_CLI_BIN:-$root_dir/zig-out/bin/par2z-cli}"
 other_cli="${PAR2_OTHER_BIN:-par2}"
 mem_log="${PAR2_MEM_LOG:-mem-results.tsv}"
-prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/bin/prng-gen}"
+prng_gen="${PAR2_PRNG_GEN:-$root_dir/zig-out/par2z/bin/prng-gen}"
 
 mem_size="${PAR2_MEM_SIZE:-33554432}"
 block_size="${PAR2_MEM_BLOCK_SIZE:-4096}"

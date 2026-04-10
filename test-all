@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root_dir="$(cd "$(dirname "$0")" && pwd)"
+
+echo "=== Unit tests ==="
+zig build test-direct
+
+if [ "${1:-}" = "--integration" ] || [ "${1:-}" = "-i" ]; then
+	echo "=== Integration tests ==="
+	"$root_dir/test-integration"
+fi
+
+echo "all tests passed"
