@@ -26,7 +26,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: mlugg/setup-zig@v2
         with:
@@ -46,7 +46,7 @@ jobs:
           cp -r zig-out/bin/* artifacts/ || true
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: par2z-cli-${{ matrix.target }}
           path: artifacts/
