@@ -3,21 +3,27 @@
 
 	inputs = {
 		nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+		zig-overlay = {
+			url = "github:mitchellh/zig-overlay";
+			inputs.nixpkgs.follows = "nixpkgs";
+		};
 	};
 
-	outputs = { self, nixpkgs }:
+	outputs = { self, nixpkgs, zig-overlay }:
 		let
 			systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
 			forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
+			zigFor = system: zig-overlay.packages.${system}."0.16.0";
 		in {
 			packages = forAllSystems (system:
 				let
 					pkgs = import nixpkgs { inherit system; };
+					zig = zigFor system;
 				in {
 					default = pkgs.stdenvNoCC.mkDerivation {
 						name = "par2z";
 						src = self;
-						nativeBuildInputs = [ pkgs.zig ];
+						nativeBuildInputs = [ zig ];
 						dontConfigure = true;
 						dontFixup = true;
 						buildPhase = ''
@@ -32,11 +38,12 @@
 			checks = forAllSystems (system:
 				let
 					pkgs = import nixpkgs { inherit system; };
+					zig = zigFor system;
 				in {
 					test = pkgs.stdenvNoCC.mkDerivation {
 						name = "par2z-test";
 						src = self;
-						nativeBuildInputs = [ pkgs.zig ];
+						nativeBuildInputs = [ zig ];
 						dontConfigure = true;
 						dontFixup = true;
 						buildPhase = ''
@@ -50,6 +57,7 @@
 			devShells = forAllSystems (system:
 				let
 					pkgs = import nixpkgs { inherit system; };
+					zig = zigFor system;
 					isDarwin = pkgs.stdenv.isDarwin;
 					valgrindPkg = if isDarwin then null else pkgs.valgrind;
 					linuxOnly = pkgs.lib.optionals (!isDarwin) [
@@ -75,7 +83,7 @@
 				in {
 					default = pkgs.mkShell {
 						packages = [
-							pkgs.zig
+							zig
 							pkgs.zls
 							pkgs.lldb
 							pkgs.cmake
