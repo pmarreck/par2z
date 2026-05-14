@@ -9,7 +9,7 @@ pub fn verify(
     allocator: std.mem.Allocator,
     opts: common.VerifyOptions,
 ) !void {
-    const par2_bytes = try std.fs.cwd().readFileAlloc(allocator, opts.par2_path, 1 << 24);
+    const par2_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), opts.par2_path, allocator, .limited(1 << 24));
     var ctx = core.api.initContext(allocator);
     var offset: usize = 0;
     while (offset + 64 <= par2_bytes.len) : (offset += 1) {
@@ -45,7 +45,7 @@ pub fn verify(
             if (entry.desc == null) continue;
             const name = entry.desc.?.file_name;
             const candidate = try path_util.joinOptional(allocator, opts.basepath, name);
-            const info = std.fs.cwd().statFile(candidate) catch {
+            const info = std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), candidate, .{}) catch {
                 continue;
             };
             file_entries[i] = .{ .path = candidate, .length = info.size, .present = true };
@@ -60,7 +60,7 @@ pub fn verify(
                 else => return e,
             };
             if (present[idx]) return error.InvalidInput;
-            const info = std.fs.cwd().statFile(path) catch return error.NotFound;
+            const info = std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), path, .{}) catch return error.NotFound;
             file_entries[idx] = .{ .path = path, .length = info.size, .present = true };
             present[idx] = true;
         }

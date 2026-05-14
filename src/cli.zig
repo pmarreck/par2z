@@ -1,8 +1,9 @@
 const std = @import("std");
 const ops = @import("ops");
+const core = @import("core");
 
-fn infoFile() std.fs.File {
-    return if (ops.stdoutToStderrEnabled()) std.fs.File.stderr() else std.fs.File.stdout();
+fn infoFile() std.Io.File {
+    return if (ops.stdoutToStderrEnabled()) std.Io.File.stderr() else std.Io.File.stdout();
 }
 
 const TarEntry = struct {
@@ -61,7 +62,7 @@ fn tarOpen(ctx: *anyopaque, path: []const u8) anyerror!ops.OutputTarget {
     return .{ .ctx = buf, .writeFn = tarCaptureWrite, .closeFn = tarCaptureClose };
 }
 
-fn writeTarHeader(writer: std.fs.File, name: []const u8, size: usize) !void {
+fn writeTarHeader(writer: std.Io.File, name: []const u8, size: usize) !void {
     var header: [512]u8 = undefined;
     @memset(&header, 0);
     const name_len = @min(name.len, 100);
@@ -90,22 +91,22 @@ fn writeTarHeader(writer: std.fs.File, name: []const u8, size: usize) !void {
     @memcpy(header[148..154], chk_buf[0..6]);
     header[154] = 0;
     header[155] = ' ';
-    try writer.writeAll(&header);
+    try writer.writeStreamingAll(core.io_singleton.getOrInit(), &header);
 }
 
 fn writeTarEntries(entries: []const TarEntry) !void {
-    const stdout = std.fs.File.stdout();
+    const stdout = std.Io.File.stdout();
     for (entries) |entry| {
         try writeTarHeader(stdout, entry.name, entry.data.len);
-        try stdout.writeAll(entry.data);
+        try stdout.writeStreamingAll(core.io_singleton.getOrInit(), entry.data);
         const pad = (512 - (entry.data.len % 512)) % 512;
         if (pad != 0) {
             var zeros: [512]u8 = .{0} ** 512;
-            try stdout.writeAll(zeros[0..pad]);
+            try stdout.writeStreamingAll(core.io_singleton.getOrInit(), zeros[0..pad]);
         }
     }
     var trailer: [1024]u8 = .{0} ** 1024;
-    try stdout.writeAll(&trailer);
+    try stdout.writeStreamingAll(core.io_singleton.getOrInit(), &trailer);
 }
 
 fn buildTarEntries(allocator: std.mem.Allocator, cap: *TarCapture) ![]TarEntry {
@@ -123,16 +124,22 @@ fn buildTarEntries(allocator: std.mem.Allocator, cap: *TarCapture) ![]TarEntry {
     return list.toOwnedSlice(allocator);
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+pub fn main(init: std.process.Init) !void {
+    // 0.16 Juicy Main: capture io + env into the singleton so the rest of the
+    // library/core code path can reach them without per-function plumbing.
+    core.io_singleton.set(init.io);
+    core.io_singleton.setEnvMap(init.environ_map);
+    var arena = std.heap.ArenaAllocator.init(init.gpa);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const scratch = gpa.allocator();
+    const scratch = init.gpa;
 
-    var args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    // 0.16 Juicy Main: init.minimal.args.toSlice returns `[]const [:0]const u8`
+    // but downstream parsing code expects `[]const []const u8`. Strip the sentinel
+    // (slice header retains length).
+    const sentinel_args = try init.minimal.args.toSlice(init.arena.allocator());
+    const args = try arena.allocator().alloc([]const u8, sentinel_args.len);
+    for (sentinel_args, 0..) |a, i| args[i] = a;
 
     if (args.len < 3) {
         try usage();
@@ -186,7 +193,8 @@ pub fn main() !void {
 }
 
 fn usage() !void {
-    try infoFile().writeAll(
+    try infoFile().writeStreamingAll(
+        core.io_singleton.getOrInit(),
         "Usage:\n  par2z-cli verify [options] <par2 file> [data files...]\n  par2z-cli recover [options] <par2 file> [data files...]\n  par2z-cli repair  [options] <par2 file> [data files...]\n  par2z-cli create [options] <par2 file> <data files...>\n\nVerify/Recover options:\n  -B <path>        Base path used to resolve file names in FileDesc packets\n  -m <MB>          Memory cap (fail if estimated or actual usage exceeds)\n  -v/-q            Increase/decrease verbosity (-q -q is silent)\n  --stdout         Recover to stdout (requires exactly one missing file)\n  --tar            Emit recovered files as a tar stream on stdout\n  -o, --out-dir    Output directory for recovered files\n  --allow-unsafe-paths  Allow absolute/.. paths from FileDesc (unsafe)\n\nCreate options:\n  -a <par2 file>   Output PAR2 file (par2cmdline-compatible)\n  -T <count>       Thread count (par2cmdline-compatible)\n  -s <bytes>       Block size (mutually exclusive with -b)\n  -b <count>       Block count (mutually exclusive with -s)\n  -r <percent>     Redundancy percent (mutually exclusive with -c)\n  -c <count>       Recovery block count (mutually exclusive with -r)\n  -f <index>       First recovery block number (offset volume indices)\n  -u               Uniform recovery file sizes\n  -l               Limit recovery file sizes (based on largest input file)\n  -n <count>       Number of recovery files (max 31; incompatible with -l)\n  -R               Recurse into subdirectories for input paths\n  --tar            Emit main+volumes as a tar stream on stdout\n  --block-size     Long form of -s\n  --block-count    Long form of -b\n  --redundancy-percent  Long form of -r\n  --recovery-blocks     Long form of -c\n  --comment <text> Add comment packet(s) (ASCII + Unicode if transliterable)\n  --mute-defaults  Suppress derived plan output (also PAR2_MUTE_DEFAULTS=1)\n  --include-input-slices  Emit FileSlic packets in main PAR2\n  --emit-packed    Emit PkdMain/PkdRecvS packets\n  --no-rfsc        Skip RFSC packets\n  --no-volume-meta Do not duplicate Main/FileDesc/IFSC/Creator in volumes\n\nNotes:\n  verify/recover match input files by exact path when possible, then by basename.\n  If basenames are ambiguous, verification/recovery fails unless exact paths are used.\n\npar2cmdline-turbo compatible options (subset):\n  -a<path> (par2 file)  -T<n> (threads)  -b<n> (block count)  -s<n> (block size)  -r<n> (redundancy %% )  -c<n> (recovery blocks)\n  -f<n> (first recovery block)  -u (uniform)  -l (limit)  -n<n> (recovery files)\n  -R (recurse)  -B<path> (basepath)  -m<n> (memory MB)  -v/-q (verbosity)\n",
     );
 }

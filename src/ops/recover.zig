@@ -68,7 +68,7 @@ pub fn recover(
         }
         var buf: [128]u8 = undefined;
         const msg = try std.fmt.bufPrint(&buf, "debug: desc={d} ifsc={d} file_slices={d} rec_slices={d}\n", .{ desc_count, ifsc_count, file_slices.items.len, recovery_slices.items.len });
-        try std.fs.File.stderr().writeAll(msg);
+        try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg);
     }
     const rs_set = ctx.recovery_set.?;
     const slice_size = std.math.cast(usize, rs_set.slice_size) orelse return error.ParityCorrupt;
@@ -108,7 +108,7 @@ pub fn recover(
             if (entry.desc == null) continue;
             const name = entry.desc.?.file_name;
             const candidate = try path_util.joinOptional(allocator, opts.basepath, name);
-            const info = std.fs.cwd().statFile(candidate) catch {
+            const info = std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), candidate, .{}) catch {
                 continue;
             };
             file_entries[i] = .{ .path = candidate, .length = info.size, .present = true };
@@ -125,7 +125,7 @@ pub fn recover(
                 else => return e,
             };
             if (present[idx]) return error.InvalidInput;
-            const info = try std.fs.cwd().statFile(path);
+            const info = try std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), path, .{});
             file_entries[idx] = .{ .path = path, .length = info.size, .present = true };
             present[idx] = true;
         }
@@ -213,7 +213,7 @@ pub fn recover(
     }
     if (missing_indices.items.len == 0 and missing_files_count == 0) {
         if (opts.verbosity >= 0) {
-            try common.infoFile().writeAll("Nothing to recover\n");
+            try common.infoFile().writeStreamingAll(core.io_singleton.getOrInit(), "Nothing to recover\n");
         }
         return;
     }
@@ -259,8 +259,9 @@ pub fn recover(
         const desc = rs_set.recovery_files[i].desc.?;
         var computed: [16]u8 = undefined;
         if (opts.stdout_only) {
-            const stdout = std.fs.File.stdout();
-            computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, stdout);
+            const stdout = std.Io.File.stdout();
+            var stdout_wrap = common.wrapFileWriter(stdout);
+            computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, &stdout_wrap);
         } else if (opts.output_open != null) {
             const target_dir = opts.out_dir orelse opts.basepath;
             const out_path = try pickOutputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths, present[i], file_entries[i].path);
@@ -277,12 +278,13 @@ pub fn recover(
                 var tmp = try openTempOutputForPath(allocator, out_path.path);
                 var keep_tmp = false;
                 defer {
-                    tmp.file.close();
-                    if (!keep_tmp) std.fs.cwd().deleteFile(tmp.path) catch {};
+                    tmp.file.close(core.io_singleton.getOrInit());
+                    if (!keep_tmp) std.Io.Dir.cwd().deleteFile(core.io_singleton.getOrInit(), tmp.path) catch {};
                     allocator.free(tmp.path);
                 }
-                computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, tmp.file);
-                try std.fs.cwd().rename(tmp.path, out_path.path);
+                var tmp_fw = common.wrapFileWriter(tmp.file);
+                computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, &tmp_fw);
+                try std.Io.Dir.cwd().rename(tmp.path, std.Io.Dir.cwd(), out_path.path, core.io_singleton.getOrInit());
                 keep_tmp = true;
             } else {
                 computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path.path);
@@ -294,7 +296,7 @@ pub fn recover(
     if (opts.verbosity >= 0) {
         var msg_buf: [64]u8 = undefined;
         const msg = try std.fmt.bufPrint(&msg_buf, "Recovered {d} slices\n", .{missing_indices.items.len});
-        try common.infoFile().writeAll(msg);
+        try common.infoFile().writeStreamingAll(core.io_singleton.getOrInit(), msg);
     }
 }
 
@@ -342,7 +344,7 @@ pub fn recoverStreams(
         }
         var buf: [128]u8 = undefined;
         const msg = try std.fmt.bufPrint(&buf, "debug: desc={d} ifsc={d} file_slices={d} rec_slices={d}\n", .{ desc_count, ifsc_count, file_slices.items.len, recovery_slices.items.len });
-        try std.fs.File.stderr().writeAll(msg);
+        try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg);
     }
     const rs_set = ctx.recovery_set.?;
     const slice_size = std.math.cast(usize, rs_set.slice_size) orelse return error.ParityCorrupt;
@@ -474,7 +476,7 @@ pub fn recoverStreams(
     }
     if (missing_indices.items.len == 0 and missing_files_count == 0) {
         if (opts.verbosity >= 0) {
-            try common.infoFile().writeAll("Nothing to recover\n");
+            try common.infoFile().writeStreamingAll(core.io_singleton.getOrInit(), "Nothing to recover\n");
         }
         return;
     }
@@ -520,8 +522,9 @@ pub fn recoverStreams(
         const desc = rs_set.recovery_files[i].desc.?;
         var computed: [16]u8 = undefined;
         if (opts.stdout_only) {
-            const stdout = std.fs.File.stdout();
-            computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, stdout);
+            const stdout = std.Io.File.stdout();
+            var stdout_wrap = common.wrapFileWriter(stdout);
+            computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, &stdout_wrap);
         } else if (opts.output_open != null) {
             const target_dir = opts.out_dir orelse opts.basepath;
             const out_path = try outputPath(allocator, target_dir, desc.file_name, opts.allow_unsafe_paths);
@@ -538,12 +541,13 @@ pub fn recoverStreams(
                 var tmp = try openTempOutputForPath(allocator, out_path.path);
                 var keep_tmp = false;
                 defer {
-                    tmp.file.close();
-                    if (!keep_tmp) std.fs.cwd().deleteFile(tmp.path) catch {};
+                    tmp.file.close(core.io_singleton.getOrInit());
+                    if (!keep_tmp) std.Io.Dir.cwd().deleteFile(core.io_singleton.getOrInit(), tmp.path) catch {};
                     allocator.free(tmp.path);
                 }
-                computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, tmp.file);
-                try std.fs.cwd().rename(tmp.path, out_path.path);
+                var tmp_fw = common.wrapFileWriter(tmp.file);
+                computed = try writeRecoveredFileSlicesWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, &tmp_fw);
+                try std.Io.Dir.cwd().rename(tmp.path, std.Io.Dir.cwd(), out_path.path, core.io_singleton.getOrInit());
                 keep_tmp = true;
             } else {
                 computed = try writeRecoveredFilePathWithHash(scratch, store2, order, recovered_for, recovered, i, slice_size, out_path.path);
@@ -555,7 +559,7 @@ pub fn recoverStreams(
     if (opts.verbosity >= 0) {
         var msg_buf: [64]u8 = undefined;
         const msg = try std.fmt.bufPrint(&msg_buf, "Recovered {d} slices\n", .{missing_indices.items.len});
-        try common.infoFile().writeAll(msg);
+        try common.infoFile().writeStreamingAll(core.io_singleton.getOrInit(), msg);
     }
 }
 
@@ -635,9 +639,10 @@ fn writeRecoveredFilePath(
     path: []const u8,
 ) !void {
     try common.ensureDirForPath(path);
-    var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
-    defer file.close();
-    try writeRecoveredFileSlices(scratch, store, order, recovered_for, recovered, file_index, slice_size, file);
+    var file = try std.Io.Dir.cwd().createFile(core.io_singleton.getOrInit(), path, .{ .truncate = true });
+    defer file.close(core.io_singleton.getOrInit());
+    var fw = common.wrapFileWriter(file);
+    try writeRecoveredFileSlices(scratch, store, order, recovered_for, recovered, file_index, slice_size, &fw);
 }
 
 fn writeRecoveredFilePathWithHash(
@@ -651,9 +656,10 @@ fn writeRecoveredFilePathWithHash(
     path: []const u8,
 ) ![16]u8 {
     try common.ensureDirForPath(path);
-    var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
-    defer file.close();
-    return writeRecoveredFileSlicesWithHash(scratch, store, order, recovered_for, recovered, file_index, slice_size, file);
+    var file = try std.Io.Dir.cwd().createFile(core.io_singleton.getOrInit(), path, .{ .truncate = true });
+    defer file.close(core.io_singleton.getOrInit());
+    var fw = common.wrapFileWriter(file);
+    return writeRecoveredFileSlicesWithHash(scratch, store, order, recovered_for, recovered, file_index, slice_size, &fw);
 }
 
 fn outputPath(allocator: std.mem.Allocator, out_dir: ?[]const u8, file_name: []const u8, allow_unsafe_paths: bool) !common.NormalizedPath {
@@ -687,7 +693,7 @@ fn pickOutputPath(
 
 const TempOutput = struct {
     path: []const u8,
-    file: std.fs.File,
+    file: std.Io.File,
 };
 
 fn openTempOutputForPath(allocator: std.mem.Allocator, target_path: []const u8) !TempOutput {
@@ -695,12 +701,13 @@ fn openTempOutputForPath(allocator: std.mem.Allocator, target_path: []const u8) 
     const base = path_util.baseName(target_path);
     var attempt: usize = 0;
     while (attempt < 32) : (attempt += 1) {
-        const stamp = std.time.nanoTimestamp();
+        // 0.16: std.time.nanoTimestamp is gone; use Io.Timestamp on the real clock.
+        const stamp = std.Io.Timestamp.now(core.io_singleton.getOrInit(), .real).nanoseconds;
         const name = try std.fmt.allocPrint(allocator, ".{s}.par2z.{d}.{d}.tmp", .{ base, stamp, attempt });
         defer allocator.free(name);
         const full = try path_util.join(allocator, dir, name);
         errdefer allocator.free(full);
-        const file = std.fs.cwd().createFile(full, .{ .exclusive = true }) catch |err| {
+        const file = std.Io.Dir.cwd().createFile(core.io_singleton.getOrInit(), full, .{ .exclusive = true }) catch |err| {
             if (err == error.PathAlreadyExists) {
                 allocator.free(full);
                 continue;

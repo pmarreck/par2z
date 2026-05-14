@@ -112,7 +112,7 @@ fn encodeRecoverySliceParallel(allocator: std.mem.Allocator, out: []u8, data_sli
             .end_word = end,
         };
     }
-    var wg: std.Thread.WaitGroup = .{};
+    var wg: thread_pool.WaitGroup = .{};
     t = 0;
     while (t + 1 < thread_count) : (t += 1) {
         pool.spawnWg(&wg, encodeRangeThread, .{&ctxs[t]});
@@ -234,7 +234,7 @@ pub fn decodeMissingSlices(
             .err = null,
         };
     }
-    var wg: std.Thread.WaitGroup = .{};
+    var wg: thread_pool.WaitGroup = .{};
     t = 0;
     while (t + 1 < thread_count) : (t += 1) {
         pool.spawnWg(&wg, decodeRangeThread, .{&ctxs[t]});

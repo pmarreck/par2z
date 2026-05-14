@@ -107,7 +107,7 @@ pub const Par2Xattr = extern struct {
 };
 
 const ThreadPoolHandle = struct {
-    pool: std.Thread.Pool,
+    pool: core.thread_pool.Pool,
     max_jobs: ?usize,
 };
 
@@ -305,23 +305,16 @@ fn cStreamReadAt(ctx: *anyopaque, offset: u64, out: []u8) usize {
 fn fileReadAt(ctx: *anyopaque, offset: u64, out: []u8) usize {
     const fs_ctx: *FileStreamCtx = @ptrCast(@alignCast(ctx));
     if (offset >= fs_ctx.length) return 0;
-    var file = std.fs.cwd().openFile(fs_ctx.path, .{}) catch return 0;
-    defer file.close();
-    file.seekTo(offset) catch return 0;
-    const n = file.readAll(out) catch return 0;
-    return n;
+    const io = core.io_singleton.getOrInit();
+    var file = std.Io.Dir.cwd().openFile(io, fs_ctx.path, .{}) catch return 0;
+    defer file.close(io);
+    // 0.16 positional read: readPositionalAll(io, buf, offset) -> bytes read
+    return file.readPositionalAll(io, out, offset) catch 0;
 }
 
 fn readFileAllocExact(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
-    var file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-    const info = try file.stat();
-    const size = std.math.cast(usize, info.size) orelse return error.InvalidInput;
-    const buf = try allocator.alloc(u8, size);
-    errdefer allocator.free(buf);
-    const n = try file.readAll(buf);
-    if (n != size) return error.IoError;
-    return buf;
+    // 0.16: use Dir.readFileAlloc with an explicit Limit. Returns whole file in one slice.
+    return std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), path, allocator, .unlimited);
 }
 
 fn findSourceMetadata(bytes: []const u8) !?core.packet_types.SourceMetadataPacket {
@@ -536,13 +529,13 @@ fn errorCodeFrom(err: anyerror) Par2Error {
 
 fn ensureTempDir(allocator: std.mem.Allocator, temp_dir: *?[]const u8) ![]const u8 {
     if (temp_dir.*) |path| return path;
-    const base = std.process.getEnvVarOwned(allocator, "TMPDIR") catch "/tmp";
+    const base = core.io_singleton.getEnvVarOwned(allocator, "TMPDIR") catch "/tmp";
     defer if (!std.mem.eql(u8, base, "/tmp")) allocator.free(base);
     var attempt: usize = 0;
     while (attempt < 10) : (attempt += 1) {
         const suffix = std.crypto.random.int(u64);
         const path = try std.fmt.allocPrint(allocator, "{s}/par2capi-{x}", .{ base, suffix });
-        std.fs.cwd().makeDir(path) catch |e| {
+        std.Io.Dir.cwd().createDir(core.io_singleton.getOrInit(), path) catch |e| {
             if (e == error.PathAlreadyExists) {
                 allocator.free(path);
                 continue;
@@ -575,11 +568,11 @@ fn writeTempFile(allocator: std.mem.Allocator, temp_dir: []const u8, name: []con
     if (hasTraversalSegment(name)) return error.InvalidInput;
     const out_path = try std.fs.path.join(allocator, &.{ temp_dir, name });
     if (std.fs.path.dirname(out_path)) |dir| {
-        if (dir.len > 0) try std.fs.cwd().makePath(dir);
+        if (dir.len > 0) try std.Io.Dir.cwd().createDirPath(core.io_singleton.getOrInit(), core.io_singleton.getOrInit(), dir);
     }
-    var file = try std.fs.cwd().createFile(out_path, .{ .truncate = true });
-    defer file.close();
-    try file.writeAll(data);
+    var file = try std.Io.Dir.cwd().createFile(core.io_singleton.getOrInit(), out_path, .{ .truncate = true });
+    defer file.close(core.io_singleton.getOrInit());
+    try file.writeStreamingAll(core.io_singleton.getOrInit(), data);
     return out_path;
 }
 
@@ -588,10 +581,10 @@ fn writeTempFileFromStream(allocator: std.mem.Allocator, temp_dir: []const u8, n
     if (hasTraversalSegment(name)) return error.InvalidInput;
     const out_path = try std.fs.path.join(allocator, &.{ temp_dir, name });
     if (std.fs.path.dirname(out_path)) |dir| {
-        if (dir.len > 0) try std.fs.cwd().makePath(dir);
+        if (dir.len > 0) try std.Io.Dir.cwd().createDirPath(core.io_singleton.getOrInit(), core.io_singleton.getOrInit(), dir);
     }
-    var file = try std.fs.cwd().createFile(out_path, .{ .truncate = true });
-    defer file.close();
+    var file = try std.Io.Dir.cwd().createFile(core.io_singleton.getOrInit(), out_path, .{ .truncate = true });
+    defer file.close(core.io_singleton.getOrInit());
     var offset: u64 = 0;
     var buf: [32768]u8 = undefined;
     while (offset < len) {
@@ -599,7 +592,7 @@ fn writeTempFileFromStream(allocator: std.mem.Allocator, temp_dir: []const u8, n
         const chunk = @min(remain, buf.len);
         const read_len = read_at(ctx, offset, &buf, @as(usize, @intCast(chunk)));
         if (read_len == 0) return error.IoError;
-        try file.writeAll(buf[0..read_len]);
+        try file.writeStreamingAll(core.io_singleton.getOrInit(), buf[0..read_len]);
         offset += read_len;
     }
     return out_path;
@@ -619,10 +612,10 @@ fn loadVolumeBytes(allocator: std.mem.Allocator, par2_path: []const u8) ![][]u8 
         base = base[0..idx];
     }
     const base_name = std.fs.path.basename(base);
-    var dir = try std.fs.cwd().openDir(std.fs.path.dirname(par2_path) orelse ".", .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.cwd().openDir(core.io_singleton.getOrInit(), std.fs.path.dirname(par2_path) orelse ".", .{ .iterate = true });
+    defer dir.close(core.io_singleton.getOrInit());
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(core.io_singleton.getOrInit())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ext)) continue;
         if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
@@ -630,9 +623,7 @@ fn loadVolumeBytes(allocator: std.mem.Allocator, par2_path: []const u8) ![][]u8 
         const full = try std.fs.path.join(allocator, &.{ std.fs.path.dirname(par2_path) orelse ".", entry.name });
         defer allocator.free(full);
         if (std.mem.eql(u8, full, par2_path)) continue;
-        const info = try std.fs.cwd().statFile(full);
-        const max_len = std.math.cast(usize, info.size) orelse return error.InvalidInput;
-        const data = try std.fs.cwd().readFileAlloc(allocator, full, max_len);
+        const data = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), full, allocator, .unlimited);
         try list.append(allocator, data);
     }
     return try list.toOwnedSlice(allocator);
@@ -740,7 +731,7 @@ pub export fn par2_create_destroy(handle: ?*Par2CreateHandle) void {
     for (h.owned_stream_names.items) |name| allocator.free(name);
     for (h.owned_stream_ctxs.items) |owned| owned.freeFn(allocator, owned.ptr);
     if (h.temp_dir) |d| {
-        _ = std.fs.cwd().deleteTree(d) catch {};
+        _ = std.Io.Dir.cwd().deleteTree(core.io_singleton.getOrInit(), d) catch {};
         allocator.free(d);
     }
     if (h.par2_path) |p| allocator.free(p);
@@ -970,7 +961,7 @@ pub export fn par2_verify_destroy(handle: ?*Par2VerifyHandle) void {
     clearPar2Blobs(allocator, &h.par2_blobs);
     h.par2_blobs.deinit(allocator);
     if (h.temp_dir) |d| {
-        _ = std.fs.cwd().deleteTree(d) catch {};
+        _ = std.Io.Dir.cwd().deleteTree(core.io_singleton.getOrInit(), d) catch {};
         allocator.free(d);
     }
     if (h.par2_path) |p| allocator.free(p);
@@ -1087,12 +1078,7 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
                 };
             }
         } else if (h.par2_path) |path| {
-            const info = std.fs.cwd().statFile(path) catch |e| {
-                setLastError(h.allocator, &h.last_error, "par2 stat failed");
-                return errorCodeFrom(e);
-            };
-            const max_len = std.math.cast(usize, info.size) orelse return .invalid_argument;
-            const buf = std.fs.cwd().readFileAlloc(h.allocator, path, max_len) catch |e| {
+            const buf = std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), path, h.allocator, .unlimited) catch |e| {
                 setLastError(h.allocator, &h.last_error, "par2 read failed");
                 return errorCodeFrom(e);
             };
@@ -1114,7 +1100,7 @@ pub export fn par2_verify_run(handle: ?*Par2VerifyHandle) Par2Error {
             inputs_items = h.stream_inputs.items;
         } else {
             for (h.data_paths.items) |path| {
-                const info = std.fs.cwd().statFile(path) catch |e| {
+                const info = std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), path, .{}) catch |e| {
                     setLastError(h.allocator, &h.last_error, "input stat failed");
                     return errorCodeFrom(e);
                 };
@@ -1299,7 +1285,7 @@ pub export fn par2_recover_destroy(handle: ?*Par2RecoverHandle) void {
     clearPar2Blobs(allocator, &h.par2_blobs);
     h.par2_blobs.deinit(allocator);
     if (h.temp_dir) |d| {
-        _ = std.fs.cwd().deleteTree(d) catch {};
+        _ = std.Io.Dir.cwd().deleteTree(core.io_singleton.getOrInit(), d) catch {};
         allocator.free(d);
     }
     if (h.par2_path) |p| allocator.free(p);
@@ -1442,12 +1428,7 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
                 par2_files.append(arena.allocator(), blob.bytes) catch return .out_of_memory;
             }
         } else if (h.par2_path) |path| {
-            const info = std.fs.cwd().statFile(path) catch |e| {
-                setLastError(h.allocator, &h.last_error, "par2 stat failed");
-                return errorCodeFrom(e);
-            };
-            const max_len = std.math.cast(usize, info.size) orelse return .invalid_argument;
-            const buf = std.fs.cwd().readFileAlloc(h.allocator, path, max_len) catch |e| {
+            const buf = std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), path, h.allocator, .unlimited) catch |e| {
                 setLastError(h.allocator, &h.last_error, "par2 read failed");
                 return errorCodeFrom(e);
             };
@@ -1477,7 +1458,7 @@ pub export fn par2_recover_run(handle: ?*Par2RecoverHandle) Par2Error {
             inputs_items = h.stream_inputs.items;
         } else {
             for (h.data_paths.items) |path| {
-                const info = std.fs.cwd().statFile(path) catch |e| {
+                const info = std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), path, .{}) catch |e| {
                     setLastError(h.allocator, &h.last_error, "input stat failed");
                     return errorCodeFrom(e);
                 };

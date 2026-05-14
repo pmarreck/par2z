@@ -70,7 +70,7 @@ pub fn build(b: *std.Build) void {
         .name = "par2z-cli",
         .root_module = cli_mod,
     });
-    cli.linkLibrary(lib);
+    cli.root_module.linkLibrary(lib);
     const install_cli = b.addInstallArtifact(cli, .{});
     b.getInstallStep().dependOn(&install_cli.step);
     const install_luajit = b.addInstallFile(b.path("tools/par2z-cli-luajit"), "par2z/bin/par2z-cli-luajit");
@@ -172,7 +172,7 @@ pub fn build(b: *std.Build) void {
         .name = "par2z-cli",
         .root_module = release_cli_mod,
     });
-    release_cli.linkLibrary(release_lib);
+    release_cli.root_module.linkLibrary(release_lib);
     const install_release_cli = b.addInstallArtifact(release_cli, .{
         .dest_dir = .{ .override = .{ .custom = "release" } },
     });

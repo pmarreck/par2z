@@ -60,12 +60,12 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
         if (opts.block_size == null and opts.block_count == null) {
             var buf: [128]u8 = undefined;
             const msg = try std.fmt.bufPrint(&buf, "default block size: {d}\n", .{block_size});
-            try std.fs.File.stderr().writeAll(msg);
+            try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg);
         }
         if (opts.recovery_blocks == null and opts.redundancy_percent != null) {
             var buf2: [128]u8 = undefined;
             const msg2 = try std.fmt.bufPrint(&buf2, "default redundancy percent: {d}\n", .{opts.redundancy_percent.?});
-            try std.fs.File.stderr().writeAll(msg2);
+            try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg2);
         }
         var plan_buf: [256]u8 = undefined;
         const plan = try std.fmt.bufPrint(
@@ -73,7 +73,7 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
             "derived plan: total_size={d} block_size={d} data_blocks={d} recovery_blocks={d}\n",
             .{ total_size, block_size, data_blocks, recovery_blocks },
         );
-        try std.fs.File.stderr().writeAll(plan);
+        try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), plan);
     }
 
     var files = try arena_alloc.alloc(FileMeta, inputs.len);
@@ -341,12 +341,12 @@ pub fn createStreams(
         if (opts.block_size == null and opts.block_count == null) {
             var buf: [128]u8 = undefined;
             const msg = try std.fmt.bufPrint(&buf, "default block size: {d}\n", .{block_size});
-            try std.fs.File.stderr().writeAll(msg);
+            try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg);
         }
         if (opts.recovery_blocks == null and opts.redundancy_percent != null) {
             var buf2: [128]u8 = undefined;
             const msg2 = try std.fmt.bufPrint(&buf2, "default redundancy percent: {d}\n", .{opts.redundancy_percent.?});
-            try std.fs.File.stderr().writeAll(msg2);
+            try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg2);
         }
         var plan_buf: [256]u8 = undefined;
         const plan = try std.fmt.bufPrint(
@@ -354,7 +354,7 @@ pub fn createStreams(
             "derived plan: total_size={d} block_size={d} data_blocks={d} recovery_blocks={d}\n",
             .{ total_size, block_size, data_blocks, recovery_blocks },
         );
-        try std.fs.File.stderr().writeAll(plan);
+        try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), plan);
     }
 
     const StreamFileMeta = struct {
@@ -614,7 +614,7 @@ fn collectCreateInputs(
 
     var base_abs: ?[]u8 = null;
     if (basepath) |bp| {
-        const abs = try std.fs.cwd().realpathAlloc(allocator, bp);
+        const abs = try std.Io.Dir.cwd().realPathFileAlloc(core.io_singleton.getOrInit(), bp, allocator);
         base_abs = abs;
     }
     if (base_abs) |abs| {
@@ -622,21 +622,21 @@ fn collectCreateInputs(
     }
 
     for (inputs) |path| {
-        const info = std.fs.cwd().statFile(path) catch continue;
+        const info = std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), path, .{}) catch continue;
         if (info.kind == .file) {
             const entry = try buildCreateInput(allocator, path, info.size, base_abs);
             if (entry) |value| try list.append(allocator, value);
             continue;
         }
         if (info.kind != .directory or !recurse) continue;
-        var dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
-        defer dir.close();
+        var dir = try std.Io.Dir.cwd().openDir(core.io_singleton.getOrInit(), path, .{ .iterate = true });
+        defer dir.close(core.io_singleton.getOrInit());
         var walker = try dir.walk(allocator);
         defer walker.deinit();
-        while (try walker.next()) |item| {
+        while (try walker.next(core.io_singleton.getOrInit())) |item| {
             if (item.kind != .file) continue;
             const full_path = try path_util.join(allocator, path, item.path);
-            const file_info = std.fs.cwd().statFile(full_path) catch {
+            const file_info = std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), full_path, .{}) catch {
                 allocator.free(full_path);
                 continue;
             };
@@ -660,12 +660,12 @@ fn buildCreateInput(
     base_abs: ?[]const u8,
 ) !?CreateInput {
     if (base_abs) |base| {
-        const abs = try std.fs.cwd().realpathAlloc(allocator, path);
+        const abs = try std.Io.Dir.cwd().realPathFileAlloc(core.io_singleton.getOrInit(), path, allocator);
         const rel = try common.relativePathUnderBase(allocator, base, abs);
         if (rel == null) {
             var buf: [256]u8 = undefined;
             const msg = try std.fmt.bufPrint(&buf, "Ignoring out of basepath source file: {s}\n", .{abs});
-            try common.infoFile().writeAll(msg);
+            try common.infoFile().writeStreamingAll(core.io_singleton.getOrInit(), msg);
             allocator.free(abs);
             return null;
         }
@@ -693,9 +693,10 @@ fn computeFileInfoAndMaybeWriteSlices(
     include_input_slices: bool,
     writer: *OutputTarget,
 ) !FileInfoResult {
-    var file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-    const info = try file.stat();
+    const io = core.io_singleton.getOrInit();
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
+    const info = try file.stat(io);
     const file_len = info.size;
     const slice_count = try core.slices.sliceCount(file_len, slice_size);
     var entries = try allocator.alloc(core.packet_types.IfscEntry, slice_count);
@@ -708,13 +709,16 @@ fn computeFileInfoAndMaybeWriteSlices(
 
     var remaining = file_len;
     var slice_index: usize = 0;
+    var read_offset: u64 = 0;
     while (slice_index < slice_count) : (slice_index += 1) {
         const chunk_len = @min(remaining, slice_size);
         if (chunk_len > 0) {
-            const n = try file.readAll(slice_buf[0..@as(usize, @intCast(chunk_len))]);
+            // 0.16: positional read replaces sequential readAll.
+            const n = try file.readPositionalAll(io, slice_buf[0..@as(usize, @intCast(chunk_len))], read_offset);
             if (n != chunk_len) return error.InvalidInput;
             md5_ctx.update(slice_buf[0..@as(usize, @intCast(chunk_len))]);
             remaining -= chunk_len;
+            read_offset += chunk_len;
         }
         if (chunk_len < slice_size) {
             @memset(slice_buf[@as(usize, @intCast(chunk_len))..], 0);
@@ -878,7 +882,7 @@ const VolumeShared = struct {
     next_index: std.atomic.Value(usize),
     stop: std.atomic.Value(u8),
     err: ?anyerror,
-    err_mutex: std.Thread.Mutex,
+    err_mutex: core.thread_pool.SpinMutex,
 };
 
 fn volumeWorker(shared: *VolumeShared) void {
@@ -930,7 +934,7 @@ const StreamVolumeShared = struct {
     next_index: std.atomic.Value(usize),
     stop: std.atomic.Value(u8),
     err: ?anyerror,
-    err_mutex: std.Thread.Mutex,
+    err_mutex: core.thread_pool.SpinMutex,
 };
 
 fn streamVolumeWorker(shared: *StreamVolumeShared) void {
@@ -992,7 +996,7 @@ fn buildVolume(
     cap_bytes: ?u64,
     parallel_slices: bool,
 ) !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
     var limited: common.LimitedAllocator = undefined;
     var tmp_alloc = gpa.allocator();
@@ -1120,7 +1124,7 @@ fn buildVolumeStream(
     cap_bytes: ?u64,
     parallel_slices: bool,
 ) !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
     var limited: common.LimitedAllocator = undefined;
     var tmp_alloc = gpa.allocator();
@@ -1232,35 +1236,35 @@ fn buildVolumeStream(
 
 fn patchRfscFileId(path: []const u8, rfsc_offset: usize) !void {
     if (rfsc_offset < 16384) return;
-    var file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-    defer file.close();
-    const info = try file.stat();
+    const io = core.io_singleton.getOrInit();
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{ .mode = .read_write });
+    defer file.close(io);
+    const info = try file.stat(io);
     const length = info.size;
     var buf: [16384]u8 = undefined;
     const read_len = @min(@as(u64, buf.len), length);
-    _ = try file.readAll(buf[0..@as(usize, @intCast(read_len))]);
+    // 0.16: positional reads/writes; the seekTo+readAll combo from 0.15 maps to readPositionalAll(io, buf, offset).
+    _ = try file.readPositionalAll(io, buf[0..@as(usize, @intCast(read_len))], 0);
     var md5_16k: [16]u8 = undefined;
     try core.md5.md5Digest(buf[0..@as(usize, @intCast(read_len))], &md5_16k);
     const name = path_util.baseName(path);
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const file_id = try core.file_id.fileIdFromHash16k(arena.allocator(), md5_16k, length, name);
-    try file.seekTo(@as(u64, @intCast(rfsc_offset)));
     var header: [64]u8 = undefined;
-    _ = try file.readAll(&header);
+    _ = try file.readPositionalAll(io, &header, @as(u64, @intCast(rfsc_offset)));
     const pkt_len = core.bytes.readU64Le(&header, 8) catch return error.InvalidInput;
     if (pkt_len < 64) return error.InvalidInput;
     var packet = try arena.allocator().alloc(u8, @as(usize, @intCast(pkt_len)));
     @memcpy(packet[0..64], &header);
     if (pkt_len > 64) {
-        _ = try file.readAll(packet[64..]);
+        _ = try file.readPositionalAll(io, packet[64..], @as(u64, @intCast(rfsc_offset + 64)));
     }
     @memcpy(packet[64..80], &file_id);
     var digest: [16]u8 = undefined;
     try core.md5.md5Digest(packet[32..], &digest);
     @memcpy(packet[16..32], &digest);
-    try file.seekTo(@as(u64, @intCast(rfsc_offset)));
-    try file.writeAll(packet);
+    try file.writePositionalAll(io, packet, @as(u64, @intCast(rfsc_offset)));
 }
 
 fn patchRfscFileIdBytes(allocator: std.mem.Allocator, data: []u8, rfsc_offset: usize, name: []const u8) !void {

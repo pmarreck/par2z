@@ -9,12 +9,12 @@ const ops = @import("ops");
 
 fn cliPath(allocator: std.mem.Allocator) ![]const u8 {
     const name = if (builtin.os.tag == .windows) "zig-out/bin/par2z-cli.exe" else "zig-out/bin/par2z-cli";
-    return try std.fs.cwd().realpathAlloc(allocator, name);
+    return try std.Io.Dir.cwd().realPathFileAlloc(core.io_singleton.getOrInit(), name, allocator);
 }
 
 fn prngPath(allocator: std.mem.Allocator) ![]const u8 {
     const name = if (builtin.os.tag == .windows) "zig-out/par2z/bin/prng-gen.exe" else "zig-out/par2z/bin/prng-gen";
-    return try std.fs.cwd().realpathAlloc(allocator, name);
+    return try std.Io.Dir.cwd().realPathFileAlloc(core.io_singleton.getOrInit(), name, allocator);
 }
 
 test "version string" {
@@ -240,7 +240,7 @@ test "ops verifyStreams rejects missing inputs" {
 }
 
 test "ops createStreams is deterministic across thread counts" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    var gpa: std.heap.DebugAllocator(.{ .thread_safe = true }) = .init;
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     const data = "abcdefghijklmnopqrstuvwxyz";
@@ -344,7 +344,7 @@ const OutBuffer = struct {
 const OutCapture = struct {
     allocator: std.mem.Allocator,
     map: std.StringHashMap(OutBuffer),
-    mutex: std.Thread.Mutex = .{},
+    mutex: core.thread_pool.SpinMutex = .{},
 };
 
 fn outCaptureInit(allocator: std.mem.Allocator) OutCapture {
@@ -385,14 +385,14 @@ fn outOpen(ctx: *anyopaque, path: []const u8) anyerror!ops.OutputTarget {
 }
 
 fn commandAvailable(allocator: std.mem.Allocator, name: []const u8) bool {
-    const res = std.process.Child.run(.{
+    const res = core.io_singleton.runChild(.{
         .allocator = allocator,
         .argv = &.{ "which", name },
     }) catch return false;
     defer allocator.free(res.stdout);
     defer allocator.free(res.stderr);
     return switch (res.term) {
-        .Exited => |code| code == 0,
+        .exited => |code| code == 0,
         else => false,
     };
 }
@@ -406,20 +406,20 @@ fn sharedLibPath(allocator: std.mem.Allocator) ![]const u8 {
     const prefix = if (builtin.os.tag == .windows) "" else "lib";
     const rel = try std.fmt.allocPrint(allocator, "zig-out/lib/{s}par2.{s}", .{ prefix, ext });
     defer allocator.free(rel);
-    return try std.fs.cwd().realpathAlloc(allocator, rel);
+    return try std.Io.Dir.cwd().realPathFileAlloc(core.io_singleton.getOrInit(), rel, allocator);
 }
 
-fn runCommandExpectOk(allocator: std.mem.Allocator, argv: []const []const u8, env: ?*std.process.EnvMap, cwd: ?[]const u8) !void {
-    const res = try std.process.Child.run(.{
+fn runCommandExpectOk(allocator: std.mem.Allocator, argv: []const []const u8, env: ?*std.process.Environ.Map, cwd: ?[]const u8) !void {
+    const res = try core.io_singleton.runChild(.{
         .allocator = allocator,
         .argv = argv,
-        .env_map = env,
+        .environ_map = env,
         .cwd = cwd,
     });
     defer allocator.free(res.stdout);
     defer allocator.free(res.stderr);
     switch (res.term) {
-        .Exited => |code| {
+        .exited => |code| {
             if (code != 0) {
                 if (res.stdout.len > 0) std.debug.print("stdout:\n{s}\n", .{res.stdout});
                 if (res.stderr.len > 0) std.debug.print("stderr:\n{s}\n", .{res.stderr});
@@ -435,23 +435,25 @@ fn libPathEnvName() []const u8 {
 }
 
 fn swiftSdkRootFromXcrun(allocator: std.mem.Allocator) !?[]const u8 {
-    var env = try std.process.getEnvMap(allocator);
+    // 0.16: in 0.15 we used `std.process.getEnvMap` to snapshot the current env then
+    // strip overriding keys. There's no public single-call way to snapshot env in
+    // 0.16 from outside Juicy Main — but for this test (xcrun under macOS), an empty
+    // env means xcrun resolves the SDK on its own; if PATH is needed we'd need to
+    // wire Juicy Main's env through. For now: empty env, rely on inherit-by-default.
+    var env = std.process.Environ.Map.init(allocator);
     defer env.deinit();
-    _ = env.remove("SDKROOT");
-    _ = env.remove("DEVELOPER_DIR");
-    _ = env.remove("TOOLCHAINS");
-    const xcrun_path = if (std.fs.accessAbsolute("/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
-    const res = try std.process.Child.run(.{
+    const xcrun_path = if (std.Io.Dir.accessAbsolute(core.io_singleton.getOrInit(), "/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
+    const res = try core.io_singleton.runChild(.{
         .allocator = allocator,
         .argv = &.{ xcrun_path, "--sdk", "macosx", "--show-sdk-path" },
-        .env_map = &env,
+        .environ_map = &env,
     });
     defer allocator.free(res.stdout);
     defer allocator.free(res.stderr);
     switch (res.term) {
-        .Exited => |code| {
+        .exited => |code| {
             if (code != 0 or res.stdout.len == 0) return null;
-            const trimmed = std.mem.trimRight(u8, res.stdout, "\r\n");
+            const trimmed = std.mem.trimEnd(u8, res.stdout, "\r\n");
             return try allocator.dupe(u8, trimmed);
         },
         else => return null,
@@ -460,16 +462,16 @@ fn swiftSdkRootFromXcrun(allocator: std.mem.Allocator) !?[]const u8 {
 
 fn xcodeSelectPath(allocator: std.mem.Allocator) ?[]const u8 {
     if (!commandAvailable(allocator, "xcode-select")) return null;
-    const res = std.process.Child.run(.{
+    const res = core.io_singleton.runChild(.{
         .allocator = allocator,
         .argv = &.{ "xcode-select", "-p" },
     }) catch return null;
     defer allocator.free(res.stdout);
     defer allocator.free(res.stderr);
     switch (res.term) {
-        .Exited => |code| {
+        .exited => |code| {
             if (code != 0 or res.stdout.len == 0) return null;
-            const trimmed = std.mem.trimRight(u8, res.stdout, "\r\n");
+            const trimmed = std.mem.trimEnd(u8, res.stdout, "\r\n");
             return allocator.dupe(u8, trimmed) catch null;
         },
         else => return null,
@@ -480,7 +482,7 @@ fn swiftCompileArgv(allocator: std.mem.Allocator, swift_path: []const u8, lib_di
     if (xcodeSelectPath(allocator)) |dev| {
         defer allocator.free(dev);
         const swiftc_path = try std.fmt.allocPrint(allocator, "{s}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc", .{dev});
-        if (std.fs.accessAbsolute(swiftc_path, .{})) |_| {
+        if (std.Io.Dir.accessAbsolute(core.io_singleton.getOrInit(), swiftc_path, .{})) |_| {
             const use_sdk = sdk_path != null;
             const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
             argv[0] = swiftc_path;
@@ -497,7 +499,7 @@ fn swiftCompileArgv(allocator: std.mem.Allocator, swift_path: []const u8, lib_di
             return argv;
         } else |_| {}
     }
-    if (std.fs.accessAbsolute("/usr/bin/swiftc", .{})) |_| {
+    if (std.Io.Dir.accessAbsolute(core.io_singleton.getOrInit(), "/usr/bin/swiftc", .{})) |_| {
         const use_sdk = sdk_path != null;
         const argv = try allocator.alloc([]const u8, if (use_sdk) 9 else 7);
         argv[0] = "/usr/bin/swiftc";
@@ -514,7 +516,7 @@ fn swiftCompileArgv(allocator: std.mem.Allocator, swift_path: []const u8, lib_di
         return argv;
     } else |_| {}
     if (commandAvailable(allocator, "xcrun")) {
-        const xcrun_path = if (std.fs.accessAbsolute("/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
+        const xcrun_path = if (std.Io.Dir.accessAbsolute(core.io_singleton.getOrInit(), "/usr/bin/xcrun", .{})) |_| "/usr/bin/xcrun" else |_| "xcrun";
         const use_sdk = sdk_path != null;
         const argv = try allocator.alloc([]const u8, if (use_sdk) 12 else 10);
         argv[0] = xcrun_path;
@@ -1013,7 +1015,7 @@ test "stress overflow guards (optional)" {
 }
 
 fn shouldRunStress() bool {
-    const val = std.process.getEnvVarOwned(std.testing.allocator, "PAR2_STRESS") catch return false;
+    const val = core.io_singleton.getEnvVarOwned(std.testing.allocator, "PAR2_STRESS") catch return false;
     defer std.testing.allocator.free(val);
     if (val.len == 0) return false;
     if (std.mem.eql(u8, val, "0")) return false;
@@ -1022,7 +1024,7 @@ fn shouldRunStress() bool {
 }
 
 fn shouldRunTurboCompat() bool {
-    const val = std.process.getEnvVarOwned(std.testing.allocator, "PAR2_TURBO") catch return false;
+    const val = core.io_singleton.getEnvVarOwned(std.testing.allocator, "PAR2_TURBO") catch return false;
     defer std.testing.allocator.free(val);
     if (val.len == 0) return false;
     if (std.mem.eql(u8, val, "0")) return false;
@@ -1031,7 +1033,7 @@ fn shouldRunTurboCompat() bool {
 }
 
 fn stressSizeBytes() u64 {
-    const val = std.process.getEnvVarOwned(std.testing.allocator, "PAR2_STRESS_SIZE") catch return 128 * 1024 * 1024;
+    const val = core.io_singleton.getEnvVarOwned(std.testing.allocator, "PAR2_STRESS_SIZE") catch return 128 * 1024 * 1024;
     defer std.testing.allocator.free(val);
     if (val.len == 0) return 128 * 1024 * 1024;
     return std.fmt.parseInt(u64, val, 10) catch 128 * 1024 * 1024;
@@ -1044,7 +1046,7 @@ test "stress large file io (optional)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const dir_path = try mktmpDir(arena.allocator());
-    defer std.fs.cwd().deleteTree(dir_path) catch {};
+    defer std.Io.Dir.cwd().deleteTree(core.io_singleton.getOrInit(), dir_path) catch {};
     const file_path = try std.fs.path.join(arena.allocator(), &.{ dir_path, "stress.bin" });
     try writeRandomFile(file_path, size);
     const slice_size: usize = 1 << 20;
@@ -1062,37 +1064,37 @@ test "par2cmdline-turbo rfsc file id behavior (optional)" {
     if (!shouldRunTurboCompat()) return;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const check = try std.process.Child.run(.{
+    const check = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ "par2", "-V" },
     });
     switch (check.term) {
-        .Exited => |code| if (code != 0) return,
+        .exited => |code| if (code != 0) return,
         else => return,
     }
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmp.dir.writeFile(.{ .sub_path = "tiny.bin", .data = "hello world" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    const create = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "tiny.bin", .data = "hello world" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ "par2", "create", "-s512", "-c1", "tiny", "tiny.bin" },
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| if (code != 0) return,
+        .exited => |code| if (code != 0) return,
         else => return,
     }
 
-    var dir = try std.fs.openDirAbsolute(tmp_path, .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.openDirAbsolute(core.io_singleton.getOrInit(), tmp_path, .{ .iterate = true });
+    defer dir.close(core.io_singleton.getOrInit());
     var it = dir.iterate();
     var saw_rfsc = false;
-    while (try it.next()) |entry| {
+    while (try it.next(core.io_singleton.getOrInit())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
         const full = try std.fs.path.join(arena.allocator(), &.{ tmp_path, entry.name });
-        const bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), full, 1 << 20);
+        const bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), full, arena.allocator(), .limited(1 << 20));
         var offset: usize = 0;
         while (offset + 64 <= bytes.len) : (offset += 1) {
             const remaining = bytes[offset..];
@@ -1113,9 +1115,9 @@ test "par2cmdline-turbo rfsc file id behavior (optional)" {
             }
             const parsed = try core.packet_types.parseRfsc(pkt, arena.allocator());
             saw_rfsc = true;
-            const file = try std.fs.cwd().openFile(full, .{});
-            defer file.close();
-            const info = try file.stat();
+            const file = try std.Io.Dir.cwd().openFile(core.io_singleton.getOrInit(), full, .{});
+            defer file.close(core.io_singleton.getOrInit());
+            const info = try file.stat(core.io_singleton.getOrInit());
             const file_len = info.size;
             if (file_len < 16384 and offset < 16384) {
                 try std.testing.expect(std.mem.eql(u8, &parsed.file_id, &([_]u8{0} ** 16)));
@@ -1124,23 +1126,23 @@ test "par2cmdline-turbo rfsc file id behavior (optional)" {
         }
     }
     if (!saw_rfsc) {
-        const create2 = try std.process.Child.run(.{
+        const create2 = try core.io_singleton.runChild(.{
             .allocator = arena.allocator(),
             .argv = &.{ "par2", "create", "-s4096", "-r200", "big", "tiny.bin" },
             .cwd = tmp_path,
         });
         switch (create2.term) {
-            .Exited => |code| if (code != 0) return,
+            .exited => |code| if (code != 0) return,
             else => return,
         }
-        var dir2 = try std.fs.openDirAbsolute(tmp_path, .{ .iterate = true });
-        defer dir2.close();
+        var dir2 = try std.Io.Dir.openDirAbsolute(core.io_singleton.getOrInit(), tmp_path, .{ .iterate = true });
+        defer dir2.close(core.io_singleton.getOrInit());
         var it2 = dir2.iterate();
-        while (try it2.next()) |entry| {
+        while (try it2.next(core.io_singleton.getOrInit())) |entry| {
             if (entry.kind != .file) continue;
             if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
             const full = try std.fs.path.join(arena.allocator(), &.{ tmp_path, entry.name });
-            const bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), full, 1 << 20);
+            const bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), full, arena.allocator(), .limited(1 << 20));
             var offset: usize = 0;
             while (offset + 64 <= bytes.len) : (offset += 1) {
                 const remaining = bytes[offset..];
@@ -1167,26 +1169,32 @@ test "par2cmdline-turbo rfsc file id behavior (optional)" {
 }
 
 fn mktmpDir(allocator: std.mem.Allocator) ![]const u8 {
-    var child = std.process.Child.init(&.{ "mktmp", "--tmpdir" }, allocator);
-    child.stdout_behavior = .Pipe;
-    child.stderr_behavior = .Ignore;
-    try child.spawn();
-    var stdout = child.stdout.?;
-    const raw = try stdout.readToEndAlloc(allocator, 4096);
-    _ = try child.wait();
-    const trimmed = std.mem.trimRight(u8, raw, "\r\n");
-    return try allocator.dupe(u8, trimmed);
+    const res = try core.io_singleton.runChild(.{
+        .allocator = allocator,
+        .argv = &.{ "mktmp", "--tmpdir" },
+    });
+    defer allocator.free(res.stderr);
+    errdefer allocator.free(res.stdout);
+    const trimmed = std.mem.trimEnd(u8, res.stdout, "\r\n");
+    const out = try allocator.dupe(u8, trimmed);
+    allocator.free(res.stdout);
+    return out;
 }
 
 fn writeRandomFile(path: []const u8, size: u64) !void {
-    var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
-    defer file.close();
+    const io = core.io_singleton.getOrInit();
+    var file = try std.Io.Dir.cwd().createFile(io, path, .{ .truncate = true });
+    defer file.close(io);
+    // 0.16: nanoTimestamp is gone; use Io.Timestamp's `real` clock instead.
+    const seed_ts: i96 = std.Io.Timestamp.now(core.io_singleton.getOrInit(), .real).nanoseconds;
+    var prng = std.Random.DefaultPrng.init(@as(u64, @intCast(seed_ts & 0x7fffffffffffffff)));
+    const rand = prng.random();
     var remaining = size;
     var buf: [1024 * 1024]u8 = undefined;
     while (remaining > 0) {
         const chunk = @min(remaining, buf.len);
-        std.crypto.random.bytes(buf[0..chunk]);
-        try file.writeAll(buf[0..chunk]);
+        rand.bytes(buf[0..chunk]);
+        try file.writeStreamingAll(io, buf[0..chunk]);
         remaining -= chunk;
     }
 }
@@ -1949,10 +1957,10 @@ test "FileStore readSlice reads and pads" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    try tmp.dir.writeFile(.{ .sub_path = "f1.bin", .data = "ABCDWXYZ" });
-    try tmp.dir.writeFile(.{ .sub_path = "f2.bin", .data = "EF" });
-    const path1 = try tmp.dir.realpathAlloc(arena.allocator(), "f1.bin");
-    const path2 = try tmp.dir.realpathAlloc(arena.allocator(), "f2.bin");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "f1.bin", .data = "ABCDWXYZ" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "f2.bin", .data = "EF" });
+    const path1 = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "f1.bin", arena.allocator());
+    const path2 = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "f2.bin", arena.allocator());
     const entries = [_]core.storage.FileEntry{
         .{ .path = path1, .length = 8, .present = true },
         .{ .path = path2, .length = 2, .present = true },
@@ -1970,8 +1978,8 @@ test "api verifyStore passes for fixture" {
     const data_path = "fixtures/sample.bin";
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const par2_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), par2_path, 1 << 20);
-    const data_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), data_path, 1 << 20);
+    const par2_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_path, arena.allocator(), .limited(1 << 20));
+    const data_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, arena.allocator(), .limited(1 << 20));
     var ctx = core.api.initContext(arena.allocator());
 
     // Walk packets in the main .par2 and feed context.
@@ -1997,8 +2005,8 @@ test "api recoverMissingSlicesMemory recovers fixture slice" {
     const data_path = "fixtures/sample.bin";
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const par2_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), par2_path, 1 << 20);
-    const data_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), data_path, 1 << 20);
+    const par2_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_path, arena.allocator(), .limited(1 << 20));
+    const data_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, arena.allocator(), .limited(1 << 20));
     const slice_size: usize = 4;
 
     // Find first RecvSlic packet.
@@ -2062,8 +2070,8 @@ test "rs matches par2cmdline fixture" {
     const data_path = "fixtures/sample.bin";
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const par2_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), par2_path, 1 << 20);
-    const data_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), data_path, 1 << 20);
+    const par2_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_path, arena.allocator(), .limited(1 << 20));
+    const data_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, arena.allocator(), .limited(1 << 20));
     const slice_size: usize = 4;
 
     // Locate first RecvSlic packet in the recovery volume.
@@ -2162,8 +2170,8 @@ test "block_api computeRecoverySliceMemory matches fixture" {
     const data_path = "fixtures/sample.bin";
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const par2_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), par2_path, 1 << 20);
-    const data_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), data_path, 1 << 20);
+    const par2_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_path, arena.allocator(), .limited(1 << 20));
+    const data_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, arena.allocator(), .limited(1 << 20));
     const slice_size: usize = 4;
 
     // Find first RecvSlic packet.
@@ -2200,8 +2208,8 @@ test "rs decodeMissingSlices recovers missing slice (fixture)" {
     const data_path = "fixtures/sample.bin";
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const par2_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), par2_path, 1 << 20);
-    const data_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), data_path, 1 << 20);
+    const par2_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_path, arena.allocator(), .limited(1 << 20));
+    const data_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, arena.allocator(), .limited(1 << 20));
     const slice_size: usize = 4;
 
     // Find first RecvSlic packet.
@@ -2258,12 +2266,12 @@ test "cli verify fixture" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const cli_path = try cliPath(arena.allocator());
-    const run = try std.process.Child.run(.{
+    const run = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "verify", "fixtures/sample.par2", "fixtures/sample.bin" },
     });
     switch (run.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 }
@@ -2273,12 +2281,12 @@ test "cli verify accepts input files in any order" {
     defer arena.deinit();
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmp.dir.writeFile(.{ .sub_path = "a.bin", .data = "aaaa" });
-    try tmp.dir.writeFile(.{ .sub_path = "b.bin", .data = "bbbb" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "a.bin", .data = "aaaa" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "b.bin", .data = "bbbb" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const cli_path = try cliPath(arena.allocator());
 
-    const create = try std.process.Child.run(.{
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2294,17 +2302,17 @@ test "cli verify accepts input files in any order" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    const verify = try std.process.Child.run(.{
+    const verify = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "verify", "set.par2", "b.bin", "a.bin" },
         .cwd = tmp_path,
     });
     switch (verify.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 }
@@ -2314,17 +2322,17 @@ test "cli create accepts space separated short flags" {
     defer arena.deinit();
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmp.dir.writeFile(.{ .sub_path = "data.bin", .data = "abcdef" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "data.bin", .data = "abcdef" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const cli_path = try cliPath(arena.allocator());
 
-    const create = try std.process.Child.run(.{
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "create", "-s", "4", "-r", "10", "out.par2", "data.bin" },
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 }
@@ -2334,23 +2342,23 @@ test "cli create strips absolute paths in file names" {
     defer arena.deinit();
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmp.dir.writeFile(.{ .sub_path = "data.bin", .data = "abcdef" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    const abs_path = try tmp.dir.realpathAlloc(arena.allocator(), "data.bin");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "data.bin", .data = "abcdef" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    const abs_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "data.bin", arena.allocator());
     const cli_path = try cliPath(arena.allocator());
 
-    const create = try std.process.Child.run(.{
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "create", "out.par2", abs_path },
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    const par2_path = try tmp.dir.realpathAlloc(arena.allocator(), "out.par2");
-    const par2_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), par2_path, 1 << 20);
+    const par2_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "out.par2", arena.allocator());
+    const par2_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_path, arena.allocator(), .limited(1 << 20));
     var offset: usize = 0;
     var seen = false;
     while (offset + 64 <= par2_bytes.len) : (offset += 1) {
@@ -2379,30 +2387,30 @@ test "cli verify resolves duplicate basenames by exact path" {
     defer arena.deinit();
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmp.dir.makePath("dir1");
-    try tmp.dir.makePath("dir2");
-    try tmp.dir.writeFile(.{ .sub_path = "dir1/file.bin", .data = "aaaa" });
-    try tmp.dir.writeFile(.{ .sub_path = "dir2/file.bin", .data = "bbbb" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    try tmp.dir.createDirPath(core.io_singleton.getOrInit(), "dir1");
+    try tmp.dir.createDirPath(core.io_singleton.getOrInit(), "dir2");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "dir1/file.bin", .data = "aaaa" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "dir2/file.bin", .data = "bbbb" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const cli_path = try cliPath(arena.allocator());
 
-    const create = try std.process.Child.run(.{
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "create", "dup.par2", "dir1/file.bin", "dir2/file.bin" },
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    const verify = try std.process.Child.run(.{
+    const verify = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "verify", "dup.par2", "dir1/file.bin", "dir2/file.bin" },
         .cwd = tmp_path,
     });
     switch (verify.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 }
@@ -2412,32 +2420,32 @@ test "cli verify rejects ambiguous basenames when paths are not exact" {
     defer arena.deinit();
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmp.dir.makePath("dir1");
-    try tmp.dir.makePath("dir2");
-    try tmp.dir.writeFile(.{ .sub_path = "dir1/file.bin", .data = "aaaa" });
-    try tmp.dir.writeFile(.{ .sub_path = "dir2/file.bin", .data = "bbbb" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    const abs1 = try tmp.dir.realpathAlloc(arena.allocator(), "dir1/file.bin");
-    const abs2 = try tmp.dir.realpathAlloc(arena.allocator(), "dir2/file.bin");
+    try tmp.dir.createDirPath(core.io_singleton.getOrInit(), "dir1");
+    try tmp.dir.createDirPath(core.io_singleton.getOrInit(), "dir2");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "dir1/file.bin", .data = "aaaa" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "dir2/file.bin", .data = "bbbb" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    const abs1 = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "dir1/file.bin", arena.allocator());
+    const abs2 = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "dir2/file.bin", arena.allocator());
     const cli_path = try cliPath(arena.allocator());
 
-    const create = try std.process.Child.run(.{
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "create", "dup.par2", "dir1/file.bin", "dir2/file.bin" },
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    const verify = try std.process.Child.run(.{
+    const verify = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "verify", "dup.par2", abs1, abs2 },
         .cwd = tmp_path,
     });
     switch (verify.term) {
-        .Exited => |code| try std.testing.expect(code != 0),
+        .exited => |code| try std.testing.expect(code != 0),
         else => return error.UnexpectedTerm,
     }
 }
@@ -2447,30 +2455,30 @@ test "prng-gen produces deterministic output" {
     defer arena.deinit();
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const tool_path = try prngPath(arena.allocator());
 
-    const run_a = try std.process.Child.run(.{
+    const run_a = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ tool_path, "a.bin", "1024", "123", "456" },
         .cwd = tmp_path,
     });
     switch (run_a.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    const run_b = try std.process.Child.run(.{
+    const run_b = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ tool_path, "b.bin", "1024", "123", "456" },
         .cwd = tmp_path,
     });
     switch (run_b.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    const a_bytes = try tmp.dir.readFileAlloc(arena.allocator(), "a.bin", 1 << 20);
-    const b_bytes = try tmp.dir.readFileAlloc(arena.allocator(), "b.bin", 1 << 20);
+    const a_bytes = try tmp.dir.readFileAlloc(core.io_singleton.getOrInit(), "a.bin", arena.allocator(), .limited(1 << 20));
+    const b_bytes = try tmp.dir.readFileAlloc(core.io_singleton.getOrInit(), "b.bin", arena.allocator(), .limited(1 << 20));
     try std.testing.expectEqualSlices(u8, a_bytes, b_bytes);
 }
 
@@ -2480,19 +2488,19 @@ test "cli recover writes to out-dir" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const data_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), "fixtures/sample.bin", 1 << 20);
+    const data_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), "fixtures/sample.bin", arena.allocator(), .limited(1 << 20));
     const corrupted = try arena.allocator().alloc(u8, data_bytes.len);
     @memcpy(corrupted, data_bytes);
     if (corrupted.len >= 5) {
         corrupted[4] ^= 0xFF;
     }
-    try tmp.dir.writeFile(.{ .sub_path = "sample.bin", .data = corrupted });
-    try tmp.dir.makePath("out");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "sample.bin", .data = corrupted });
+    try tmp.dir.createDirPath(core.io_singleton.getOrInit(), "out");
 
-    const data_path = try tmp.dir.realpathAlloc(arena.allocator(), "sample.bin");
-    const out_dir = try tmp.dir.realpathAlloc(arena.allocator(), "out");
+    const data_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "sample.bin", arena.allocator());
+    const out_dir = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "out", arena.allocator());
 
-    const run = try std.process.Child.run(.{
+    const run = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2504,12 +2512,12 @@ test "cli recover writes to out-dir" {
         },
     });
     switch (run.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
     const recovered_path = try std.fs.path.join(arena.allocator(), &.{ out_dir, "sample.bin" });
-    const recovered_bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), recovered_path, 1 << 20);
+    const recovered_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), recovered_path, arena.allocator(), .limited(1 << 20));
     try std.testing.expectEqualSlices(u8, data_bytes, recovered_bytes);
 }
 
@@ -2520,36 +2528,37 @@ test "cli recover repairs in place when data path provided" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     const payload = "The quick brown fox jumps over the lazy dog.";
-    try tmp.dir.writeFile(.{ .sub_path = "in.bin", .data = payload });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "in.bin", .data = payload });
 
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    const data_path = try tmp.dir.realpathAlloc(arena.allocator(), "in.bin");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    const data_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "in.bin", arena.allocator());
     const par2_path = try std.fs.path.join(arena.allocator(), &.{ tmp_path, "in.par2" });
 
-    const create = try std.process.Child.run(.{
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "create", "--block-size", "4", "--recovery-blocks", "2", par2_path, data_path },
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    var file = try std.fs.cwd().openFile(data_path, .{ .mode = .read_write });
-    defer file.close();
-    try file.seekTo(5);
-    _ = try file.writeAll("X");
+    const io_2540 = core.io_singleton.getOrInit();
+    var file = try std.Io.Dir.cwd().openFile(io_2540, data_path, .{ .mode = .read_write });
+    defer file.close(io_2540);
+    // 0.16: positional write — seekTo+writeAll collapses to writePositionalAll(io, data, offset).
+    try file.writePositionalAll(io_2540, "X", 5);
 
-    const recover = try std.process.Child.run(.{
+    const recover = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "recover", par2_path, data_path },
     });
     switch (recover.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    const repaired = try std.fs.cwd().readFileAlloc(arena.allocator(), data_path, 1 << 20);
+    const repaired = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, arena.allocator(), .limited(1 << 20));
     try std.testing.expectEqualStrings(payload, repaired);
 }
 
@@ -2559,13 +2568,13 @@ test "cli create tar stream" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     const cli_path = try cliPath(arena.allocator());
-    try tmp.dir.writeFile(.{ .sub_path = "a.bin", .data = "abcd" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "a.bin", .data = "abcd" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const tar_path = try std.fs.path.join(arena.allocator(), &.{ tmp_path, "out.tar" });
     const out_dir = try std.fs.path.join(arena.allocator(), &.{ tmp_path, "out" });
-    try std.fs.cwd().makePath(out_dir);
+    try std.Io.Dir.cwd().createDirPath(core.io_singleton.getOrInit(), out_dir);
 
-    const run = try std.process.Child.run(.{
+    const run = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2581,23 +2590,23 @@ test "cli create tar stream" {
         .cwd = tmp_path,
     });
     switch (run.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    try tmp.dir.writeFile(.{ .sub_path = "out.tar", .data = run.stdout });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "out.tar", .data = run.stdout });
 
-    const untar = try std.process.Child.run(.{
+    const untar = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ "tar", "-xf", tar_path, "-C", out_dir },
     });
     switch (untar.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     const main_path = try std.fs.path.join(arena.allocator(), &.{ out_dir, "set.par2" });
     const vol_path = try std.fs.path.join(arena.allocator(), &.{ out_dir, "set.vol0+1.par2" });
-    _ = try std.fs.cwd().statFile(main_path);
-    _ = try std.fs.cwd().statFile(vol_path);
+    _ = try std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), main_path, .{});
+    _ = try std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), vol_path, .{});
 }
 
 test "cli recover tar stream" {
@@ -2606,13 +2615,13 @@ test "cli recover tar stream" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     const cli_path = try cliPath(arena.allocator());
-    try tmp.dir.writeFile(.{ .sub_path = "r.bin", .data = "ABCDEFGHABCDEFGH" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "r.bin", .data = "ABCDEFGHABCDEFGH" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const tar_path = try std.fs.path.join(arena.allocator(), &.{ tmp_path, "out.tar" });
     const out_dir = try std.fs.path.join(arena.allocator(), &.{ tmp_path, "out" });
-    try std.fs.cwd().makePath(out_dir);
+    try std.Io.Dir.cwd().createDirPath(core.io_singleton.getOrInit(), out_dir);
 
-    const create = try std.process.Child.run(.{
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2627,32 +2636,33 @@ test "cli recover tar stream" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    try tmp.dir.writeFile(.{ .sub_path = "r.bin", .data = "XBCDEFGHABCDEFGH" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "r.bin", .data = "XBCDEFGHABCDEFGH" });
 
-    const recover = try std.process.Child.run(.{
+    const recover = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "recover", "--tar", "r.par2", "r.bin" },
         .cwd = tmp_path,
     });
     switch (recover.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    try tmp.dir.writeFile(.{ .sub_path = "out.tar", .data = recover.stdout });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "out.tar", .data = recover.stdout });
 
-    const untar = try std.process.Child.run(.{
+    const untar = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ "tar", "-xf", tar_path, "-C", out_dir },
     });
     switch (untar.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    const recovered = try std.fs.cwd().readFileAlloc(arena.allocator(), try std.fs.path.join(arena.allocator(), &.{ out_dir, "r.bin" }), 1 << 20);
+    const recovered_path = try std.fs.path.join(arena.allocator(), &.{ out_dir, "r.bin" });
+    const recovered = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), recovered_path, arena.allocator(), .limited(1 << 20));
     try std.testing.expectEqualStrings("ABCDEFGHABCDEFGH", recovered);
 }
 
@@ -2662,11 +2672,11 @@ test "cli create rfsc gated by volume size" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     const cli_path = try cliPath(arena.allocator());
-    try tmp.dir.writeFile(.{ .sub_path = "small.bin", .data = "0123456789abcdef" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    const small_path = try tmp.dir.realpathAlloc(arena.allocator(), "small.bin");
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "small.bin", .data = "0123456789abcdef" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    const small_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "small.bin", arena.allocator());
 
-    const create_small = try std.process.Child.run(.{
+    const create_small = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2681,14 +2691,14 @@ test "cli create rfsc gated by volume size" {
         .cwd = tmp_path,
     });
     switch (create_small.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     try std.testing.expect(!dirHasRfsc(arena.allocator(), tmp_path));
 
-    try tmp.dir.writeFile(.{ .sub_path = "large.bin", .data = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" });
-    const large_path = try tmp.dir.realpathAlloc(arena.allocator(), "large.bin");
-    const create_large = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "large.bin", .data = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" });
+    const large_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "large.bin", arena.allocator());
+    const create_large = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2703,7 +2713,7 @@ test "cli create rfsc gated by volume size" {
         .cwd = tmp_path,
     });
     switch (create_large.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     try std.testing.expect(dirHasRfsc(arena.allocator(), tmp_path));
@@ -2715,9 +2725,9 @@ test "cli recover from fileslic only" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmp.dir.writeFile(.{ .sub_path = "a.bin", .data = "abcdefghijklmnopqrstuvwxyz" });
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    const create = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "a.bin", .data = "abcdefghijklmnopqrstuvwxyz" });
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2733,23 +2743,23 @@ test "cli recover from fileslic only" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    try tmp.dir.deleteFile("a.bin");
-    try tmp.dir.makePath("out");
-    const out_dir = try tmp.dir.realpathAlloc(arena.allocator(), "out");
-    const recover = try std.process.Child.run(.{
+    try tmp.dir.deleteFile(core.io_singleton.getOrInit(), "a.bin");
+    try tmp.dir.createDirPath(core.io_singleton.getOrInit(), "out");
+    const out_dir = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "out", arena.allocator());
+    const recover = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "recover", "-o", out_dir, "a.par2" },
         .cwd = tmp_path,
     });
     switch (recover.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     const recovered_path = try std.fs.path.join(arena.allocator(), &.{ out_dir, "a.bin" });
-    const recovered = try std.fs.cwd().readFileAlloc(arena.allocator(), recovered_path, 1 << 20);
+    const recovered = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), recovered_path, arena.allocator(), .limited(1 << 20));
     try std.testing.expectEqualStrings("abcdefghijklmnopqrstuvwxyz", recovered);
 }
 
@@ -2759,9 +2769,9 @@ test "cli recover uses packed recvslic when recvslic missing" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    try tmp.dir.writeFile(.{ .sub_path = "p.bin", .data = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" });
-    const create = try std.process.Child.run(.{
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "p.bin", .data = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2777,22 +2787,22 @@ test "cli recover uses packed recvslic when recvslic missing" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     try stripPacketTypeInDir(arena.allocator(), tmp_path, recvslicType());
-    try tmp.dir.writeFile(.{ .sub_path = "p.bin", .data = "X23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" });
-    const recover = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "p.bin", .data = "X23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" });
+    const recover = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "recover", "-o", "out", "p.par2", "p.bin" },
         .cwd = tmp_path,
     });
     switch (recover.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     const out_path = try std.fs.path.join(arena.allocator(), &.{ tmp_path, "out", "p.bin" });
-    const recovered = try std.fs.cwd().readFileAlloc(arena.allocator(), out_path, 1 << 20);
+    const recovered = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), out_path, arena.allocator(), .limited(1 << 20));
     try std.testing.expectEqualStrings("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", recovered);
 }
 
@@ -2802,9 +2812,9 @@ test "cli recover verifies full file hash after recovery" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    try tmp.dir.writeFile(.{ .sub_path = "h.bin", .data = "0123456789abcdef0123456789abcdef" });
-    const create = try std.process.Child.run(.{
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "h.bin", .data = "0123456789abcdef0123456789abcdef" });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2819,21 +2829,21 @@ test "cli recover verifies full file hash after recovery" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    try tmp.dir.writeFile(.{ .sub_path = "h.bin", .data = "X123456789abcdef0123456789abcdef" });
-    const recover = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "h.bin", .data = "X123456789abcdef0123456789abcdef" });
+    const recover = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "recover", "-o", "out", "h.par2", "h.bin" },
         .cwd = tmp_path,
     });
     switch (recover.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     const out_path = try std.fs.path.join(arena.allocator(), &.{ tmp_path, "out", "h.bin" });
-    const recovered = try std.fs.cwd().readFileAlloc(arena.allocator(), out_path, 1 << 20);
+    const recovered = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), out_path, arena.allocator(), .limited(1 << 20));
     try std.testing.expectEqualStrings("0123456789abcdef0123456789abcdef", recovered);
 }
 
@@ -2843,9 +2853,9 @@ test "cli verify falls back to full-file hash when IFSC missing" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    try tmp.dir.writeFile(.{ .sub_path = "v.bin", .data = "verify-hash-data-12345" });
-    const create = try std.process.Child.run(.{
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "v.bin", .data = "verify-hash-data-12345" });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2860,17 +2870,17 @@ test "cli verify falls back to full-file hash when IFSC missing" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     try stripPacketTypeInDir(arena.allocator(), tmp_path, ifscType());
-    const verify = try std.process.Child.run(.{
+    const verify = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "verify", "v.par2", "v.bin" },
         .cwd = tmp_path,
     });
     switch (verify.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 }
@@ -2881,9 +2891,9 @@ test "cli verify detects corruption when IFSC missing" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    try tmp.dir.writeFile(.{ .sub_path = "c.bin", .data = "verify-hash-data-ABCDE" });
-    const create = try std.process.Child.run(.{
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "c.bin", .data = "verify-hash-data-ABCDE" });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2898,18 +2908,18 @@ test "cli verify detects corruption when IFSC missing" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     try stripPacketTypeInDir(arena.allocator(), tmp_path, ifscType());
-    try tmp.dir.writeFile(.{ .sub_path = "c.bin", .data = "Xerify-hash-data-ABCDE" });
-    const verify = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "c.bin", .data = "Xerify-hash-data-ABCDE" });
+    const verify = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "verify", "c.par2", "c.bin" },
         .cwd = tmp_path,
     });
     switch (verify.term) {
-        .Exited => |code| try std.testing.expect(code != 0),
+        .exited => |code| try std.testing.expect(code != 0),
         else => return error.UnexpectedTerm,
     }
 }
@@ -2920,12 +2930,12 @@ test "cli verify succeeds under low memory cap" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const size: usize = 2 * 1024 * 1024;
     const buf = try arena.allocator().alloc(u8, size);
     @memset(buf, 'A');
-    try tmp.dir.writeFile(.{ .sub_path = "cap.bin", .data = buf });
-    const create = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "cap.bin", .data = buf });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2940,16 +2950,16 @@ test "cli verify succeeds under low memory cap" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    const verify = try std.process.Child.run(.{
+    const verify = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "verify", "-m", "1", "cap.par2", "cap.bin" },
         .cwd = tmp_path,
     });
     switch (verify.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 }
@@ -2960,11 +2970,11 @@ test "cli create enforces memory cap" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const big = try arena.allocator().alloc(u8, 1024 * 1024);
     @memset(big, 'A');
-    try tmp.dir.writeFile(.{ .sub_path = "big.bin", .data = big });
-    const run = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "big.bin", .data = big });
+    const run = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -2981,7 +2991,7 @@ test "cli create enforces memory cap" {
         .cwd = tmp_path,
     });
     switch (run.term) {
-        .Exited => |code| try std.testing.expect(code != 0),
+        .exited => |code| try std.testing.expect(code != 0),
         else => return error.UnexpectedTerm,
     }
 }
@@ -2992,11 +3002,11 @@ test "cli recover enforces memory cap" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const big = try arena.allocator().alloc(u8, 2 * 1024 * 1024);
     @memset(big, 'B');
-    try tmp.dir.writeFile(.{ .sub_path = "big.bin", .data = big });
-    const create = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "big.bin", .data = big });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -3011,17 +3021,17 @@ test "cli recover enforces memory cap" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    try tmp.dir.deleteFile("big.bin");
-    const recover = try std.process.Child.run(.{
+    try tmp.dir.deleteFile(core.io_singleton.getOrInit(), "big.bin");
+    const recover = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "recover", "-m", "1", "-o", "out", "big.par2" },
         .cwd = tmp_path,
     });
     switch (recover.term) {
-        .Exited => |code| try std.testing.expect(code != 0),
+        .exited => |code| try std.testing.expect(code != 0),
         else => return error.UnexpectedTerm,
     }
 }
@@ -3034,7 +3044,7 @@ test "c api create/verify with memory input" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "mem.par2" });
 
     var create_handle: ?*par2.Par2CreateHandle = null;
@@ -3062,7 +3072,7 @@ test "c api create writes SFMD after Main and only in main file" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "meta.par2" });
 
     var opts: par2.Par2CreateOptions = .{};
@@ -3085,7 +3095,7 @@ test "c api create writes SFMD after Main and only in main file" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
 
-    const main_bytes = try std.fs.cwd().readFileAlloc(allocator, par2_path, 1 << 20);
+    const main_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_path, allocator, .limited(1 << 20));
     const main_hdr = try core.packet.parseHeader(main_bytes);
     const main_end: usize = @intCast(main_hdr.length);
     try std.testing.expect(main_end <= main_bytes.len);
@@ -3099,7 +3109,7 @@ test "c api create writes SFMD after Main and only in main file" {
     try std.testing.expect(std.mem.eql(u8, &next_hdr.packet_type, &sfmdType()));
 
     const vol_path = try findFirstVolume(allocator, tmp_path);
-    const vol_bytes = try std.fs.cwd().readFileAlloc(allocator, vol_path, 1 << 20);
+    const vol_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), vol_path, allocator, .limited(1 << 20));
     try std.testing.expect(!fileHasPacketType(vol_bytes, sfmdType()));
 }
 
@@ -3111,7 +3121,7 @@ test "c api get metadata round trip" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "meta-rt.par2" });
 
     var opts: par2.Par2CreateOptions = .{};
@@ -3154,7 +3164,7 @@ test "c api get metadata missing returns zero" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "meta-none.par2" });
 
     var opts: par2.Par2CreateOptions = .{};
@@ -3191,7 +3201,7 @@ test "c api create rejects metadata with multiple inputs" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "meta-multi.par2" });
 
     var opts: par2.Par2CreateOptions = .{};
@@ -3217,9 +3227,9 @@ test "c api verify/recover with in-memory par2 blobs" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const main_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.par2", 1 << 20);
-    const vol_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.vol0+1.par2", 1 << 20);
-    const sample_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.bin", 1 << 20);
+    const main_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), "fixtures/sample.par2", allocator, .limited(1 << 20));
+    const vol_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), "fixtures/sample.vol0+1.par2", allocator, .limited(1 << 20));
+    const sample_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), "fixtures/sample.bin", allocator, .limited(1 << 20));
 
     var verify_handle: ?*par2.Par2VerifyHandle = null;
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &verify_handle));
@@ -3231,9 +3241,9 @@ test "c api verify/recover with in-memory par2 blobs" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const sample_path = try std.fs.path.join(allocator, &.{ tmp_path, "sample.bin" });
-    try std.fs.cwd().writeFile(.{ .sub_path = sample_path, .data = sample_bytes });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = sample_path, .data = sample_bytes });
     try flipByteInFile(sample_path, 0);
 
     var recover_handle: ?*par2.Par2RecoverHandle = null;
@@ -3246,7 +3256,7 @@ test "c api verify/recover with in-memory par2 blobs" {
     const tmp_path_z = try allocator.dupeZ(u8, tmp_path);
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_set_output_dir(recover_handle, tmp_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_run(recover_handle));
-    const recovered = try std.fs.cwd().readFileAlloc(allocator, sample_path, sample_bytes.len);
+    const recovered = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), sample_path, allocator, .unlimited);
     try std.testing.expectEqualSlices(u8, sample_bytes, recovered);
 }
 
@@ -3256,8 +3266,8 @@ test "c api error codes for parity data issues" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const main_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.par2", 1 << 20);
-    const sample_bytes = try std.fs.cwd().readFileAlloc(allocator, "fixtures/sample.bin", 1 << 20);
+    const main_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), "fixtures/sample.par2", allocator, .limited(1 << 20));
+    const sample_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), "fixtures/sample.bin", allocator, .limited(1 << 20));
 
     var missing_handle: ?*par2.Par2VerifyHandle = null;
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_verify_new(null, &missing_handle));
@@ -3320,7 +3330,7 @@ test "c api create/verify with stream input" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "stream.par2" });
 
     var create_handle: ?*par2.Par2CreateHandle = null;
@@ -3359,12 +3369,12 @@ test "ffi swift example (optional)" {
     const allocator = arena.allocator();
 
     const lib_path = try sharedLibPath(allocator);
-    std.fs.cwd().access(lib_path, .{}) catch return error.FileNotFound;
+    std.Io.Dir.cwd().access(core.io_singleton.getOrInit(), lib_path, .{}) catch return error.FileNotFound;
     const lib_dir = std.fs.path.dirname(lib_path) orelse ".";
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const out_path = try std.fs.path.join(allocator, &.{ tmp_path, "swift.par2" });
     const swift_path = try std.fs.path.join(allocator, &.{ tmp_path, "main.swift" });
     const bin_path = try std.fs.path.join(allocator, &.{ tmp_path, "swift-ffi-test" });
@@ -3396,16 +3406,16 @@ test "ffi swift example (optional)" {
     try src.appendSlice(allocator, "check(par2_create_run(handle))\n");
     try src.appendSlice(allocator, "par2_create_destroy(handle)\n");
     try src.appendSlice(allocator, "exit(0)\n");
-    try tmp.dir.writeFile(.{ .sub_path = "main.swift", .data = src.items });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "main.swift", .data = src.items });
 
-    var compile_env = std.process.EnvMap.init(allocator);
+    var compile_env = std.process.Environ.Map.init(allocator);
     defer compile_env.deinit();
     try compile_env.put("PATH", "/usr/bin:/bin");
-    if (std.process.getEnvVarOwned(allocator, "HOME")) |home| {
+    if (core.io_singleton.getEnvVarOwned(allocator, "HOME")) |home| {
         defer allocator.free(home);
         try compile_env.put("HOME", home);
     } else |_| {}
-    if (std.process.getEnvVarOwned(allocator, "TMPDIR")) |tmpdir| {
+    if (core.io_singleton.getEnvVarOwned(allocator, "TMPDIR")) |tmpdir| {
         defer allocator.free(tmpdir);
         try compile_env.put("TMPDIR", tmpdir);
     } else |_| {}
@@ -3425,16 +3435,16 @@ test "ffi swift example (optional)" {
     defer if (sdk_path) |path| allocator.free(path);
     const compile_argv = try swiftCompileArgv(allocator, swift_path, lib_dir, bin_path, sdk_path);
     defer allocator.free(compile_argv);
-    const compile = try std.process.Child.run(.{
+    const compile = try core.io_singleton.runChild(.{
         .allocator = allocator,
         .argv = compile_argv,
-        .env_map = &compile_env,
+        .environ_map = &compile_env,
         .cwd = tmp_path,
     });
     defer allocator.free(compile.stdout);
     defer allocator.free(compile.stderr);
     switch (compile.term) {
-        .Exited => |code| {
+        .exited => |code| {
             if (code != 0) {
                 if (compile.stdout.len > 0) std.debug.print("swiftc stdout:\n{s}\n", .{compile.stdout});
                 if (compile.stderr.len > 0) std.debug.print("swiftc stderr:\n{s}\n", .{compile.stderr});
@@ -3444,12 +3454,12 @@ test "ffi swift example (optional)" {
         else => return error.UnexpectedTerm,
     }
 
-    var env = std.process.EnvMap.init(allocator);
+    var env = std.process.Environ.Map.init(allocator);
     defer env.deinit();
     try env.put(libPathEnvName(), lib_dir);
     try runCommandExpectOk(allocator, &.{bin_path}, &env, tmp_path);
 
-    _ = try std.fs.cwd().statFile(out_path);
+    _ = try std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), out_path, .{});
 }
 
 test "ffi luajit example (optional)" {
@@ -3459,12 +3469,12 @@ test "ffi luajit example (optional)" {
     const allocator = arena.allocator();
 
     const lib_path = try sharedLibPath(allocator);
-    std.fs.cwd().access(lib_path, .{}) catch return error.FileNotFound;
+    std.Io.Dir.cwd().access(core.io_singleton.getOrInit(), lib_path, .{}) catch return error.FileNotFound;
     const lib_dir = std.fs.path.dirname(lib_path) orelse ".";
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const out_path = try std.fs.path.join(allocator, &.{ tmp_path, "lua.par2" });
     const script_path = try std.fs.path.join(allocator, &.{ tmp_path, "ffi.lua" });
 
@@ -3493,14 +3503,14 @@ test "ffi luajit example (optional)" {
     try src.appendSlice(allocator, "if lib.par2_create_run(handle[0]) ~= 0 then os.exit(1) end\n");
     try src.appendSlice(allocator, "lib.par2_create_destroy(handle[0])\n");
     try src.appendSlice(allocator, "os.exit(0)\n");
-    try tmp.dir.writeFile(.{ .sub_path = "ffi.lua", .data = src.items });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "ffi.lua", .data = src.items });
 
-    var env = std.process.EnvMap.init(allocator);
+    var env = std.process.Environ.Map.init(allocator);
     defer env.deinit();
     try env.put(libPathEnvName(), lib_dir);
     try runCommandExpectOk(allocator, &.{ "luajit", script_path }, &env, tmp_path);
 
-    _ = try std.fs.cwd().statFile(out_path);
+    _ = try std.Io.Dir.cwd().statFile(core.io_singleton.getOrInit(), out_path, .{});
 }
 
 const CapiBuffer = struct {
@@ -3558,10 +3568,10 @@ test "c api create uses output_open" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "cap.par2" });
     const rec_path = try std.fs.path.join(allocator, &.{ tmp_path, "cap.bin" });
-    try tmp.dir.writeFile(.{ .sub_path = "cap.bin", .data = "ABCDEFGHABCDEFGH" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "cap.bin", .data = "ABCDEFGHABCDEFGH" });
 
     var capture = CapiCapture{ .allocator = allocator };
     defer if (capture.last_path) |p| allocator.free(p);
@@ -3600,11 +3610,11 @@ test "c api recover uses output_open" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "rec.par2" });
     const par2_path_z = try allocator.dupeZ(u8, par2_path);
 
-    try tmp.dir.writeFile(.{ .sub_path = "rec.bin", .data = "ABCDEFGHABCDEFGH" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "rec.bin", .data = "ABCDEFGHABCDEFGH" });
 
     var create_handle: ?*par2.Par2CreateHandle = null;
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(null, &create_handle));
@@ -3615,7 +3625,7 @@ test "c api recover uses output_open" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
 
-    try tmp.dir.writeFile(.{ .sub_path = "rec.bin", .data = "XBCDEFGHABCDEFGH" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "rec.bin", .data = "XBCDEFGHABCDEFGH" });
 
     var capture = CapiCapture{ .allocator = allocator };
     defer if (capture.last_path) |p| allocator.free(p);
@@ -3645,11 +3655,11 @@ test "c api recover writes to output dir" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "rec.par2" });
     const par2_path_z = try allocator.dupeZ(u8, par2_path);
 
-    try tmp.dir.writeFile(.{ .sub_path = "rec.bin", .data = "ABCDEFGHABCDEFGH" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "rec.bin", .data = "ABCDEFGHABCDEFGH" });
 
     var create_handle: ?*par2.Par2CreateHandle = null;
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(null, &create_handle));
@@ -3660,10 +3670,10 @@ test "c api recover writes to output dir" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
 
-    try tmp.dir.writeFile(.{ .sub_path = "rec.bin", .data = "XBCDEFGHABCDEFGH" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "rec.bin", .data = "XBCDEFGHABCDEFGH" });
 
     const out_dir = try std.fs.path.join(allocator, &.{ tmp_path, "out" });
-    try std.fs.cwd().makePath(out_dir);
+    try std.Io.Dir.cwd().createDirPath(core.io_singleton.getOrInit(), out_dir);
 
     var recover_handle: ?*par2.Par2RecoverHandle = null;
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_new(null, &recover_handle));
@@ -3680,7 +3690,7 @@ test "c api recover writes to output dir" {
     }
     try std.testing.expectEqual(par2.Par2Error.ok, recover_rc);
 
-    const recovered = try tmp.dir.readFileAlloc(allocator, "out/rec.bin", 1 << 20);
+    const recovered = try tmp.dir.readFileAlloc(core.io_singleton.getOrInit(), "out/rec.bin", allocator, .limited(1 << 20));
     try std.testing.expectEqualStrings("ABCDEFGHABCDEFGH", recovered);
 }
 
@@ -3692,12 +3702,12 @@ test "c api recover repairs in place when no output dir set" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "in.par2" });
     const par2_path_z = try allocator.dupeZ(u8, par2_path);
     const rec_path = try std.fs.path.join(allocator, &.{ tmp_path, "in.bin" });
     const rec_path_z = try allocator.dupeZ(u8, rec_path);
-    try tmp.dir.writeFile(.{ .sub_path = "in.bin", .data = "ABCDEFGHABCDEFGH" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "in.bin", .data = "ABCDEFGHABCDEFGH" });
 
     var create_handle: ?*par2.Par2CreateHandle = null;
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_new(null, &create_handle));
@@ -3706,7 +3716,7 @@ test "c api recover repairs in place when no output dir set" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
 
-    try tmp.dir.writeFile(.{ .sub_path = "in.bin", .data = "XBCDEFGHABCDEFGH" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "in.bin", .data = "XBCDEFGHABCDEFGH" });
 
     var recover_handle: ?*par2.Par2RecoverHandle = null;
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_new(null, &recover_handle));
@@ -3715,7 +3725,7 @@ test "c api recover repairs in place when no output dir set" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_add_path(recover_handle, rec_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_recover_run(recover_handle));
 
-    const repaired = try tmp.dir.readFileAlloc(allocator, "in.bin", 1 << 20);
+    const repaired = try tmp.dir.readFileAlloc(core.io_singleton.getOrInit(), "in.bin", allocator, .limited(1 << 20));
     try std.testing.expectEqualStrings("ABCDEFGHABCDEFGH", repaired);
 }
 
@@ -3725,11 +3735,11 @@ test "cli recover rejects recovery slices that fail rfsc" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
     const data = try arena.allocator().alloc(u8, 32768);
     @memset(data, 'A');
-    try tmp.dir.writeFile(.{ .sub_path = "r.bin", .data = data });
-    const create = try std.process.Child.run(.{
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "r.bin", .data = data });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -3744,18 +3754,18 @@ test "cli recover rejects recovery slices that fail rfsc" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     try corruptFirstRecvSlicInDir(arena.allocator(), tmp_path);
-    try tmp.dir.deleteFile("r.bin");
-    const recover = try std.process.Child.run(.{
+    try tmp.dir.deleteFile(core.io_singleton.getOrInit(), "r.bin");
+    const recover = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "recover", "-o", "out", "r.par2" },
         .cwd = tmp_path,
     });
     switch (recover.term) {
-        .Exited => |code| try std.testing.expect(code != 0),
+        .exited => |code| try std.testing.expect(code != 0),
         else => return error.UnexpectedTerm,
     }
 }
@@ -3766,9 +3776,9 @@ test "cli create duplicates metadata in volume files by default" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    try tmp.dir.writeFile(.{ .sub_path = "m.bin", .data = "abcdefghijklmno" });
-    const create = try std.process.Child.run(.{
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "m.bin", .data = "abcdefghijklmno" });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -3783,11 +3793,11 @@ test "cli create duplicates metadata in volume files by default" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     const vol_path = try findFirstVolume(arena.allocator(), tmp_path);
-    const bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), vol_path, 1 << 20);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), vol_path, arena.allocator(), .limited(1 << 20));
     try std.testing.expect(fileHasPacketType(bytes, mainType()));
     try std.testing.expect(fileHasPacketType(bytes, filedescType()));
     try std.testing.expect(fileHasPacketType(bytes, ifscType()));
@@ -3800,9 +3810,9 @@ test "cli create can omit volume metadata" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    try tmp.dir.writeFile(.{ .sub_path = "n.bin", .data = "abcdefghijklmno" });
-    const create = try std.process.Child.run(.{
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "n.bin", .data = "abcdefghijklmno" });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -3818,11 +3828,11 @@ test "cli create can omit volume metadata" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     const vol_path = try findFirstVolume(arena.allocator(), tmp_path);
-    const bytes = try std.fs.cwd().readFileAlloc(arena.allocator(), vol_path, 1 << 20);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), vol_path, arena.allocator(), .limited(1 << 20));
     try std.testing.expect(!fileHasPacketType(bytes, mainType()));
     try std.testing.expect(!fileHasPacketType(bytes, filedescType()));
     try std.testing.expect(!fileHasPacketType(bytes, ifscType()));
@@ -3835,10 +3845,10 @@ test "cli recover multi-file ordering" {
     const cli_path = try cliPath(arena.allocator());
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(arena.allocator(), ".");
-    try tmp.dir.writeFile(.{ .sub_path = "a.bin", .data = "AAAAAAAABBBBBBBB" });
-    try tmp.dir.writeFile(.{ .sub_path = "b.bin", .data = "CCCCCCCCDDDDDDDD" });
-    const create = try std.process.Child.run(.{
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", arena.allocator());
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "a.bin", .data = "AAAAAAAABBBBBBBB" });
+    try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "b.bin", .data = "CCCCCCCCDDDDDDDD" });
+    const create = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{
             cli_path,
@@ -3854,42 +3864,42 @@ test "cli recover multi-file ordering" {
         .cwd = tmp_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
     {
-        var a_bytes = try tmp.dir.readFileAlloc(arena.allocator(), "a.bin", 1 << 20);
+        var a_bytes = try tmp.dir.readFileAlloc(core.io_singleton.getOrInit(), "a.bin", arena.allocator(), .limited(1 << 20));
         a_bytes[0] ^= 0xFF;
-        try tmp.dir.writeFile(.{ .sub_path = "a.bin", .data = a_bytes });
-        var b_bytes = try tmp.dir.readFileAlloc(arena.allocator(), "b.bin", 1 << 20);
+        try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "a.bin", .data = a_bytes });
+        var b_bytes = try tmp.dir.readFileAlloc(core.io_singleton.getOrInit(), "b.bin", arena.allocator(), .limited(1 << 20));
         b_bytes[8] ^= 0xFF;
-        try tmp.dir.writeFile(.{ .sub_path = "b.bin", .data = b_bytes });
+        try tmp.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "b.bin", .data = b_bytes });
     }
-    const recover = try std.process.Child.run(.{
+    const recover = try core.io_singleton.runChild(.{
         .allocator = arena.allocator(),
         .argv = &.{ cli_path, "recover", "-o", "out", "m.par2", "a.bin", "b.bin" },
         .cwd = tmp_path,
     });
     switch (recover.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
-    const out_a = try tmp.dir.readFileAlloc(arena.allocator(), "out/a.bin", 1 << 20);
-    const out_b = try tmp.dir.readFileAlloc(arena.allocator(), "out/b.bin", 1 << 20);
+    const out_a = try tmp.dir.readFileAlloc(core.io_singleton.getOrInit(), "out/a.bin", arena.allocator(), .limited(1 << 20));
+    const out_b = try tmp.dir.readFileAlloc(core.io_singleton.getOrInit(), "out/b.bin", arena.allocator(), .limited(1 << 20));
     try std.testing.expectEqualStrings("AAAAAAAABBBBBBBB", out_a);
     try std.testing.expectEqualStrings("CCCCCCCCDDDDDDDD", out_b);
 }
 
 fn dirHasRfsc(allocator: std.mem.Allocator, dir_path: []const u8) bool {
-    var dir = std.fs.openDirAbsolute(dir_path, .{ .iterate = true }) catch return false;
-    defer dir.close();
+    var dir = std.Io.Dir.openDirAbsolute(core.io_singleton.getOrInit(), dir_path, .{ .iterate = true }) catch return false;
+    defer dir.close(core.io_singleton.getOrInit());
     var it = dir.iterate();
-    while (it.next() catch return false) |entry| {
+    while (it.next(core.io_singleton.getOrInit()) catch return false) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
         if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
         const full = std.fs.path.join(allocator, &.{ dir_path, entry.name }) catch continue;
-        const bytes = std.fs.cwd().readFileAlloc(allocator, full, 1 << 20) catch continue;
+        const bytes = std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), full, allocator, .limited(1 << 20)) catch continue;
         if (fileHasRfsc(bytes)) return true;
     }
     return false;
@@ -3937,10 +3947,10 @@ fn fileHasPacketType(bytes: []const u8, packet_type: [16]u8) bool {
 }
 
 fn findFirstVolume(allocator: std.mem.Allocator, dir_path: []const u8) ![]const u8 {
-    var dir = try std.fs.openDirAbsolute(dir_path, .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.openDirAbsolute(core.io_singleton.getOrInit(), dir_path, .{ .iterate = true });
+    defer dir.close(core.io_singleton.getOrInit());
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(core.io_singleton.getOrInit())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
         if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
@@ -4011,10 +4021,10 @@ fn recvslicType() [16]u8 {
 }
 
 fn stripPacketTypeInDir(allocator: std.mem.Allocator, dir_path: []const u8, packet_type: [16]u8) !void {
-    var dir = try std.fs.openDirAbsolute(dir_path, .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.openDirAbsolute(core.io_singleton.getOrInit(), dir_path, .{ .iterate = true });
+    defer dir.close(core.io_singleton.getOrInit());
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(core.io_singleton.getOrInit())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
         const full = try std.fs.path.join(allocator, &.{ dir_path, entry.name });
@@ -4023,7 +4033,7 @@ fn stripPacketTypeInDir(allocator: std.mem.Allocator, dir_path: []const u8, pack
 }
 
 fn stripPacketTypeInFile(allocator: std.mem.Allocator, path: []const u8, packet_type: [16]u8) !void {
-    const bytes = try std.fs.cwd().readFileAlloc(allocator, path, 1 << 20);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), path, allocator, .limited(1 << 20));
     var out = std.ArrayList(u8).empty;
     defer out.deinit(allocator);
     var offset: usize = 0;
@@ -4041,34 +4051,35 @@ fn stripPacketTypeInFile(allocator: std.mem.Allocator, path: []const u8, packet_
         try out.appendSlice(allocator, remaining[0..end]);
         offset += end - 1;
     }
-    var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
-    defer file.close();
-    try file.writeAll(out.items);
+    var file = try std.Io.Dir.cwd().createFile(core.io_singleton.getOrInit(), path, .{ .truncate = true });
+    defer file.close(core.io_singleton.getOrInit());
+    try file.writeStreamingAll(core.io_singleton.getOrInit(), out.items);
 }
 
 fn corruptFirstRecvSlicInDir(allocator: std.mem.Allocator, dir_path: []const u8) !void {
-    var dir = try std.fs.openDirAbsolute(dir_path, .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.openDirAbsolute(core.io_singleton.getOrInit(), dir_path, .{ .iterate = true });
+    defer dir.close(core.io_singleton.getOrInit());
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(core.io_singleton.getOrInit())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
         if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
         const full = try std.fs.path.join(allocator, &.{ dir_path, entry.name });
-        const bytes = try std.fs.cwd().readFileAlloc(allocator, full, 1 << 20);
+        const bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), full, allocator, .limited(1 << 20));
         if (!fileHasRfsc(bytes)) continue;
         if (try corruptFirstRecvSlicPacket(full)) return;
     }
 }
 
 fn corruptFirstRecvSlicPacket(path: []const u8) !bool {
-    var file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-    defer file.close();
-    const info = try file.stat();
+    const io = core.io_singleton.getOrInit();
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{ .mode = .read_write });
+    defer file.close(io);
+    const info = try file.stat(io);
     const len = info.size;
     var bytes = try std.heap.page_allocator.alloc(u8, @as(usize, @intCast(len)));
     defer std.heap.page_allocator.free(bytes);
-    _ = try file.readAll(bytes);
+    _ = try file.readPositionalAll(io, bytes, 0);
     var offset: usize = 0;
     const recvslic = recvslicType();
     while (offset + 64 <= bytes.len) : (offset += 1) {
@@ -4087,23 +4098,21 @@ fn corruptFirstRecvSlicPacket(path: []const u8) !bool {
         var digest: [16]u8 = undefined;
         try core.md5.md5Digest(bytes[offset + 32 .. offset + end], &digest);
         @memcpy(bytes[offset + 16 .. offset + 32], &digest);
-        try file.seekTo(0);
-        try file.writeAll(bytes);
+        try file.writePositionalAll(io, bytes, 0);
         return true;
     }
     return false;
 }
 
 fn flipByteInFile(path: []const u8, offset: u64) !void {
-    var file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-    defer file.close();
+    const io = core.io_singleton.getOrInit();
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{ .mode = .read_write });
+    defer file.close(io);
     var b: [1]u8 = undefined;
-    try file.seekTo(offset);
-    const n = try file.readAll(&b);
+    const n = try file.readPositionalAll(io, &b, offset);
     if (n != 1) return error.UnexpectedEof;
     b[0] ^= 0xFF;
-    try file.seekTo(offset);
-    try file.writeAll(&b);
+    try file.writePositionalAll(io, &b, offset);
 }
 
 fn fillDeterministicBytes(buf: []u8, seed_init: u64) void {
@@ -4118,25 +4127,25 @@ fn fillDeterministicBytes(buf: []u8, seed_init: u64) void {
 }
 
 fn copyPar2Files(allocator: std.mem.Allocator, src_dir: []const u8, dst_dir: []const u8) !void {
-    var dir = try std.fs.openDirAbsolute(src_dir, .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.openDirAbsolute(core.io_singleton.getOrInit(), src_dir, .{ .iterate = true });
+    defer dir.close(core.io_singleton.getOrInit());
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(core.io_singleton.getOrInit())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
         const src = try std.fs.path.join(allocator, &.{ src_dir, entry.name });
         const dst = try std.fs.path.join(allocator, &.{ dst_dir, entry.name });
         defer allocator.free(src);
         defer allocator.free(dst);
-        try std.fs.cwd().copyFile(src, std.fs.cwd(), dst, .{});
+        try std.Io.Dir.cwd().copyFile(src, std.Io.Dir.cwd(), dst, core.io_singleton.getOrInit(), .{});
     }
 }
 
 fn firstVolumePath(allocator: std.mem.Allocator, dir_path: []const u8) ![]const u8 {
-    var dir = try std.fs.openDirAbsolute(dir_path, .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.openDirAbsolute(core.io_singleton.getOrInit(), dir_path, .{ .iterate = true });
+    defer dir.close(core.io_singleton.getOrInit());
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(core.io_singleton.getOrInit())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".par2")) continue;
         if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;
@@ -4157,7 +4166,7 @@ test "randomized roundtrip stress (small files)" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
 
     // Use deterministic seed for reproducibility
     var rng = core.prng.Pcg32.init(0xDEADBEEF, 0xCAFEBABE);
@@ -4185,7 +4194,7 @@ test "randomized roundtrip stress (small files)" {
         // Write data file
         const data_name = try std.fmt.allocPrint(allocator, "data_{d}.bin", .{iteration});
         const data_path = try std.fs.path.join(allocator, &.{ tmp_path, data_name });
-        try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+        try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
         // Create PAR2
         const par2_name = try std.fmt.allocPrint(allocator, "data_{d}.par2", .{iteration});
@@ -4194,7 +4203,7 @@ test "randomized roundtrip stress (small files)" {
         const block_str = try std.fmt.allocPrint(allocator, "{d}", .{block_size});
         const redund_str = try std.fmt.allocPrint(allocator, "{d}", .{redundancy});
 
-        _ = try std.process.Child.run(.{
+        _ = try core.io_singleton.runChild(.{
             .argv = &.{ cli_path, "create", "-s", block_str, "-r", redund_str, "-q", par2_path, data_path },
             .allocator = allocator,
             .cwd = tmp_path,
@@ -4203,17 +4212,17 @@ test "randomized roundtrip stress (small files)" {
         // Corrupt one byte in the data file
         const corrupt_pos = rng.nextU32() % file_size;
         data[corrupt_pos] ^= 0xFF;
-        try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+        try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
         // Recover
-        _ = try std.process.Child.run(.{
+        _ = try core.io_singleton.runChild(.{
             .argv = &.{ cli_path, "recover", "-q", par2_path },
             .allocator = allocator,
             .cwd = tmp_path,
         });
 
         // Verify recovered file matches original
-        const recovered = try std.fs.cwd().readFileAlloc(allocator, data_path, 1 << 20);
+        const recovered = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, allocator, .limited(1 << 20));
         try std.testing.expectEqualSlices(u8, original, recovered);
     }
 }
@@ -4225,17 +4234,17 @@ test "boundary conditions: empty and tiny files" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const cli_path = try cliPath(allocator);
 
     // Test 1-byte file (use explicit byte to avoid any newline issues)
     const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "tiny.bin" });
     const original_data = [_]u8{0x58}; // 'X'
 
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = &original_data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = &original_data });
 
     // Create and recover from tmp_path so file paths resolve correctly
-    _ = try std.process.Child.run(.{
+    _ = try core.io_singleton.runChild(.{
         .argv = &.{ cli_path, "create", "-s4", "-r50", "-q", "tiny.par2", "tiny.bin" },
         .allocator = allocator,
         .cwd = tmp_path,
@@ -4243,17 +4252,17 @@ test "boundary conditions: empty and tiny files" {
 
     // Corrupt it
     const corrupt_data = [_]u8{0x59}; // 'Y'
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = &corrupt_data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = &corrupt_data });
 
     // Recover
-    _ = try std.process.Child.run(.{
+    _ = try core.io_singleton.runChild(.{
         .argv = &.{ cli_path, "recover", "-q", "tiny.par2" },
         .allocator = allocator,
         .cwd = tmp_path,
     });
 
     // Verify
-    const recovered = try std.fs.cwd().readFileAlloc(allocator, data_path, 1024);
+    const recovered = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, allocator, .limited(1024));
     try std.testing.expectEqualSlices(u8, &original_data, recovered);
 }
 
@@ -4264,7 +4273,7 @@ test "boundary conditions: file exactly one block" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const cli_path = try cliPath(allocator);
 
     const block_size: usize = 64;
@@ -4276,10 +4285,10 @@ test "boundary conditions: file exactly one block" {
 
     const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "oneblock.bin" });
 
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
     // Create and recover from tmp_path so file paths resolve correctly
-    _ = try std.process.Child.run(.{
+    _ = try core.io_singleton.runChild(.{
         .argv = &.{ cli_path, "create", "-s64", "-r100", "-q", "oneblock.par2", "oneblock.bin" },
         .allocator = allocator,
         .cwd = tmp_path,
@@ -4287,15 +4296,15 @@ test "boundary conditions: file exactly one block" {
 
     // Corrupt first byte
     data[0] = 0xFF;
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
-    _ = try std.process.Child.run(.{
+    _ = try core.io_singleton.runChild(.{
         .argv = &.{ cli_path, "recover", "-q", "oneblock.par2" },
         .allocator = allocator,
         .cwd = tmp_path,
     });
 
-    const recovered = try std.fs.cwd().readFileAlloc(allocator, data_path, 1024);
+    const recovered = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, allocator, .limited(1024));
     // First byte should be 0, not 0xFF
     try std.testing.expectEqual(@as(u8, 0), recovered[0]);
     try std.testing.expectEqualSlices(u8, original, recovered);
@@ -4309,7 +4318,7 @@ test "par2cmdline cross-validation: par2z create, par2cmdline verify" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const cli_path = try cliPath(allocator);
 
     // Create test data
@@ -4317,20 +4326,20 @@ test "par2cmdline cross-validation: par2z create, par2cmdline verify" {
     const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "cross.bin" });
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "cross.par2" });
 
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
     // Create with par2z
-    _ = try std.process.Child.run(.{
+    _ = try core.io_singleton.runChild(.{
         .argv = &.{ cli_path, "create", "-s4", "-r20", "-q", par2_path, data_path },
         .allocator = allocator,
     });
 
     // Verify with par2cmdline
-    const verify_result = try std.process.Child.run(.{
+    const verify_result = try core.io_singleton.runChild(.{
         .argv = &.{ "par2", "verify", "-q", par2_path },
         .allocator = allocator,
     });
-    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.exited);
 }
 
 test "par2cmdline cross-validation: par2cmdline create, par2z verify" {
@@ -4341,7 +4350,7 @@ test "par2cmdline cross-validation: par2cmdline create, par2z verify" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const cli_path = try cliPath(allocator);
 
     // Create test data
@@ -4349,22 +4358,22 @@ test "par2cmdline cross-validation: par2cmdline create, par2z verify" {
     const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "interop.bin" });
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "interop.par2" });
 
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
     // Create with par2cmdline - must run from the tmp dir so paths match
-    _ = try std.process.Child.run(.{
+    _ = try core.io_singleton.runChild(.{
         .argv = &.{ "par2", "create", "-s4", "-r20", "-q", par2_path, data_path },
         .allocator = allocator,
         .cwd = tmp_path,
     });
 
     // Verify with par2z - also run from tmp dir
-    const verify_result = try std.process.Child.run(.{
+    const verify_result = try core.io_singleton.runChild(.{
         .argv = &.{ cli_path, "verify", "-q", par2_path, data_path },
         .allocator = allocator,
         .cwd = tmp_path,
     });
-    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.exited);
 }
 
 test "par2cmdline verify tolerates SFMD metadata packet" {
@@ -4376,12 +4385,12 @@ test "par2cmdline verify tolerates SFMD metadata packet" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
 
     const data = "metadata compatibility data";
     const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfmd.bin" });
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfmd.par2" });
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
     var opts: par2.Par2CreateOptions = .{};
     opts.block_size = 4;
@@ -4398,12 +4407,12 @@ test "par2cmdline verify tolerates SFMD metadata packet" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_set_output_path(create_handle, par2_path_z));
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
 
-    const verify_result = try std.process.Child.run(.{
+    const verify_result = try core.io_singleton.runChild(.{
         .argv = &.{ "par2", "verify", "-q", par2_path },
         .allocator = allocator,
         .cwd = tmp_path,
     });
-    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.exited);
 }
 
 test "par2cmdline verify tolerates SFVS validation state packet" {
@@ -4415,12 +4424,12 @@ test "par2cmdline verify tolerates SFVS validation state packet" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
 
     const data = "SFVS validation state compatibility test data";
     const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfvs.bin" });
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfvs.par2" });
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
     var opts: par2.Par2CreateOptions = .{};
     opts.block_size = 4;
@@ -4446,12 +4455,12 @@ test "par2cmdline verify tolerates SFVS validation state packet" {
     try std.testing.expectEqual(par2.Par2Error.ok, par2.par2_create_run(create_handle));
 
     // par2cmdline should ignore the unknown SFVS packet and verify successfully
-    const verify_result = try std.process.Child.run(.{
+    const verify_result = try core.io_singleton.runChild(.{
         .argv = &.{ "par2", "verify", "-q", par2_path },
         .allocator = allocator,
         .cwd = tmp_path,
     });
-    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.exited);
 }
 
 test "par2cmdline verify tolerates AAPL xattr packet" {
@@ -4462,12 +4471,12 @@ test "par2cmdline verify tolerates AAPL xattr packet" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
 
     const data = "AAPL xattr compatibility test data for par2cmdline";
     const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "aapl_test.bin" });
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "aapl_test.par2" });
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
     var cap = outCaptureInit(allocator);
     defer outCaptureDeinit(&cap);
@@ -4524,15 +4533,15 @@ test "par2cmdline verify tolerates AAPL xattr packet" {
 
     // Write the par2 file to disk for par2cmdline
     const par2_data = cap.map.getPtr("aapl_test.par2") orelse return error.NotFound;
-    try std.fs.cwd().writeFile(.{ .sub_path = par2_path, .data = par2_data.data.items });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = par2_path, .data = par2_data.data.items });
 
     // par2cmdline should ignore the unknown AAPL packet and verify successfully
-    const verify_result = try std.process.Child.run(.{
+    const verify_result = try core.io_singleton.runChild(.{
         .argv = &.{ "par2", "verify", "-q", par2_path },
         .allocator = allocator,
         .cwd = tmp_path,
     });
-    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.exited);
 }
 
 test "par2cmdline verify tolerates SFMD v2 with uid/gid/mode" {
@@ -4543,12 +4552,12 @@ test "par2cmdline verify tolerates SFMD v2 with uid/gid/mode" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
 
     const data = "SFMD v2 compatibility test with extended fields";
     const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfmd_v2.bin" });
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "sfmd_v2.par2" });
-    try std.fs.cwd().writeFile(.{ .sub_path = data_path, .data = data });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
     var cap = outCaptureInit(allocator);
     defer outCaptureDeinit(&cap);
@@ -4609,15 +4618,15 @@ test "par2cmdline verify tolerates SFMD v2 with uid/gid/mode" {
 
     // Write the par2 file to disk for par2cmdline
     const par2_data = cap.map.getPtr("sfmd_v2.par2") orelse return error.NotFound;
-    try std.fs.cwd().writeFile(.{ .sub_path = par2_path, .data = par2_data.data.items });
+    try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = par2_path, .data = par2_data.data.items });
 
     // par2cmdline should ignore the unknown SFMD v2 packet (larger than expected) and verify successfully
-    const verify_result = try std.process.Child.run(.{
+    const verify_result = try core.io_singleton.runChild(.{
         .argv = &.{ "par2", "verify", "-q", par2_path },
         .allocator = allocator,
         .cwd = tmp_path,
     });
-    try std.testing.expectEqual(@as(u8, 0), verify_result.term.Exited);
+    try std.testing.expectEqual(@as(u8, 0), verify_result.term.exited);
 }
 
 test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
@@ -4628,22 +4637,22 @@ test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const cli_path = try cliPath(allocator);
     var work_rel_buf: [64]u8 = undefined;
     var work_path: []const u8 = undefined;
     var attempt: u8 = 0;
     while (true) : (attempt += 1) {
         const work_rel = try std.fmt.bufPrint(&work_rel_buf, "par2cmdline-{d}", .{attempt});
-        tmp.dir.makeDir(work_rel) catch |err| switch (err) {
+        tmp.dir.createDir(core.io_singleton.getOrInit(), work_rel, .default_dir) catch |err| switch (err) {
             error.PathAlreadyExists => continue,
             else => return err,
         };
         work_path = try std.fs.path.join(allocator, &.{ tmp_path, work_rel });
         break;
     }
-    var work_dir = try std.fs.openDirAbsolute(work_path, .{});
-    defer work_dir.close();
+    var work_dir = try std.Io.Dir.openDirAbsolute(core.io_singleton.getOrInit(), work_path, .{});
+    defer work_dir.close(core.io_singleton.getOrInit());
 
     const file_len: usize = 65536;
     const slice_size: u64 = 4096;
@@ -4652,29 +4661,29 @@ test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
     const data_rel = "mix.bin";
     const par2_rel = "mix.par2";
     const data_path = try std.fs.path.join(allocator, &.{ work_path, data_rel });
-    try work_dir.writeFile(.{ .sub_path = data_rel, .data = data });
+    try work_dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_rel, .data = data });
 
-    const create = try std.process.Child.run(.{
+    const create = try core.io_singleton.runChild(.{
         .allocator = allocator,
         .argv = &.{ "par2", "create", "-s4096", "-c5", "-n4", "-q", par2_rel, data_rel },
         .cwd = work_path,
     });
     switch (create.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    const original = try std.fs.cwd().readFileAlloc(allocator, data_path, file_len);
+    const original = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, allocator, .limited(file_len));
 
     const par2_dir = try std.fs.path.join(allocator, &.{ tmp_path, "par2" });
     const ours_dir = try std.fs.path.join(allocator, &.{ tmp_path, "ours" });
-    try std.fs.cwd().makeDir(par2_dir);
-    try std.fs.cwd().makeDir(ours_dir);
+    try std.Io.Dir.cwd().createDir(core.io_singleton.getOrInit(), par2_dir, .default_dir);
+    try std.Io.Dir.cwd().createDir(core.io_singleton.getOrInit(), ours_dir, .default_dir);
 
     const par2_data_path = try std.fs.path.join(allocator, &.{ par2_dir, "mix.bin" });
     const ours_data_path = try std.fs.path.join(allocator, &.{ ours_dir, "mix.bin" });
-    try std.fs.cwd().copyFile(data_path, std.fs.cwd(), par2_data_path, .{});
-    try std.fs.cwd().copyFile(data_path, std.fs.cwd(), ours_data_path, .{});
+    try std.Io.Dir.cwd().copyFile(data_path, std.Io.Dir.cwd(), par2_data_path, core.io_singleton.getOrInit(), .{});
+    try std.Io.Dir.cwd().copyFile(data_path, std.Io.Dir.cwd(), ours_data_path, core.io_singleton.getOrInit(), .{});
     try copyPar2Files(allocator, work_path, par2_dir);
     try copyPar2Files(allocator, work_path, ours_dir);
 
@@ -4684,17 +4693,17 @@ test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
     defer allocator.free(par2_vol);
     try flipByteInFile(par2_vol, 0);
 
-    const repair = try std.process.Child.run(.{
+    const repair = try core.io_singleton.runChild(.{
         .allocator = allocator,
         .argv = &.{ "par2", "repair", "-q", "mix.par2", "mix.bin" },
         .cwd = par2_dir,
     });
     switch (repair.term) {
-        .Exited => |code| try std.testing.expect(code == 0 or code == 5 or code == 6),
+        .exited => |code| try std.testing.expect(code == 0 or code == 5 or code == 6),
         else => return error.UnexpectedTerm,
     }
 
-    const par2_out = try std.fs.cwd().readFileAlloc(allocator, par2_data_path, file_len);
+    const par2_out = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_data_path, allocator, .limited(file_len));
     try std.testing.expectEqualSlices(u8, original, par2_out);
 
     try flipByteInFile(ours_data_path, slice_size);
@@ -4703,17 +4712,17 @@ test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
     defer allocator.free(ours_vol);
     try flipByteInFile(ours_vol, 0);
 
-    const recover = try std.process.Child.run(.{
+    const recover = try core.io_singleton.runChild(.{
         .allocator = allocator,
         .argv = &.{ cli_path, "recover", "-q", "mix.par2", "mix.bin" },
         .cwd = ours_dir,
     });
     switch (recover.term) {
-        .Exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
+        .exited => |code| try std.testing.expectEqual(@as(u8, 0), code),
         else => return error.UnexpectedTerm,
     }
 
-    const ours_out = try std.fs.cwd().readFileAlloc(allocator, ours_data_path, file_len);
+    const ours_out = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), ours_data_path, allocator, .limited(file_len));
     try std.testing.expectEqualSlices(u8, original, ours_out);
 }
 
@@ -4724,7 +4733,7 @@ test "multi-file randomized roundtrip" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     const cli_path = try cliPath(allocator);
 
     var rng = core.prng.Pcg32.init(0x12345678, 0x87654321);
@@ -4748,12 +4757,12 @@ test "multi-file randomized roundtrip" {
         basenames[i] = name;
         const path = try std.fs.path.join(allocator, &.{ tmp_path, name });
         data_paths[i] = path;
-        try std.fs.cwd().writeFile(.{ .sub_path = path, .data = data });
+        try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = path, .data = data });
     }
 
     // Create PAR2 for all files (use basenames since we'll run from tmp_path)
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "multi.par2" });
-    _ = try std.process.Child.run(.{
+    _ = try core.io_singleton.runChild(.{
         .argv = &.{ cli_path, "create", "-s32", "-r50", "-q", par2_path, basenames[0], basenames[1], basenames[2] },
         .allocator = allocator,
         .cwd = tmp_path,
@@ -4764,11 +4773,11 @@ test "multi-file randomized roundtrip" {
         const corrupted = try allocator.dupe(u8, original_data[i]);
         const pos = rng.nextU32() % @as(u32, @intCast(corrupted.len));
         corrupted[pos] ^= 0xFF;
-        try std.fs.cwd().writeFile(.{ .sub_path = data_paths[i], .data = corrupted });
+        try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_paths[i], .data = corrupted });
     }
 
     // Recover
-    _ = try std.process.Child.run(.{
+    _ = try core.io_singleton.runChild(.{
         .argv = &.{ cli_path, "recover", "-q", par2_path },
         .allocator = allocator,
         .cwd = tmp_path,
@@ -4776,7 +4785,7 @@ test "multi-file randomized roundtrip" {
 
     // Verify all files match originals
     for (0..file_count) |i| {
-        const recovered = try std.fs.cwd().readFileAlloc(allocator, data_paths[i], 1 << 20);
+        const recovered = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_paths[i], allocator, .limited(1 << 20));
         try std.testing.expectEqualSlices(u8, original_data[i], recovered);
     }
 }
@@ -4784,7 +4793,7 @@ test "multi-file randomized roundtrip" {
 // Memory leak regression tests for C API
 test "par2_create handle lifecycle - no leaks" {
     // Use a tracking allocator to detect leaks
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer {
         const check = gpa.deinit();
         if (check == .leak) {
@@ -4794,8 +4803,10 @@ test "par2_create handle lifecycle - no leaks" {
     const allocator = gpa.allocator();
 
     // Create temp directory
-    var tmp_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = std.fs.cwd().realpath(".", &tmp_buf) catch return;
+    var tmp_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    // 0.16: realpath -> realPath which returns usize bytes written; slice the buffer.
+    const tmp_len = std.Io.Dir.cwd().realPath(core.io_singleton.getOrInit(), &tmp_buf) catch return;
+    const tmp_path = tmp_buf[0..tmp_len];
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
@@ -4803,12 +4814,12 @@ test "par2_create handle lifecycle - no leaks" {
     const data = "test data for memory leak test";
     const data_path = try std.fs.path.join(allocator, &.{ tmp_path, "test_leak.bin" });
     defer allocator.free(data_path);
-    try tmp_dir.dir.writeFile(.{ .sub_path = "test_leak.bin", .data = data });
+    try tmp_dir.dir.writeFile(core.io_singleton.getOrInit(), .{ .sub_path = "test_leak.bin", .data = data });
 
-    const full_data_path = try tmp_dir.dir.realpathAlloc(allocator, "test_leak.bin");
+    const full_data_path = try tmp_dir.dir.realPathFileAlloc(core.io_singleton.getOrInit(), "test_leak.bin", allocator);
     defer allocator.free(full_data_path);
 
-    const par2_out = try tmp_dir.dir.realpathAlloc(allocator, ".");
+    const par2_out = try tmp_dir.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", allocator);
     defer allocator.free(par2_out);
     const par2_path = try std.fmt.allocPrintSentinel(allocator, "{s}/test_leak.par2", .{par2_out}, 0);
     defer allocator.free(par2_path);
@@ -4866,7 +4877,7 @@ test "par2_create with memory inputs - no leaks" {
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    const par2_out = try tmp_dir.dir.realpathAlloc(std.testing.allocator, ".");
+    const par2_out = try tmp_dir.dir.realPathFileAlloc(core.io_singleton.getOrInit(), ".", std.testing.allocator);
     defer std.testing.allocator.free(par2_out);
     const par2_path = try std.fmt.allocPrintSentinel(std.testing.allocator, "{s}/mem_test.par2", .{par2_out}, 0);
     defer std.testing.allocator.free(par2_path);
@@ -4888,7 +4899,7 @@ test "par2_create with memory inputs - no leaks" {
         lib.par2_create_destroy(handle);
 
         // Clean up generated par2 files for next iteration
-        tmp_dir.dir.deleteFile("mem_test.par2") catch {};
+        tmp_dir.dir.deleteFile(core.io_singleton.getOrInit(), "mem_test.par2") catch {};
     }
 }
 

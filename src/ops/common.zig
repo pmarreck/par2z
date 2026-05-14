@@ -86,34 +86,49 @@ pub fn stdoutToStderrEnabled() bool {
     return envFlagSet("STDOUT_TO_STDERR");
 }
 
-pub fn infoFile() std.fs.File {
+pub fn infoFile() std.Io.File {
     // NOTE: Kept for future use. Originally added to work around Zig test runner
     // hangs when tests write to stdout. If removing, update infoFile() uses below
     // and src/cli.zig (usage output) plus README mention of STDOUT_TO_STDERR.
-    return if (stdoutToStderrEnabled()) std.fs.File.stderr() else std.fs.File.stdout();
+    return if (stdoutToStderrEnabled()) std.Io.File.stderr() else std.Io.File.stdout();
 }
 
 const FileOutput = struct {
-    file: std.fs.File,
+    file: std.Io.File,
     allocator: std.mem.Allocator,
 };
 
 fn fileWrite(ctx: *anyopaque, data: []const u8) anyerror!usize {
     const out: *FileOutput = @ptrCast(@alignCast(ctx));
-    return out.file.write(data);
+    // 0.16: there is no direct `write(slice) -> usize`; writeStreaming takes a slice-of-slices and splat.
+    return out.file.writeStreaming(core.io_singleton.getOrInit(), &.{}, &.{data}, 1);
 }
 
 fn fileClose(ctx: *anyopaque) void {
     const out: *FileOutput = @ptrCast(@alignCast(ctx));
-    out.file.close();
+    out.file.close(core.io_singleton.getOrInit());
     out.allocator.destroy(out);
 }
 
 pub fn openFileOutput(allocator: std.mem.Allocator, path: []const u8) !OutputTarget {
-    const file = try std.fs.cwd().createFile(path, .{ .truncate = true });
+    const file = try std.Io.Dir.cwd().createFile(core.io_singleton.getOrInit(), path, .{ .truncate = true });
     const out = try allocator.create(FileOutput);
     out.* = .{ .file = file, .allocator = allocator };
     return .{ .ctx = out, .writeFn = fileWrite, .closeFn = fileClose };
+}
+
+/// Wrap a (caller-owned) std.Io.File as an OutputTarget — used by recover paths
+/// to give File and OutputTarget callers a single `writer.writeAll(...)` shape.
+pub const FileOutputTarget = struct {
+    file: std.Io.File,
+
+    pub fn writeAll(self: *FileOutputTarget, data: []const u8) !void {
+        return self.file.writeStreamingAll(core.io_singleton.getOrInit(), data);
+    }
+};
+
+pub fn wrapFileWriter(file: std.Io.File) FileOutputTarget {
+    return .{ .file = file };
 }
 
 pub fn openOutput(allocator: std.mem.Allocator, path: []const u8, opener: ?OutputOpener) !OutputTarget {
@@ -124,7 +139,7 @@ pub fn openOutput(allocator: std.mem.Allocator, path: []const u8, opener: ?Outpu
 }
 
 pub fn envMuteDefaults() bool {
-    const val = std.process.getEnvVarOwned(std.heap.page_allocator, "PAR2_MUTE_DEFAULTS") catch return false;
+    const val = core.io_singleton.getEnvVarOwned(std.heap.page_allocator, "PAR2_MUTE_DEFAULTS") catch return false;
     defer std.heap.page_allocator.free(val);
     if (val.len == 0) return false;
     if (std.mem.eql(u8, val, "0")) return false;
@@ -133,7 +148,7 @@ pub fn envMuteDefaults() bool {
 }
 
 pub fn envFlagSet(name: []const u8) bool {
-    const val = std.process.getEnvVarOwned(std.heap.page_allocator, name) catch return false;
+    const val = core.io_singleton.getEnvVarOwned(std.heap.page_allocator, name) catch return false;
     defer std.heap.page_allocator.free(val);
     if (val.len == 0) return false;
     if (std.mem.eql(u8, val, "0")) return false;
@@ -241,10 +256,10 @@ pub fn isPathPrefix(base: []const u8, full: []const u8) bool {
 }
 
 pub fn relativePathForInput(allocator: std.mem.Allocator, basepath: []const u8, path: []const u8) !?[]const u8 {
-    const base_abs = try std.fs.cwd().realpathAlloc(allocator, basepath);
+    const base_abs = try std.Io.Dir.cwd().realPathFileAlloc(core.io_singleton.getOrInit(), basepath, allocator);
     defer allocator.free(base_abs);
     const base_norm = trimTrailingSeparators(base_abs);
-    const path_abs = try std.fs.cwd().realpathAlloc(allocator, path);
+    const path_abs = try std.Io.Dir.cwd().realPathFileAlloc(core.io_singleton.getOrInit(), path, allocator);
     defer allocator.free(path_abs);
     return relativePathUnderBase(allocator, base_norm, path_abs);
 }
@@ -330,7 +345,7 @@ pub fn hasTraversalSegment(path: []const u8) bool {
 pub fn ensureDirForPath(path: []const u8) !void {
     const dir = path_util.dirNameOrDot(path);
     if (dir.len > 0) {
-        try std.fs.cwd().makePath(dir);
+        try std.Io.Dir.cwd().createDirPath(core.io_singleton.getOrInit(), dir);
     }
 }
 
@@ -414,24 +429,31 @@ fn asciiMap(allocator: std.mem.Allocator, text: []const u8) !?MapResult {
 }
 
 pub fn md5First16k(path: []const u8) ![16]u8 {
-    var file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+    const io = core.io_singleton.getOrInit();
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
     var buf: [16384]u8 = undefined;
-    const n = try file.readAll(&buf);
+    // 0.16: positional read of up to 16k bytes; may return short read at EOF.
+    const n = try file.readPositionalAll(io, &buf, 0);
     var out: [16]u8 = undefined;
     try core.md5.md5Digest(buf[0..n], &out);
     return out;
 }
 
 pub fn md5File(path: []const u8) ![16]u8 {
-    var file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+    const io = core.io_singleton.getOrInit();
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
     var ctx = core.md5.Md5Ctx.init(.{});
+    // 0.16: read via positional reads to avoid Reader/Writer interface threading.
     var buf: [32768]u8 = undefined;
+    var offset: u64 = 0;
     while (true) {
-        const n = try file.read(&buf);
+        const n = try file.readPositionalAll(io, &buf, offset);
         if (n == 0) break;
         ctx.update(buf[0..n]);
+        offset += n;
+        if (n < buf.len) break;
     }
     var out: [16]u8 = undefined;
     ctx.final(&out);
@@ -517,9 +539,7 @@ pub fn loadPar2File(
     defer local_packed.deinit(allocator);
     var local_rfsc = std.ArrayList(core.packet_types.RfscEntry).empty;
     defer local_rfsc.deinit(allocator);
-    const info = try std.fs.cwd().statFile(path);
-    const max_len = std.math.cast(usize, info.size) orelse return error.InvalidInput;
-    const par2_bytes = try std.fs.cwd().readFileAlloc(allocator, path, max_len);
+    const par2_bytes = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), path, allocator, .unlimited);
     var offset: usize = 0;
     while (offset + 64 <= par2_bytes.len) : (offset += 1) {
         const remaining = par2_bytes[offset..];
@@ -713,10 +733,10 @@ pub fn loadVolumeFiles(
         base = base[0..idx];
     }
     const base_name = path_util.baseName(base);
-    var dir = try std.fs.cwd().openDir(path_util.dirNameOrDot(path), .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.cwd().openDir(core.io_singleton.getOrInit(), path_util.dirNameOrDot(path), .{ .iterate = true });
+    defer dir.close(core.io_singleton.getOrInit());
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(core.io_singleton.getOrInit())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ext)) continue;
         if (std.mem.indexOf(u8, entry.name, ".vol") == null) continue;

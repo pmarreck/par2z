@@ -9,7 +9,7 @@ const core = @import("core");
 /// for context allocations. This is acceptable as the context is designed
 /// to live for the duration of processing. The arena ensures no leaks.
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer {
         const status = gpa.deinit();
         if (status == .leak) {
@@ -24,7 +24,7 @@ pub fn main() !void {
     const ctx_allocator = arena.allocator();
 
     // Read all input from stdin
-    const stdin = std.fs.File.stdin();
+    const stdin = std.Io.File.stdin();
     const input = stdin.readToEndAlloc(allocator, 4 * 1024 * 1024) catch |err| {
         if (err == error.StreamTooLong) return;
         return err;

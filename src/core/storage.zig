@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_singleton = @import("io_singleton.zig");
 
 pub const StoreError = error{
     InvalidInput,
@@ -83,10 +84,11 @@ pub const FileStore = struct {
         const end = @min(offset + slice_size, file_len);
         var out = try allocator.alloc(u8, slice_size);
         @memset(out, 0);
-        var file = std.fs.cwd().openFile(entry.path, .{}) catch return error.IoError;
-        defer file.close();
-        file.seekTo(offset) catch return error.IoError;
-        const n = file.readAll(out[0 .. end - offset]) catch return error.IoError;
+        const io = io_singleton.getOrInit();
+        var file = std.Io.Dir.cwd().openFile(io, entry.path, .{}) catch return error.IoError;
+        defer file.close(io);
+        // 0.16 positional read: readPositionalAll(io, buf, offset) -> bytes read
+        const n = file.readPositionalAll(io, out[0 .. end - offset], offset) catch return error.IoError;
         if (n != end - offset) return error.OutOfBounds;
         return out;
     }

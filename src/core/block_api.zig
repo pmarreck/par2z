@@ -4,6 +4,8 @@ const layout = @import("layout.zig");
 const storage = @import("storage.zig");
 const rs = @import("rs.zig");
 const slice_utils = @import("slices.zig");
+const thread_pool = @import("thread_pool.zig");
+const io_singleton = @import("io_singleton.zig");
 
 pub const BlockError = error{
     OutOfMemory,
@@ -98,7 +100,7 @@ const Shared = struct {
     next_index: std.atomic.Value(usize),
     stop: std.atomic.Value(u8),
     err: ?BlockError,
-    err_mutex: std.Thread.Mutex,
+    err_mutex: thread_pool.SpinMutex,
 };
 
 fn worker(shared: *Shared) void {
@@ -289,18 +291,21 @@ fn computeRecoverySlicesBatchStreamFile(
     while (file_i < files.len) : (file_i += 1) {
         const entry = store.files[file_i];
         if (!entry.present) return error.StoreError;
-        var file = std.fs.cwd().openFile(entry.path, .{}) catch return error.StoreError;
-        defer file.close();
-        const info = file.stat() catch return error.StoreError;
+        const io = io_singleton.getOrInit();
+        var file = std.Io.Dir.cwd().openFile(io, entry.path, .{}) catch return error.StoreError;
+        defer file.close(io);
+        const info = file.stat(io) catch return error.StoreError;
         if (info.size != files[file_i].length) return error.StoreError;
         const slice_count = slice_utils.sliceCount(info.size, slice_size) catch return error.InvalidInput;
         var remaining = info.size;
+        var read_offset: u64 = 0;
         var slice_index: usize = 0;
         while (slice_index < slice_count) : (slice_index += 1) {
             const chunk_len = @min(remaining, slice_size);
             if (chunk_len > 0) {
-                const n = file.readAll(slice_buf[0..@as(usize, @intCast(chunk_len))]) catch return error.StoreError;
+                const n = file.readPositionalAll(io, slice_buf[0..@as(usize, @intCast(chunk_len))], read_offset) catch return error.StoreError;
                 if (n != chunk_len) return error.StoreError;
+                read_offset += chunk_len;
             }
             if (chunk_len < slice_size) {
                 @memset(slice_buf[@as(usize, @intCast(chunk_len))..], 0);

@@ -5,7 +5,7 @@ const core = @import("core");
 /// Reads input from stdin and attempts to parse it as various PAR2 packet types.
 /// Uses GPA to detect memory leaks - any leak will cause a non-zero exit.
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer {
         const status = gpa.deinit();
         if (status == .leak) {
@@ -15,7 +15,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // Read all input from stdin (AFL++ provides input this way)
-    const stdin = std.fs.File.stdin();
+    const stdin = std.Io.File.stdin();
     const input = stdin.readToEndAlloc(allocator, 1024 * 1024) catch |err| {
         if (err == error.StreamTooLong) return; // Input too large, skip
         return err;
