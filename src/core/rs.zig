@@ -356,9 +356,10 @@ fn encodeRangePmull(out: []u8, data_slices: []const []const u8, factors: []const
             const prod_arr = gf.mulVec8Simd(words, factors[i]);
             acc ^= @as(@Vector(lanes, u16), prod_arr);
         }
+        const acc_arr: [lanes]u16 = acc;
         var lane_write: usize = 0;
         while (lane_write < lanes) : (lane_write += 1) {
-            writeWord(out, w + lane_write, acc[lane_write]);
+            writeWord(out, w + lane_write, acc_arr[lane_write]);
         }
     }
     return w - start_word;

@@ -20,6 +20,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/core/mod.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     core_mod.addOptions("build_options", build_options);
     const ops_mod = b.addModule("ops", .{
@@ -135,6 +136,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/core/mod.zig"),
         .target = target,
         .optimize = .ReleaseFast,
+        .link_libc = true,
     });
     const release_ops_mod = b.addModule("ops-release", .{
         .root_source_file = b.path("src/ops.zig"),
@@ -247,6 +249,7 @@ fn addStaticCliVariant(
         .root_source_file = b.path("src/core/mod.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     core_mod.addOptions("build_options", build_options);
     const ops_mod = b.addModule(b.fmt("ops-{s}", .{install_subdir}), .{
