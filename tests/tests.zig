@@ -5121,6 +5121,278 @@ test "SFMD v2 with uid/gid/mode round-trip" {
     try std.testing.expectEqual(@as(u16, 0o644), sfmd.mode);
 }
 
+// ===========================================================================
+// BLAKE3 / Mecha mode tests (TDD — written before implementation)
+// ===========================================================================
+
+test "hash_algo.HashAlgo enum values are stable wire identifiers" {
+    // MUST be stable across versions: written to MECHCFG packet bodies on disk.
+    try std.testing.expectEqual(@as(u32, 0), @intFromEnum(core.hash_algo.HashAlgo.md5));
+    try std.testing.expectEqual(@as(u32, 1), @intFromEnum(core.hash_algo.HashAlgo.blake3_128));
+}
+
+test "hash_algo.hashDigest MD5 matches reference implementation" {
+    var out: [16]u8 = undefined;
+    core.hash_algo.hashDigest(.md5, "123456789", &out);
+    const expect = [_]u8{ 0x25, 0xF9, 0xE7, 0x94, 0x32, 0x3B, 0x45, 0x38, 0x85, 0xF5, 0x18, 0x1F, 0x1B, 0x62, 0x4D, 0x0B };
+    try std.testing.expectEqualSlices(u8, &expect, &out);
+}
+
+test "hash_algo.hashDigest BLAKE3-128 matches known vector (empty input)" {
+    // BLAKE3("") full digest starts with af1349b9 f5f9a1a6 0404... — first 16 bytes:
+    var out: [16]u8 = undefined;
+    core.hash_algo.hashDigest(.blake3_128, "", &out);
+    const expect = [_]u8{ 0xAF, 0x13, 0x49, 0xB9, 0xF5, 0xF9, 0xA1, 0xA6, 0xA0, 0x40, 0x4D, 0xEA, 0x36, 0xDC, 0xC9, 0x49 };
+    try std.testing.expectEqualSlices(u8, &expect, &out);
+}
+
+test "hash_algo.hashDigest BLAKE3-128 matches known vector (hello)" {
+    var out: [16]u8 = undefined;
+    core.hash_algo.hashDigest(.blake3_128, "hello", &out);
+    const expect = [_]u8{ 0xEA, 0x8F, 0x16, 0x3D, 0xB3, 0x86, 0x82, 0x92, 0x5E, 0x44, 0x91, 0xC5, 0xE5, 0x8D, 0x4B, 0xB3 };
+    try std.testing.expectEqualSlices(u8, &expect, &out);
+}
+
+test "hash_algo streaming context produces same digest as one-shot" {
+    const data = "the quick brown fox jumps over the lazy dog";
+    inline for (.{ core.hash_algo.HashAlgo.md5, core.hash_algo.HashAlgo.blake3_128 }) |algo| {
+        var oneshot: [16]u8 = undefined;
+        core.hash_algo.hashDigest(algo, data, &oneshot);
+
+        var ctx = core.hash_algo.HashCtx.init(algo);
+        ctx.update(data[0..10]);
+        ctx.update(data[10..20]);
+        ctx.update(data[20..]);
+        var streamed: [16]u8 = undefined;
+        ctx.final(&streamed);
+
+        try std.testing.expectEqualSlices(u8, &oneshot, &streamed);
+    }
+}
+
+test "mechcfg packet type identifier is 16 bytes and namespaced" {
+    // Must be a 16-byte PAR 2.0 namespaced packet type so strict readers
+    // recognize it as a valid-but-unknown packet (and ignore it per spec).
+    const t = core.packet_types.mechcfg_type;
+    try std.testing.expectEqual(@as(usize, 16), t.len);
+    try std.testing.expectEqualSlices(u8, "PAR 2.0\x00", t[0..8]);
+}
+
+test "mechcfg packet round-trip — write then parse" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const recovery_set_id: [16]u8 = .{ 0xAA, 0xBB, 0xCC, 0xDD } ++ ([_]u8{0} ** 12);
+    const packet_bytes = try core.create_packets.buildMechCfg(allocator, recovery_set_id, .{
+        .hash_algo = .blake3_128,
+        .version = 0,
+        .flags = 0,
+    });
+
+    // Header must verify (MD5 self-hash for the MECHCFG packet itself)
+    try core.packet.verifyPacketHash(packet_bytes);
+
+    const parsed = try core.packet_types.parseMechCfg(packet_bytes);
+    try std.testing.expectEqual(core.hash_algo.HashAlgo.blake3_128, parsed.hash_algo);
+    try std.testing.expectEqual(@as(u32, 0), parsed.version);
+    try std.testing.expectEqual(@as(u32, 0), parsed.flags);
+}
+
+test "ops streaming create+verify+recover round-trips in Mecha mode (BLAKE3-128)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    const payload = "ABCDEFGHIJKLMNOP";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "a.bin",
+        .length = payload.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = null,
+        .validation_state = null,
+        .aapl_packet = null,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+        .hash_algo = .blake3_128,
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+    const main_buf = cap.map.getPtr("set.par2") orelse return error.NotFound;
+    const vol_buf = cap.map.getPtr("set.vol0+1.par2") orelse return error.NotFound;
+
+    // The main par2 file MUST contain a MECHCFG packet declaring BLAKE3-128
+    try std.testing.expectEqual(
+        core.hash_algo.HashAlgo.blake3_128,
+        core.packet_types.scanHashAlgo(main_buf.data.items),
+    );
+
+    // Sanity-check: at least one IFSC slice hash should equal BLAKE3-128 of
+    // a slice, NOT MD5 of it. The first slice is the first 4 bytes "ABCD"
+    // padded to 4 bytes (no padding here).
+    {
+        var expected_blake3: [16]u8 = undefined;
+        core.hash_algo.hashDigest(.blake3_128, "ABCD", &expected_blake3);
+        var expected_md5: [16]u8 = undefined;
+        core.hash_algo.hashDigest(.md5, "ABCD", &expected_md5);
+        // The two MUST differ for the test to be meaningful:
+        try std.testing.expect(!std.mem.eql(u8, &expected_blake3, &expected_md5));
+        // And the main par2 must contain the BLAKE3 digest somewhere (in an IFSC entry):
+        try std.testing.expect(std.mem.indexOf(u8, main_buf.data.items, &expected_blake3) != null);
+        try std.testing.expect(std.mem.indexOf(u8, main_buf.data.items, &expected_md5) == null);
+    }
+
+    const verify_opts = ops.VerifyOptions{
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+    };
+    try ops.verifyStreams(allocator, &.{main_buf.data.items}, verify_opts, &inputs);
+
+    // Recovery from a corrupted input must still work
+    var corrupt: [16]u8 = undefined;
+    @memcpy(&corrupt, payload);
+    corrupt[0] = 'Z';
+    var corrupt_ctx = StreamMemCtx{ .data = corrupt[0..] };
+    const inputs_corrupt = [_]ops.StreamInput{.{
+        .name = "a.bin",
+        .length = corrupt.len,
+        .read_at = streamReadAt,
+        .ctx = &corrupt_ctx,
+    }};
+
+    var out_cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&out_cap);
+    const recover_opts = ops.RecoverOptions{
+        .stdout_only = false,
+        .out_dir = null,
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .allow_unsafe_paths = false,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .output_open = .{ .ctx = &out_cap, .openFn = outOpen },
+    };
+    const par2_files = [_][]const u8{ main_buf.data.items, vol_buf.data.items };
+    try ops.recoverStreams(allocator, allocator, &par2_files, recover_opts, &inputs_corrupt);
+    const recovered = out_cap.map.getPtr("a.bin") orelse return error.NotFound;
+    try std.testing.expectEqualStrings(payload, recovered.data.items);
+}
+
+test "ops streaming create defaults to MD5 (no MECHCFG packet written)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var cap = outCaptureInit(allocator);
+    defer outCaptureDeinit(&cap);
+
+    const payload = "ABCDEFGHIJKLMNOP";
+    var mem_ctx = StreamMemCtx{ .data = payload };
+    const inputs = [_]ops.StreamInput{.{
+        .name = "a.bin",
+        .length = payload.len,
+        .read_at = streamReadAt,
+        .ctx = &mem_ctx,
+    }};
+
+    const create_opts = ops.CreateOptions{
+        .block_size = 4,
+        .block_count = null,
+        .redundancy_percent = null,
+        .recovery_blocks = 1,
+        .first_recovery_block = null,
+        .uniform_recovery = false,
+        .limit_recovery = false,
+        .recovery_file_count = null,
+        .par2_path = "set.par2",
+        .data_paths = &.{},
+        .mute_defaults = true,
+        .comment = null,
+        .metadata = null,
+        .validation_state = null,
+        .aapl_packet = null,
+        .include_input_slices = false,
+        .emit_packed = false,
+        .emit_rfsc = true,
+        .include_volume_meta = true,
+        .basepath = null,
+        .verbosity = -1,
+        .memory_mb = null,
+        .recurse = false,
+        .thread_count = 1,
+        .output_open = .{ .ctx = &cap, .openFn = outOpen },
+        // hash_algo omitted → defaults to MD5
+    };
+    try ops.createStreams(allocator, create_opts, &inputs);
+    const main_buf = cap.map.getPtr("set.par2") orelse return error.NotFound;
+
+    // Default MD5 → scan returns MD5 (no MECHCFG written)
+    try std.testing.expectEqual(
+        core.hash_algo.HashAlgo.md5,
+        core.packet_types.scanHashAlgo(main_buf.data.items),
+    );
+
+    // First slice hash must be MD5("ABCD"), not BLAKE3
+    var expected_md5: [16]u8 = undefined;
+    core.hash_algo.hashDigest(.md5, "ABCD", &expected_md5);
+    try std.testing.expect(std.mem.indexOf(u8, main_buf.data.items, &expected_md5) != null);
+}
+
+test "mechcfg scan finds packet in mixed stream and reports md5 default when absent" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const recovery_set_id: [16]u8 = .{ 0x11, 0x22, 0x33 } ++ ([_]u8{0} ** 13);
+
+    // Stream WITHOUT a MECHCFG packet → default to MD5
+    {
+        const empty_stream: []const u8 = &.{};
+        try std.testing.expectEqual(core.hash_algo.HashAlgo.md5, core.packet_types.scanHashAlgo(empty_stream));
+    }
+
+    // Stream WITH a MECHCFG packet → returns the configured algo
+    {
+        const mechcfg_bytes = try core.create_packets.buildMechCfg(allocator, recovery_set_id, .{
+            .hash_algo = .blake3_128,
+            .version = 0,
+            .flags = 0,
+        });
+        try std.testing.expectEqual(core.hash_algo.HashAlgo.blake3_128, core.packet_types.scanHashAlgo(mechcfg_bytes));
+    }
+}
+
 // Include tests from core modules
 test {
     _ = core.packet_types;

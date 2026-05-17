@@ -854,6 +854,20 @@ pub export fn par2_create_set_output_open(handle: ?*Par2CreateHandle, open_fn: ?
     return .ok;
 }
 
+/// Set the hash algorithm used for IFSC/RFSC per-slice strong hashes.
+/// 0 = MD5 (strict PAR2 default), 1 = BLAKE3-128 (Mecha mode).
+/// Other values are rejected.
+pub export fn par2_create_set_hash_algo(handle: ?*Par2CreateHandle, algo: u32) Par2Error {
+    if (handle == null) return .invalid_argument;
+    var h = castCreate(handle.?);
+    switch (algo) {
+        0 => h.options.hash_algo = .md5,
+        1 => h.options.hash_algo = .blake3_128,
+        else => return .invalid_argument,
+    }
+    return .ok;
+}
+
 pub export fn par2_create_run(handle: ?*Par2CreateHandle) Par2Error {
     if (handle == null) return .invalid_argument;
     var h = castCreate(handle.?);
@@ -891,6 +905,7 @@ pub export fn par2_create_run(handle: ?*Par2CreateHandle) Par2Error {
         .recurse = h.options.recurse,
         .thread_count = h.options.thread_count,
         .output_open = output_open,
+        .hash_algo = h.options.hash_algo,
     };
     if (h.memory_inputs) {
         ops.createStreams(h.allocator, opts, h.stream_inputs.items) catch |e| {

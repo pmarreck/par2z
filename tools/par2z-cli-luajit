@@ -126,14 +126,22 @@ local function find_lib()
 	end
 	local arg0 = arg[0] or "par2z-cli-luajit"
 	local bin_dir = dirname(arg0)
-	local root = dirname(bin_dir)
-	local dylib = root .. "/lib/libpar2.dylib"
-	local so = root .. "/lib/libpar2.so"
-	if file_exists(dylib) then
-		return dylib
-	end
-	if file_exists(so) then
-		return so
+	-- The wrapper installs at zig-out/par2z/bin/, but libpar2 lives at
+	-- zig-out/lib/. Walk up one extra level so both that layout and the
+	-- legacy zig-out/bin/ + zig-out/lib/ layout resolve.
+	local candidates = {
+		dirname(bin_dir),
+		dirname(dirname(bin_dir)),
+	}
+	for _, root in ipairs(candidates) do
+		local dylib = root .. "/lib/libpar2.dylib"
+		local so = root .. "/lib/libpar2.so"
+		if file_exists(dylib) then
+			return dylib
+		end
+		if file_exists(so) then
+			return so
+		end
 	end
 	return nil
 end

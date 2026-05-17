@@ -28,6 +28,13 @@ pub const CreateOptions = struct {
     recurse: bool,
     thread_count: ?u32,
     output_open: ?OutputOpener,
+    /// Hash algorithm for IFSC/RFSC per-slice strong hashes. Default `.md5`
+    /// produces strict-PAR2-spec archives. `.blake3_128` opts into Mecha
+    /// mode: a MECHCFG packet is written declaring the algorithm; per-slice
+    /// strong hashes become BLAKE3-128 (16 bytes, same on-wire size as MD5).
+    /// All other hashes (file_id, recovery_set_id, packet self-hash, file
+    /// full-content hash) stay MD5.
+    hash_algo: core.hash_algo.HashAlgo = .md5,
 };
 
 pub const RecoverOptions = struct {
@@ -603,7 +610,7 @@ pub fn loadPar2File(
     for (local_recs.items) |rec| {
         const idx = rec_index.get(rec.exponent) orelse continue;
         var digest: [16]u8 = undefined;
-        try core.md5.md5Digest(rec.data, &digest);
+        core.hash_algo.hashDigest(ctx.hash_algo, rec.data, &digest);
         if (std.mem.eql(u8, &digest, &local_rfsc.items[idx].md5) and local_rfsc.items[idx].crc32 == core.crc32.crc32(rec.data)) {
             try recs.append(allocator, rec);
         }
@@ -611,7 +618,7 @@ pub fn loadPar2File(
     for (local_packed.items) |rec| {
         const idx = rec_index.get(rec.exponent) orelse continue;
         var digest: [16]u8 = undefined;
-        try core.md5.md5Digest(rec.data, &digest);
+        core.hash_algo.hashDigest(ctx.hash_algo, rec.data, &digest);
         if (std.mem.eql(u8, &digest, &local_rfsc.items[idx].md5) and local_rfsc.items[idx].crc32 == core.crc32.crc32(rec.data)) {
             try packed_recs.append(allocator, rec);
         }
@@ -697,7 +704,7 @@ pub fn loadPar2Bytes(
     for (local_recs.items) |rec| {
         const idx = rec_index.get(rec.exponent) orelse continue;
         var digest: [16]u8 = undefined;
-        try core.md5.md5Digest(rec.data, &digest);
+        core.hash_algo.hashDigest(ctx.hash_algo, rec.data, &digest);
         if (std.mem.eql(u8, &digest, &local_rfsc.items[idx].md5) and local_rfsc.items[idx].crc32 == core.crc32.crc32(rec.data)) {
             try recs.append(allocator, rec);
         }
@@ -705,7 +712,7 @@ pub fn loadPar2Bytes(
     for (local_packed.items) |rec| {
         const idx = rec_index.get(rec.exponent) orelse continue;
         var digest: [16]u8 = undefined;
-        try core.md5.md5Digest(rec.data, &digest);
+        core.hash_algo.hashDigest(ctx.hash_algo, rec.data, &digest);
         if (std.mem.eql(u8, &digest, &local_rfsc.items[idx].md5) and local_rfsc.items[idx].crc32 == core.crc32.crc32(rec.data)) {
             try packed_recs.append(allocator, rec);
         }

@@ -154,7 +154,7 @@ pub fn recover(
                     continue;
                 };
                 defer scratch.free(slice);
-                const computed = try computeSliceEntry(slice);
+                const computed = try computeSliceEntry(slice, ctx.hash_algo);
                 if (!std.mem.eql(u8, &computed.md5, &expected[si].md5) or computed.crc32 != expected[si].crc32) {
                     flags[si] = true;
                 }
@@ -417,7 +417,7 @@ pub fn recoverStreams(
                     continue;
                 };
                 defer scratch.free(slice);
-                const computed = try computeSliceEntry(slice);
+                const computed = try computeSliceEntry(slice, ctx.hash_algo);
                 if (!std.mem.eql(u8, &computed.md5, &expected[si].md5) or computed.crc32 != expected[si].crc32) {
                     flags[si] = true;
                 }
@@ -563,9 +563,9 @@ pub fn recoverStreams(
     }
 }
 
-fn computeSliceEntry(slice: []const u8) !core.packet_types.IfscEntry {
+fn computeSliceEntry(slice: []const u8, algo: core.hash_algo.HashAlgo) !core.packet_types.IfscEntry {
     var entry: core.packet_types.IfscEntry = undefined;
-    try core.md5.md5Digest(slice, &entry.md5);
+    core.hash_algo.hashDigest(algo, slice, &entry.md5);
     entry.crc32 = core.crc32.crc32(slice);
     return entry;
 }

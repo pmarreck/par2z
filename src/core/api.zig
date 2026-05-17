@@ -6,6 +6,7 @@ const slices = @import("slices.zig");
 const storage = @import("storage.zig");
 const layout = @import("layout.zig");
 const rs = @import("rs.zig");
+const hash_algo_mod = @import("hash_algo.zig");
 
 pub const ApiError = error{
     InvalidInput,
@@ -24,6 +25,10 @@ pub const Par2Context = struct {
     recovery_set: ?set.RecoverySet,
     file_descs: std.ArrayList(types.FileDescPacket),
     ifscs: std.ArrayList(types.IfscPacket),
+    /// Hash algorithm declared by the archive's MECHCFG packet (if any).
+    /// Defaults to `.md5` — the strict-PAR2-spec algorithm — unless a
+    /// MECHCFG packet is observed while parsing.
+    hash_algo: hash_algo_mod.HashAlgo,
 };
 
 pub fn initContext(allocator: std.mem.Allocator) Par2Context {
@@ -34,6 +39,7 @@ pub fn initContext(allocator: std.mem.Allocator) Par2Context {
         .recovery_set = null,
         .file_descs = std.ArrayList(types.FileDescPacket).empty,
         .ifscs = std.ArrayList(types.IfscPacket).empty,
+        .hash_algo = .md5,
     };
 }
 
@@ -80,6 +86,11 @@ pub fn addPacket(allocator: std.mem.Allocator, ctx: *Par2Context, buf: []const u
         try ctx.ifscs.append(allocator, i);
         return;
     }
+    if (std.mem.eql(u8, &t, &types.mechcfg_type)) {
+        const cfg = types.parseMechCfg(buf) catch return error.PacketError;
+        ctx.hash_algo = cfg.hash_algo;
+        return;
+    }
 }
 
 fn attachBufferedPackets(ctx: *Par2Context) void {
@@ -104,7 +115,7 @@ pub fn verifyStore(allocator: std.mem.Allocator, ctx: *Par2Context, store: stora
         const entry = rs_set.recovery_files[file_i];
         if (entry.ifsc) |ifsc| {
             const file = store.files[file_i];
-            const computed = slices.computeIfscEntries(allocator, file, slice_size) catch return error.SliceError;
+            const computed = slices.computeIfscEntriesAlgo(allocator, file, slice_size, ctx.hash_algo) catch return error.SliceError;
             slices.verifyIfsc(computed, ifsc.entries) catch |e| switch (e) {
                 error.Mismatch => return error.DataCorrupt,
                 else => return error.SliceError,
@@ -136,7 +147,7 @@ fn verifyStoreSlices(allocator: std.mem.Allocator, ctx: *Par2Context, store: any
                 const slice = store.readSlice(allocator, file_i, slice_size, slice_i) catch return error.StoreError;
                 defer allocator.free(slice);
                 var computed: types.IfscEntry = undefined;
-                slices.computeIfscEntry(slice, &computed) catch return error.SliceError;
+                slices.computeIfscEntryAlgo(slice, &computed, ctx.hash_algo);
                 if (!std.mem.eql(u8, &computed.md5, &expected[slice_i].md5)) return error.DataCorrupt;
                 if (computed.crc32 != expected[slice_i].crc32) return error.DataCorrupt;
             }

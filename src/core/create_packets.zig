@@ -17,9 +17,24 @@ const pkdrecvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd'
 const sfmd_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'M', 'D', 0, 0, 0, 0 };
 const sfvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'V', 'S', 0, 0, 0, 0 };
 const aapl_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'A', 'A', 'P', 'L', 0, 0, 0, 0 };
+const mechcfg_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'M', 'e', 'c', 'h', 'C', 'f', 'g', 0 };
 
 pub fn buildCreatorPacket(allocator: std.mem.Allocator, recovery_set_id: [16]u8, text: []const u8) ![]u8 {
     return packet_write.buildPacket(allocator, recovery_set_id, creator_type, text);
+}
+
+/// Build a MECHCFG packet. Body is a fixed 16 bytes:
+///   [0..4]  hash_algo: u32 LE
+///   [4..8]  version:   u32 LE
+///   [8..12] flags:     u32 LE
+///   [12..16] reserved (must be 0 in version 0)
+pub fn buildMechCfg(allocator: std.mem.Allocator, recovery_set_id: [16]u8, cfg: types.MechCfgPacket) ![]u8 {
+    var body: [16]u8 = undefined;
+    writeU32Le(&body, 0, @intFromEnum(cfg.hash_algo));
+    writeU32Le(&body, 4, cfg.version);
+    writeU32Le(&body, 8, cfg.flags);
+    writeU32Le(&body, 12, 0);
+    return packet_write.buildPacket(allocator, recovery_set_id, mechcfg_type, &body);
 }
 
 pub fn buildMainBody(allocator: std.mem.Allocator, slice_size: u64, file_ids: []const [16]u8) ![]u8 {

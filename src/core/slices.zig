@@ -1,6 +1,7 @@
 const std = @import("std");
 const crc32 = @import("crc32.zig");
 const md5 = @import("md5.zig");
+const hash_algo = @import("hash_algo.zig");
 const types = @import("packet_types.zig");
 
 pub const SliceError = error{
@@ -19,6 +20,10 @@ pub fn sliceCount(file_length: u64, slice_size: usize) SliceError!usize {
 }
 
 pub fn computeIfscEntries(allocator: std.mem.Allocator, data: []const u8, slice_size: usize) SliceError![]types.IfscEntry {
+    return computeIfscEntriesAlgo(allocator, data, slice_size, .md5);
+}
+
+pub fn computeIfscEntriesAlgo(allocator: std.mem.Allocator, data: []const u8, slice_size: usize, algo: hash_algo.HashAlgo) SliceError![]types.IfscEntry {
     if (slice_size == 0) return error.InvalidInput;
     const slice_count = (data.len + slice_size - 1) / slice_size;
     var entries = try allocator.alloc(types.IfscEntry, slice_count);
@@ -28,20 +33,24 @@ pub fn computeIfscEntries(allocator: std.mem.Allocator, data: []const u8, slice_
         const end = @min(start + slice_size, data.len);
         const chunk = data[start..end];
         if (chunk.len == slice_size) {
-            computeIfscEntry(chunk, &entries[i]) catch return error.CryptoUnavailable;
+            computeIfscEntryAlgo(chunk, &entries[i], algo);
         } else {
             var tmp = try allocator.alloc(u8, slice_size);
             defer allocator.free(tmp);
             @memset(tmp, 0);
             @memcpy(tmp[0..chunk.len], chunk);
-            computeIfscEntry(tmp, &entries[i]) catch return error.CryptoUnavailable;
+            computeIfscEntryAlgo(tmp, &entries[i], algo);
         }
     }
     return entries;
 }
 
 pub fn computeIfscEntry(slice: []const u8, out: *types.IfscEntry) SliceError!void {
-    md5.md5Digest(slice, &out.md5) catch return error.CryptoUnavailable;
+    computeIfscEntryAlgo(slice, out, .md5);
+}
+
+pub fn computeIfscEntryAlgo(slice: []const u8, out: *types.IfscEntry, algo: hash_algo.HashAlgo) void {
+    hash_algo.hashDigest(algo, slice, &out.md5);
     out.crc32 = crc32.crc32(slice);
 }
 

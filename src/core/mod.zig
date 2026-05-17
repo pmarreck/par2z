@@ -1,6 +1,7 @@
 pub const bytes = @import("bytes.zig");
 pub const crc32 = @import("crc32.zig");
 pub const md5 = @import("md5.zig");
+pub const hash_algo = @import("hash_algo.zig");
 pub const packet = @import("packet.zig");
 pub const packet_types = @import("packet_types.zig");
 pub const file_id = @import("file_id.zig");

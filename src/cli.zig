@@ -195,7 +195,7 @@ pub fn main(init: std.process.Init) !void {
 fn usage() !void {
     try infoFile().writeStreamingAll(
         core.io_singleton.getOrInit(),
-        "Usage:\n  par2z-cli verify [options] <par2 file> [data files...]\n  par2z-cli recover [options] <par2 file> [data files...]\n  par2z-cli repair  [options] <par2 file> [data files...]\n  par2z-cli create [options] <par2 file> <data files...>\n\nVerify/Recover options:\n  -B <path>        Base path used to resolve file names in FileDesc packets\n  -m <MB>          Memory cap (fail if estimated or actual usage exceeds)\n  -v/-q            Increase/decrease verbosity (-q -q is silent)\n  --stdout         Recover to stdout (requires exactly one missing file)\n  --tar            Emit recovered files as a tar stream on stdout\n  -o, --out-dir    Output directory for recovered files\n  --allow-unsafe-paths  Allow absolute/.. paths from FileDesc (unsafe)\n\nCreate options:\n  -a <par2 file>   Output PAR2 file (par2cmdline-compatible)\n  -T <count>       Thread count (par2cmdline-compatible)\n  -s <bytes>       Block size (mutually exclusive with -b)\n  -b <count>       Block count (mutually exclusive with -s)\n  -r <percent>     Redundancy percent (mutually exclusive with -c)\n  -c <count>       Recovery block count (mutually exclusive with -r)\n  -f <index>       First recovery block number (offset volume indices)\n  -u               Uniform recovery file sizes\n  -l               Limit recovery file sizes (based on largest input file)\n  -n <count>       Number of recovery files (max 31; incompatible with -l)\n  -R               Recurse into subdirectories for input paths\n  --tar            Emit main+volumes as a tar stream on stdout\n  --block-size     Long form of -s\n  --block-count    Long form of -b\n  --redundancy-percent  Long form of -r\n  --recovery-blocks     Long form of -c\n  --comment <text> Add comment packet(s) (ASCII + Unicode if transliterable)\n  --mute-defaults  Suppress derived plan output (also PAR2_MUTE_DEFAULTS=1)\n  --include-input-slices  Emit FileSlic packets in main PAR2\n  --emit-packed    Emit PkdMain/PkdRecvS packets\n  --no-rfsc        Skip RFSC packets\n  --no-volume-meta Do not duplicate Main/FileDesc/IFSC/Creator in volumes\n\nNotes:\n  verify/recover match input files by exact path when possible, then by basename.\n  If basenames are ambiguous, verification/recovery fails unless exact paths are used.\n\npar2cmdline-turbo compatible options (subset):\n  -a<path> (par2 file)  -T<n> (threads)  -b<n> (block count)  -s<n> (block size)  -r<n> (redundancy %% )  -c<n> (recovery blocks)\n  -f<n> (first recovery block)  -u (uniform)  -l (limit)  -n<n> (recovery files)\n  -R (recurse)  -B<path> (basepath)  -m<n> (memory MB)  -v/-q (verbosity)\n",
+        "Usage:\n  par2z-cli verify [options] <par2 file> [data files...]\n  par2z-cli recover [options] <par2 file> [data files...]\n  par2z-cli repair  [options] <par2 file> [data files...]\n  par2z-cli create [options] <par2 file> <data files...>\n\nVerify/Recover options:\n  -B <path>        Base path used to resolve file names in FileDesc packets\n  -m <MB>          Memory cap (fail if estimated or actual usage exceeds)\n  -v/-q            Increase/decrease verbosity (-q -q is silent)\n  --stdout         Recover to stdout (requires exactly one missing file)\n  --tar            Emit recovered files as a tar stream on stdout\n  -o, --out-dir    Output directory for recovered files\n  --allow-unsafe-paths  Allow absolute/.. paths from FileDesc (unsafe)\n\nCreate options:\n  -a <par2 file>   Output PAR2 file (par2cmdline-compatible)\n  -T <count>       Thread count (par2cmdline-compatible)\n  -s <bytes>       Block size (mutually exclusive with -b)\n  -b <count>       Block count (mutually exclusive with -s)\n  -r <percent>     Redundancy percent (mutually exclusive with -c)\n  -c <count>       Recovery block count (mutually exclusive with -r)\n  -f <index>       First recovery block number (offset volume indices)\n  -u               Uniform recovery file sizes\n  -l               Limit recovery file sizes (based on largest input file)\n  -n <count>       Number of recovery files (max 31; incompatible with -l)\n  -R               Recurse into subdirectories for input paths\n  --tar            Emit main+volumes as a tar stream on stdout\n  --block-size     Long form of -s\n  --block-count    Long form of -b\n  --redundancy-percent  Long form of -r\n  --recovery-blocks     Long form of -c\n  --comment <text> Add comment packet(s) (ASCII + Unicode if transliterable)\n  --mute-defaults  Suppress derived plan output (also PAR2_MUTE_DEFAULTS=1)\n  --include-input-slices  Emit FileSlic packets in main PAR2\n  --emit-packed    Emit PkdMain/PkdRecvS packets\n  --no-rfsc        Skip RFSC packets\n  --no-volume-meta Do not duplicate Main/FileDesc/IFSC/Creator in volumes\n  --mecha          Mecha mode: use BLAKE3-128 for IFSC/RFSC slice hashes (default MD5 stays strict-PAR2-compliant)\n  --hash-algo <a>  Explicit hash algorithm: 'md5' (default) or 'blake3-128'\n\nNotes:\n  verify/recover match input files by exact path when possible, then by basename.\n  If basenames are ambiguous, verification/recovery fails unless exact paths are used.\n\npar2cmdline-turbo compatible options (subset):\n  -a<path> (par2 file)  -T<n> (threads)  -b<n> (block count)  -s<n> (block size)  -r<n> (redundancy %% )  -c<n> (recovery blocks)\n  -f<n> (first recovery block)  -u (uniform)  -l (limit)  -n<n> (recovery files)\n  -R (recurse)  -B<path> (basepath)  -m<n> (memory MB)  -v/-q (verbosity)\n",
     );
 }
 
@@ -243,6 +243,7 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
     var recurse = false;
     var thread_count: ?u32 = null;
     var output_path: ?[]const u8 = null;
+    var hash_algo: core.hash_algo.HashAlgo = .md5;
     var i: usize = 0;
     while (i < args.len) {
         const a = args[i];
@@ -338,6 +339,24 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
         if (std.mem.eql(u8, a, "--no-volume-meta")) {
             include_volume_meta = false;
             i += 1;
+            continue;
+        }
+        if (std.mem.eql(u8, a, "--mecha")) {
+            hash_algo = .blake3_128;
+            i += 1;
+            continue;
+        }
+        if (std.mem.eql(u8, a, "--hash-algo")) {
+            if (i + 1 >= args.len) return error.InvalidInput;
+            const v = args[i + 1];
+            if (std.mem.eql(u8, v, "md5")) {
+                hash_algo = .md5;
+            } else if (std.mem.eql(u8, v, "blake3-128") or std.mem.eql(u8, v, "blake3_128")) {
+                hash_algo = .blake3_128;
+            } else {
+                return error.InvalidInput;
+            }
+            i += 2;
             continue;
         }
         if (std.mem.eql(u8, a, "--block-size")) {
@@ -490,6 +509,7 @@ fn parseCreateArgs(args: []const []const u8) !CreateArgs {
         .recurse = recurse,
         .thread_count = thread_count,
         .output_open = null,
+        .hash_algo = hash_algo,
     };
 }
 

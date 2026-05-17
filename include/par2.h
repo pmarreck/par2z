@@ -128,6 +128,11 @@ Par2Error par2_create_set_metadata(Par2CreateHandle *handle, const par2_source_m
 Par2Error par2_create_set_validation_state(Par2CreateHandle *handle, const par2_validation_state_t *state);
 Par2Error par2_create_set_output_path(Par2CreateHandle *handle, const char *par2_path);
 Par2Error par2_create_set_output_open(Par2CreateHandle *handle, Par2OpenOutputFn open_fn, void *ctx);
+/* Hash algorithm for IFSC/RFSC per-slice strong hashes:
+ *   0 = MD5 (strict PAR2 default)
+ *   1 = BLAKE3-128 (Mecha mode; writes a MECHCFG packet)
+ */
+Par2Error par2_create_set_hash_algo(Par2CreateHandle *handle, uint32_t algo);
 Par2Error par2_create_run(Par2CreateHandle *handle);
 const char *par2_create_last_error(Par2CreateHandle *handle);
 

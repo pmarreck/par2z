@@ -111,6 +111,17 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
     var volume_meta_packets = std.ArrayList([]const u8).empty;
     defer volume_meta_packets.deinit(arena_alloc);
     try main_packets.append(arena_alloc, main_pkt);
+    if (opts.hash_algo != .md5) {
+        const mechcfg_pkt = try core.create_packets.buildMechCfg(arena_alloc, recovery_set_id, .{
+            .hash_algo = opts.hash_algo,
+            .version = 0,
+            .flags = 0,
+        });
+        try main_packets.append(arena_alloc, mechcfg_pkt);
+        if (opts.include_volume_meta) {
+            try volume_meta_packets.append(arena_alloc, mechcfg_pkt);
+        }
+    }
     if (opts.metadata) |meta| {
         if (files.len != 1) return error.InvalidInput;
         const meta_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
@@ -184,6 +195,7 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
             slice_size,
             opts.include_input_slices,
             &main_out,
+            opts.hash_algo,
         );
         const filedesc_pkt = try core.create_packets.buildFileDescPacket(
             temp_alloc,
@@ -269,6 +281,7 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
             .emit_packed = opts.emit_packed,
             .include_volume_meta = opts.include_volume_meta,
             .cap_bytes = cap_bytes,
+            .hash_algo = opts.hash_algo,
             .next_index = std.atomic.Value(usize).init(0),
             .stop = std.atomic.Value(u8).init(0),
             .err = null,
@@ -407,6 +420,17 @@ pub fn createStreams(
     var volume_meta_packets = std.ArrayList([]const u8).empty;
     defer volume_meta_packets.deinit(arena_alloc);
     try main_packets.append(arena_alloc, main_pkt);
+    if (opts.hash_algo != .md5) {
+        const mechcfg_pkt = try core.create_packets.buildMechCfg(arena_alloc, recovery_set_id, .{
+            .hash_algo = opts.hash_algo,
+            .version = 0,
+            .flags = 0,
+        });
+        try main_packets.append(arena_alloc, mechcfg_pkt);
+        if (opts.include_volume_meta) {
+            try volume_meta_packets.append(arena_alloc, mechcfg_pkt);
+        }
+    }
     if (opts.metadata) |meta| {
         if (files.len != 1) return error.InvalidInput;
         const meta_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
@@ -480,6 +504,7 @@ pub fn createStreams(
             slice_size,
             opts.include_input_slices,
             &main_out,
+            opts.hash_algo,
         );
         const filedesc_pkt = try core.create_packets.buildFileDescPacket(
             temp_alloc,
@@ -565,6 +590,7 @@ pub fn createStreams(
             .emit_packed = opts.emit_packed,
             .include_volume_meta = opts.include_volume_meta,
             .cap_bytes = cap_bytes,
+            .hash_algo = opts.hash_algo,
             .next_index = std.atomic.Value(usize).init(0),
             .stop = std.atomic.Value(u8).init(0),
             .err = null,
@@ -692,6 +718,7 @@ fn computeFileInfoAndMaybeWriteSlices(
     slice_size: usize,
     include_input_slices: bool,
     writer: *OutputTarget,
+    hash_algo: core.hash_algo.HashAlgo,
 ) !FileInfoResult {
     const io = core.io_singleton.getOrInit();
     var file = try std.Io.Dir.cwd().openFile(io, path, .{});
@@ -723,7 +750,7 @@ fn computeFileInfoAndMaybeWriteSlices(
         if (chunk_len < slice_size) {
             @memset(slice_buf[@as(usize, @intCast(chunk_len))..], 0);
         }
-        try core.md5.md5Digest(slice_buf, &entries[slice_index].md5);
+        core.hash_algo.hashDigest(hash_algo, slice_buf, &entries[slice_index].md5);
         entries[slice_index].crc32 = core.crc32.crc32(slice_buf);
         if (include_input_slices) {
             const pkt = try core.create_packets.buildFileSlicPacket(
@@ -750,6 +777,7 @@ fn computeFileInfoAndMaybeWriteSlicesStream(
     slice_size: usize,
     include_input_slices: bool,
     writer: *OutputTarget,
+    hash_algo: core.hash_algo.HashAlgo,
 ) !FileInfoResult {
     const slice_count = try core.slices.sliceCount(input.length, slice_size);
     var entries = try allocator.alloc(core.packet_types.IfscEntry, slice_count);
@@ -775,7 +803,7 @@ fn computeFileInfoAndMaybeWriteSlicesStream(
         if (chunk_len < slice_size) {
             @memset(slice_buf[@as(usize, @intCast(chunk_len))..], 0);
         }
-        try core.md5.md5Digest(slice_buf, &entries[slice_index].md5);
+        core.hash_algo.hashDigest(hash_algo, slice_buf, &entries[slice_index].md5);
         entries[slice_index].crc32 = core.crc32.crc32(slice_buf);
         if (include_input_slices) {
             const pkt = try core.create_packets.buildFileSlicPacket(
@@ -879,6 +907,7 @@ const VolumeShared = struct {
     emit_packed: bool,
     include_volume_meta: bool,
     cap_bytes: ?u64,
+    hash_algo: core.hash_algo.HashAlgo,
     next_index: std.atomic.Value(usize),
     stop: std.atomic.Value(u8),
     err: ?anyerror,
@@ -909,6 +938,7 @@ fn volumeWorker(shared: *VolumeShared) void {
             shared.include_volume_meta,
             shared.cap_bytes,
             false,
+            shared.hash_algo,
         ) catch |e| {
             setVolumeError(shared, e);
             return;
@@ -931,6 +961,7 @@ const StreamVolumeShared = struct {
     emit_packed: bool,
     include_volume_meta: bool,
     cap_bytes: ?u64,
+    hash_algo: core.hash_algo.HashAlgo,
     next_index: std.atomic.Value(usize),
     stop: std.atomic.Value(u8),
     err: ?anyerror,
@@ -961,6 +992,7 @@ fn streamVolumeWorker(shared: *StreamVolumeShared) void {
             shared.include_volume_meta,
             shared.cap_bytes,
             false,
+            shared.hash_algo,
         ) catch |err| {
             shared.err_mutex.lock();
             defer shared.err_mutex.unlock();
@@ -995,6 +1027,7 @@ fn buildVolume(
     include_volume_meta: bool,
     cap_bytes: ?u64,
     parallel_slices: bool,
+    hash_algo: core.hash_algo.HashAlgo,
 ) !void {
     var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
@@ -1050,7 +1083,7 @@ fn buildVolume(
         byte_offset += pkt.len;
         if (emit_rfsc) {
             var entry: core.packet_types.RfscEntry = undefined;
-            try core.md5.md5Digest(rec_slice, &entry.md5);
+            core.hash_algo.hashDigest(hash_algo, rec_slice, &entry.md5);
             entry.crc32 = core.crc32.crc32(rec_slice);
             entry.exponent = exp;
             try rfsc_entries.append(allocator, entry);
@@ -1123,6 +1156,7 @@ fn buildVolumeStream(
     include_volume_meta: bool,
     cap_bytes: ?u64,
     parallel_slices: bool,
+    hash_algo: core.hash_algo.HashAlgo,
 ) !void {
     var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
@@ -1178,7 +1212,7 @@ fn buildVolumeStream(
         byte_offset += pkt.len;
         if (emit_rfsc) {
             var entry: core.packet_types.RfscEntry = undefined;
-            try core.md5.md5Digest(rec_slice, &entry.md5);
+            core.hash_algo.hashDigest(hash_algo, rec_slice, &entry.md5);
             entry.crc32 = core.crc32.crc32(rec_slice);
             entry.exponent = exp;
             try rfsc_entries.append(allocator, entry);

@@ -1,6 +1,7 @@
 const std = @import("std");
 const bytes = @import("bytes.zig");
 const packet = @import("packet.zig");
+const hash_algo_mod = @import("hash_algo.zig");
 
 pub const PacketTypeError = error{
     OutOfBounds,
@@ -138,10 +139,23 @@ const pkdrecvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'P', 'k', 'd'
 const sfmd_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'M', 'D', 0, 0, 0, 0 };
 const sfvs_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'S', 'F', 'V', 'S', 0, 0, 0, 0 };
 const aapl_type = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'A', 'A', 'P', 'L', 0, 0, 0, 0 };
+const mechcfg_type_arr = [_]u8{ 'P', 'A', 'R', ' ', '2', '.', '0', 0, 'M', 'e', 'c', 'h', 'C', 'f', 'g', 0 };
 
 pub const source_metadata_type = sfmd_type;
 pub const validation_state_type = sfvs_type;
 pub const apple_xattr_type = aapl_type;
+pub const mechcfg_type = mechcfg_type_arr;
+
+/// Mecha configuration packet — declares which hash algorithm the archive
+/// uses for IFSC/RFSC slice strong-hashes. Optional; absence means MD5
+/// (strict PAR2 default). Strict PAR2 readers MUST ignore this packet
+/// (unknown type) per spec §3.1; Mecha-aware readers scan for it before
+/// validating slice integrity.
+pub const MechCfgPacket = struct {
+    hash_algo: hash_algo_mod.HashAlgo,
+    version: u32,
+    flags: u32,
+};
 
 pub fn parseCreator(buf: []const u8) PacketTypeError!CreatorPacket {
     const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
@@ -454,6 +468,57 @@ test "ValidationFlags values are distinct and correct" {
         ValidationFlags.CHARSET | ValidationFlags.SEMANTIC |
         ValidationFlags.ENCRYPTED | ValidationFlags.COMPLETE;
     try std.testing.expectEqual(@as(u8, 0xFF), all_flags);
+}
+
+/// Parse a MECHCFG packet body. The body layout is 16 bytes:
+///   [0..4]  hash_algo: u32 LE
+///   [4..8]  version:   u32 LE
+///   [8..12] flags:     u32 LE
+///   [12..16] reserved: u32 LE (must be 0 in version 0)
+pub fn parseMechCfg(buf: []const u8) PacketTypeError!MechCfgPacket {
+    const hdr = packet.parseHeader(buf) catch return error.OutOfBounds;
+    if (!std.mem.eql(u8, &hdr.packet_type, &mechcfg_type_arr)) return error.InvalidInput;
+    if (hdr.length < 64 + 16) return error.InvalidInput;
+    const end: usize = @intCast(hdr.length);
+    const body = buf[64..end];
+    if (body.len < 16) return error.InvalidInput;
+    const algo_raw = bytes.readU32Le(body, 0) catch return error.OutOfBounds;
+    const algo: hash_algo_mod.HashAlgo = switch (algo_raw) {
+        0 => .md5,
+        1 => .blake3_128,
+        else => return error.InvalidInput,
+    };
+    return .{
+        .hash_algo = algo,
+        .version = bytes.readU32Le(body, 4) catch return error.OutOfBounds,
+        .flags = bytes.readU32Le(body, 8) catch return error.OutOfBounds,
+    };
+}
+
+/// Scan a byte stream (one or more concatenated .par2 packets) for a MECHCFG
+/// packet. Returns the configured HashAlgo if found, otherwise `.md5`
+/// (strict PAR2 default). Stops at the first valid MECHCFG packet — if
+/// callers need to enforce single-MECHCFG-per-recovery-set, they should do
+/// that at a higher layer.
+pub fn scanHashAlgo(stream: []const u8) hash_algo_mod.HashAlgo {
+    var off: usize = 0;
+    const magic = [_]u8{ 'P', 'A', 'R', '2', 0, 'P', 'K', 'T' };
+    while (off + 64 <= stream.len) {
+        if (!std.mem.eql(u8, stream[off .. off + 8], &magic)) {
+            off += 1;
+            continue;
+        }
+        const length = bytes.readU64Le(stream, off + 8) catch break;
+        if (length < 64 or off + length > stream.len) break;
+        const ptype = stream[off + 48 .. off + 64];
+        if (std.mem.eql(u8, ptype, &mechcfg_type_arr)) {
+            if (parseMechCfg(stream[off .. off + @as(usize, @intCast(length))])) |cfg| {
+                return cfg.hash_algo;
+            } else |_| {}
+        }
+        off += @intCast(length);
+    }
+    return .md5;
 }
 
 test "ENCRYPTED flag can be combined with validation depth flags" {
