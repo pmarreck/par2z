@@ -49,18 +49,26 @@
 						dontFixup = true;
 						buildPhase = ''
 							export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-							# Compile tests without running. On Linux, Zig links libc
-							# with the FHS dynamic-linker path which doesn't exist in
-							# the Nix sandbox; patchelf can't always rewrite Zig 0.16's
-							# ELFs (page-size assertion fails), so we invoke Nix's
-							# dynamic linker directly with the binary as its argument.
-							zig build test-compile --prefix $TMPDIR/out
+							# Compile tests + CLI without running. On Linux, Zig links
+							# libc with the FHS dynamic-linker path which doesn't exist
+							# in the Nix sandbox; patchelf can't rewrite Zig 0.16 ELFs
+							# (page-size assertion). Wrap binaries with Nix's loader.
+							zig build test-compile
+							zig build
 							${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
 							DL="$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)"
-							"$DL" $TMPDIR/out/par2z/bin/test
+							# Wrap the par2z-cli so tests that exec it from zig-out
+							# go through Nix's loader.
+							if [ -x zig-out/bin/par2z-cli ]; then
+								mv zig-out/bin/par2z-cli zig-out/bin/par2z-cli.real
+								printf "%s\n%s\n" "#!${pkgs.runtimeShell}" "exec $DL \"$PWD/zig-out/bin/par2z-cli.real\" \"\$@\"" > zig-out/bin/par2z-cli
+								chmod +x zig-out/bin/par2z-cli
+							fi
+							# Run the test binary directly via the loader.
+							"$DL" zig-out/par2z/bin/test
 							''}
 							${pkgs.lib.optionalString (!pkgs.stdenv.isLinux) ''
-							$TMPDIR/out/par2z/bin/test
+							zig-out/par2z/bin/test
 							''}
 						'';
 						installPhase = "touch $out";
