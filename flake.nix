@@ -57,13 +57,20 @@
 							zig build
 							${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
 							DL="$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)"
-							# Wrap the par2z-cli so tests that exec it from zig-out
-							# go through Nix's loader.
-							if [ -x zig-out/bin/par2z-cli ]; then
-								mv zig-out/bin/par2z-cli zig-out/bin/par2z-cli.real
-								printf "%s\n%s\n" "#!${pkgs.runtimeShell}" "exec $DL \"$PWD/zig-out/bin/par2z-cli.real\" \"\$@\"" > zig-out/bin/par2z-cli
-								chmod +x zig-out/bin/par2z-cli
-							fi
+							# Wrap any installed exe under zig-out so tests that exec
+							# them via realPath go through Nix's loader.
+							wrap_exe() {
+								local bin="$1"
+								[ -f "$bin" ] || return 0
+								[ -x "$bin" ] || return 0
+								local real="$bin.real"
+								mv "$bin" "$real"
+								printf "%s\n%s\n" "#!${pkgs.runtimeShell}" "exec $DL \"$real\" \"\$@\"" > "$bin"
+								chmod +x "$bin"
+							}
+							wrap_exe zig-out/bin/par2z-cli
+							wrap_exe zig-out/par2z/bin/prng-gen
+							wrap_exe zig-out/par2z/bin/shared-test
 							# Run the test binary directly via the loader.
 							"$DL" zig-out/par2z/bin/test
 							''}
