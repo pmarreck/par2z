@@ -49,14 +49,19 @@
 						dontFixup = true;
 						buildPhase = ''
 							export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-							# Compile tests without running, then on Linux fix up the
-							# dynamic linker (Zig bakes the FHS path which doesn't
-							# exist in the Nix sandbox), then run the binary directly.
+							# Compile tests without running. On Linux, Zig links libc
+							# with the FHS dynamic-linker path which doesn't exist in
+							# the Nix sandbox; patchelf can't always rewrite Zig 0.16's
+							# ELFs (page-size assertion fails), so we invoke Nix's
+							# dynamic linker directly with the binary as its argument.
 							zig build test-compile --prefix $TMPDIR/out
 							${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
-							patchelf --set-interpreter "$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)" $TMPDIR/out/par2z/bin/test
+							DL="$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)"
+							"$DL" $TMPDIR/out/par2z/bin/test
 							''}
+							${pkgs.lib.optionalString (!pkgs.stdenv.isLinux) ''
 							$TMPDIR/out/par2z/bin/test
+							''}
 						'';
 						installPhase = "touch $out";
 					};
