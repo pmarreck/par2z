@@ -40,15 +40,23 @@
 					pkgs = import nixpkgs { inherit system; };
 					zig = zigFor system;
 				in {
-					test = pkgs.stdenvNoCC.mkDerivation {
+					test = pkgs.stdenv.mkDerivation {
 						name = "par2z-test";
 						src = self;
-						nativeBuildInputs = [ zig ];
+						nativeBuildInputs = [ zig ]
+							++ pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.patchelf ];
 						dontConfigure = true;
 						dontFixup = true;
 						buildPhase = ''
 							export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-							zig build test-direct
+							# Compile tests without running, then on Linux fix up the
+							# dynamic linker (Zig bakes the FHS path which doesn't
+							# exist in the Nix sandbox), then run the binary directly.
+							zig build test-compile --prefix $TMPDIR/out
+							${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+							patchelf --set-interpreter "$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)" $TMPDIR/out/par2z/bin/test
+							''}
+							$TMPDIR/out/par2z/bin/test
 						'';
 						installPhase = "touch $out";
 					};
