@@ -43,7 +43,7 @@
 					test = pkgs.stdenv.mkDerivation {
 						name = "par2z-test";
 						src = self;
-						nativeBuildInputs = [ zig pkgs.par2cmdline ]
+						nativeBuildInputs = [ zig pkgs.par2cmdline pkgs.gnutar ]
 							++ pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.patchelf ];
 						dontConfigure = true;
 						dontFixup = true;
