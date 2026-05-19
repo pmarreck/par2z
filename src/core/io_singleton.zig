@@ -43,13 +43,30 @@ pub fn setEnvMap(map: *const std.process.Environ.Map) void {
     cached_env = map;
 }
 
+/// Build a process.Environ from libc's environ pointer. Used when this Threaded
+/// io is the fallback (no `set()` from main). Without this, runChild() inherits
+/// an empty env block, which makes Zig fall back to the default PATH
+/// "/usr/local/bin:/bin:/usr/bin" — none of which exist in the Nix sandbox, so
+/// PATH-based subprocess lookups (e.g. `tar`) fail with FileNotFound.
+fn buildFallbackEnviron() std.process.Environ {
+    if (builtin.os.tag == .windows or builtin.os.tag == .wasi) return .empty;
+    if (!builtin.link_libc) return .empty;
+    const c_environ = std.c.environ;
+    var env_count: usize = 0;
+    while (c_environ[env_count] != null) : (env_count += 1) {}
+    const slice = c_environ[0..env_count :null];
+    return .{ .block = .{ .slice = slice } };
+}
+
 fn getFallbackIo() std.Io {
     // 3-state atomic guard per the docscan firsthand note (replaces removed Thread.Mutex).
     while (true) {
         const cur = fallback_init_state.load(.acquire);
         if (cur == 2) return fallback_threaded.?.io();
         if (cur == 0 and fallback_init_state.cmpxchgStrong(0, 1, .acquire, .acquire) == null) {
-            fallback_threaded = std.Io.Threaded.init(std.heap.c_allocator, .{});
+            fallback_threaded = std.Io.Threaded.init(std.heap.c_allocator, .{
+                .environ = buildFallbackEnviron(),
+            });
             fallback_init_state.store(2, .release);
             return fallback_threaded.?.io();
         }

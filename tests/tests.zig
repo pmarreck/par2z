@@ -4698,7 +4698,7 @@ test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
         else => return error.UnexpectedTerm,
     }
 
-    const original = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, allocator, .limited(file_len));
+    const original = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), data_path, allocator, .limited(file_len + 1));
 
     const par2_dir = try std.fs.path.join(allocator, &.{ tmp_path, "par2" });
     const ours_dir = try std.fs.path.join(allocator, &.{ tmp_path, "ours" });
@@ -4728,7 +4728,7 @@ test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
         else => return error.UnexpectedTerm,
     }
 
-    const par2_out = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_data_path, allocator, .limited(file_len));
+    const par2_out = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), par2_data_path, allocator, .limited(file_len + 1));
     try std.testing.expectEqualSlices(u8, original, par2_out);
 
     try flipByteInFile(ours_data_path, slice_size);
@@ -4747,7 +4747,7 @@ test "par2cmdline recovery tolerates corrupted par2 data (and par2z does too)" {
         else => return error.UnexpectedTerm,
     }
 
-    const ours_out = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), ours_data_path, allocator, .limited(file_len));
+    const ours_out = try std.Io.Dir.cwd().readFileAlloc(core.io_singleton.getOrInit(), ours_data_path, allocator, .limited(file_len + 1));
     try std.testing.expectEqualSlices(u8, original, ours_out);
 }
 
