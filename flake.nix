@@ -59,13 +59,18 @@
 							DL="$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)"
 							# Wrap any installed exe under zig-out so tests that exec
 							# them via realPath go through Nix's loader.
+							# IMPORTANT: bake the ABSOLUTE path to $real into the wrapper
+							# script so it still resolves when the test invokes the CLI
+							# with cwd set to a different directory (e.g. tmpDir).
 							wrap_exe() {
 								local bin="$1"
 								[ -f "$bin" ] || return 0
 								[ -x "$bin" ] || return 0
 								local real="$bin.real"
 								mv "$bin" "$real"
-								printf "%s\n%s\n" "#!${pkgs.runtimeShell}" "exec $DL \"$real\" \"\$@\"" > "$bin"
+								local real_abs
+								real_abs="$(readlink -f "$real")"
+								printf "%s\n%s\n" "#!${pkgs.runtimeShell}" "exec $DL \"$real_abs\" \"\$@\"" > "$bin"
 								chmod +x "$bin"
 							}
 							wrap_exe zig-out/bin/par2z-cli
