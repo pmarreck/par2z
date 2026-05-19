@@ -17,6 +17,31 @@ fn prngPath(allocator: std.mem.Allocator) ![]const u8 {
     return try std.Io.Dir.cwd().realPathFileAlloc(core.io_singleton.getOrInit(), name, allocator);
 }
 
+/// Run a child process and assert it exited with code 0. On non-zero exit,
+/// dumps argv + stdout + stderr to stderr so CI logs reveal why it failed.
+/// Used by recovery roundtrip tests that previously silently ignored exit code.
+fn runChildExpectSuccess(opts: core.io_singleton.RunChildOptions) !void {
+    const result = try core.io_singleton.runChild(opts);
+    switch (result.term) {
+        .exited => |code| {
+            if (code != 0) {
+                const io = core.io_singleton.getOrInit();
+                const argv0 = if (opts.argv.len > 0) opts.argv[0] else "<empty>";
+                var hdr_buf: [4096]u8 = undefined;
+                const hdr = std.fmt.bufPrint(&hdr_buf, "child exit {d}: argv[0]={s}\n", .{ code, argv0 }) catch "child exit non-zero\n";
+                std.Io.File.stderr().writeStreamingAll(io, hdr) catch {};
+                std.Io.File.stderr().writeStreamingAll(io, "stdout:\n") catch {};
+                std.Io.File.stderr().writeStreamingAll(io, result.stdout) catch {};
+                std.Io.File.stderr().writeStreamingAll(io, "\nstderr:\n") catch {};
+                std.Io.File.stderr().writeStreamingAll(io, result.stderr) catch {};
+                std.Io.File.stderr().writeStreamingAll(io, "\n") catch {};
+                return error.ChildFailed;
+            }
+        },
+        else => return error.UnexpectedTerm,
+    }
+}
+
 test "version string" {
     try std.testing.expectEqualStrings("par2z 0.1.0", lib.zigVersion());
 }
@@ -4203,7 +4228,7 @@ test "randomized roundtrip stress (small files)" {
         const block_str = try std.fmt.allocPrint(allocator, "{d}", .{block_size});
         const redund_str = try std.fmt.allocPrint(allocator, "{d}", .{redundancy});
 
-        _ = try core.io_singleton.runChild(.{
+        try runChildExpectSuccess(.{
             .argv = &.{ cli_path, "create", "-s", block_str, "-r", redund_str, "-q", par2_path, data_path },
             .allocator = allocator,
             .cwd = tmp_path,
@@ -4215,7 +4240,7 @@ test "randomized roundtrip stress (small files)" {
         try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
         // Recover
-        _ = try core.io_singleton.runChild(.{
+        try runChildExpectSuccess(.{
             .argv = &.{ cli_path, "recover", "-q", par2_path },
             .allocator = allocator,
             .cwd = tmp_path,
@@ -4244,7 +4269,7 @@ test "boundary conditions: empty and tiny files" {
     try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = &original_data });
 
     // Create and recover from tmp_path so file paths resolve correctly
-    _ = try core.io_singleton.runChild(.{
+    try runChildExpectSuccess(.{
         .argv = &.{ cli_path, "create", "-s4", "-r50", "-q", "tiny.par2", "tiny.bin" },
         .allocator = allocator,
         .cwd = tmp_path,
@@ -4255,7 +4280,7 @@ test "boundary conditions: empty and tiny files" {
     try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = &corrupt_data });
 
     // Recover
-    _ = try core.io_singleton.runChild(.{
+    try runChildExpectSuccess(.{
         .argv = &.{ cli_path, "recover", "-q", "tiny.par2" },
         .allocator = allocator,
         .cwd = tmp_path,
@@ -4288,7 +4313,7 @@ test "boundary conditions: file exactly one block" {
     try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
     // Create and recover from tmp_path so file paths resolve correctly
-    _ = try core.io_singleton.runChild(.{
+    try runChildExpectSuccess(.{
         .argv = &.{ cli_path, "create", "-s64", "-r100", "-q", "oneblock.par2", "oneblock.bin" },
         .allocator = allocator,
         .cwd = tmp_path,
@@ -4298,7 +4323,7 @@ test "boundary conditions: file exactly one block" {
     data[0] = 0xFF;
     try std.Io.Dir.cwd().writeFile(core.io_singleton.getOrInit(), .{ .sub_path = data_path, .data = data });
 
-    _ = try core.io_singleton.runChild(.{
+    try runChildExpectSuccess(.{
         .argv = &.{ cli_path, "recover", "-q", "oneblock.par2" },
         .allocator = allocator,
         .cwd = tmp_path,
@@ -4762,7 +4787,7 @@ test "multi-file randomized roundtrip" {
 
     // Create PAR2 for all files (use basenames since we'll run from tmp_path)
     const par2_path = try std.fs.path.join(allocator, &.{ tmp_path, "multi.par2" });
-    _ = try core.io_singleton.runChild(.{
+    try runChildExpectSuccess(.{
         .argv = &.{ cli_path, "create", "-s32", "-r50", "-q", par2_path, basenames[0], basenames[1], basenames[2] },
         .allocator = allocator,
         .cwd = tmp_path,
@@ -4777,7 +4802,7 @@ test "multi-file randomized roundtrip" {
     }
 
     // Recover
-    _ = try core.io_singleton.runChild(.{
+    try runChildExpectSuccess(.{
         .argv = &.{ cli_path, "recover", "-q", par2_path },
         .allocator = allocator,
         .cwd = tmp_path,
