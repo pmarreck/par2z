@@ -26,11 +26,63 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: 0.16.0
+      - name: Install Zig
+
+        shell: bash
+
+        run: |
+
+          set -euo pipefail
+
+          version="0.16.0"
+
+          if [ "$version" = "latest" ]; then
+
+            version="$(curl -fsSL https://ziglang.org/download/index.json | ruby -rjson -e 'data = JSON.parse(STDIN.read); puts data.keys.grep(/\A\d+\.\d+\.\d+\z/).sort_by { |v| v.split(".").map(&:to_i) }.last')"
+
+          fi
+
+          case "${RUNNER_OS}-${RUNNER_ARCH}" in
+
+            Linux-X64) platform="x86_64-linux"; ext="tar.xz" ;;
+
+            Linux-ARM64) platform="aarch64-linux"; ext="tar.xz" ;;
+
+            macOS-X64) platform="x86_64-macos"; ext="tar.xz" ;;
+
+            macOS-ARM64) platform="aarch64-macos"; ext="tar.xz" ;;
+
+            Windows-X64) platform="x86_64-windows"; ext="zip" ;;
+
+            *) echo "Unsupported runner: ${RUNNER_OS}-${RUNNER_ARCH}" >&2; exit 1 ;;
+
+          esac
+
+          archive="$RUNNER_TEMP/zig.$ext"
+
+          install_dir="$RUNNER_TEMP/zig"
+
+          curl -fsSL "https://ziglang.org/download/${version}/zig-${platform}-${version}.${ext}" -o "$archive"
+
+          mkdir -p "$install_dir"
+
+          if [ "$ext" = "zip" ]; then
+
+            unzip -q "$archive" -d "$install_dir"
+
+          else
+
+            tar -xf "$archive" -C "$install_dir"
+
+          fi
+
+          zig_dir="$(find "$install_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+
+          echo "$zig_dir" >> "$GITHUB_PATH"
+
+          "$zig_dir/zig" version
 
       - name: Build
         run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
