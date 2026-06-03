@@ -124,7 +124,10 @@
 							pkgs.pkg-config
 						pkgs.openssl
 						pkgs.par2cmdline
-						pkgs.luajit
+						# luajit with luafilesystem baked in so rm-safe (a luajit script that
+						# require()s lfs) works inside this dev shell, which otherwise shadows
+						# the system luajit. Also fine for the lua FFI example test.
+						(pkgs.luajit.withPackages (ps: [ ps.luafilesystem ]))
 						par2TurboPkg
 						mktmpPkg
 					] ++ linuxOnly ++ pkgs.lib.optional (valgrindPkg != null) valgrindPkg;
