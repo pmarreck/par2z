@@ -176,9 +176,13 @@ Done (2026-06-03):
   module, so `_ = core.x` can't pull them in) — added a `test {}` block in
   `core/mod.zig` + a `test-core` build target gated into `./test`. 14 kernel
   correctness/parity tests (gf16 SIMD, crc32, packet_types) now run in CI.
-  NOTE for the fleet: only gf16/crc32/packet_types are activated; the remaining
-  core modules' inline tests are still dormant — a future sweep could reference
-  them from `core/mod.zig` too (watch for 0.16-stale dormant tests).
+  Follow-up (done 2026-06-03): swept the remaining dormant inline tests too —
+  added `test-ops` (16: outputPath path-safety, transliterateAscii, volumePath)
+  and `test-cli` (21: arg parsing) build targets via `test {}` blocks in
+  `ops.zig`, all gated into `./test`. All 51 previously-dormant tests are
+  0.16-clean and pass; none needed commenting out. `./test` now runs 210 tests
+  across 4 binaries (was 159). No core modules besides gf16/crc32/packet_types
+  carry inline tests.
 - [x] **Suboptimal/disorganized** — merged `buildVolume`/`buildVolumeStream`
   twins into one `store: anytype` fn (comptime store dispatch); extracted
   `deriveCreatePlan` / `printCreateDefaults` / `appendMainPackets` shared by

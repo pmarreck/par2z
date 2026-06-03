@@ -326,3 +326,13 @@ pub fn createDirectoryMetadata(allocator: std.mem.Allocator, opts: DirectoryMeta
 
     return output;
 }
+
+// Pull inline `test` blocks from the ops submodules into the `test-ops` binary
+// (same-module `_ = decl` reference; a cross-module ref from tests/tests.zig
+// cannot). create/recover/common carry path-safety + arg/format unit tests.
+test {
+    _ = common;
+    _ = create_mod;
+    _ = verify_mod;
+    _ = recover_mod;
+}

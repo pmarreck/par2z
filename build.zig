@@ -171,6 +171,42 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_core_tests.step);
     test_direct_step.dependOn(&run_core_tests.step);
 
+    // ops-module inline unit tests (path-safety, arg/format helpers).
+    const ops_tests = b.addTest(.{
+        .name = "test-ops",
+        .root_module = ops_mod,
+        .filters = test_filters,
+    });
+    const install_ops_tests = b.addInstallArtifact(ops_tests, .{
+        .dest_dir = .{ .override = .{ .custom = "par2z/bin" } },
+    });
+    const ops_test_bin = b.pathJoin(&.{ b.install_path, "par2z", "bin", "test-ops" });
+    const run_ops_tests = b.addSystemCommand(&.{ops_test_bin});
+    run_ops_tests.step.dependOn(&install_ops_tests.step);
+    const test_ops_step = b.step("test-ops", "Run ops-module inline unit tests");
+    test_ops_step.dependOn(&run_ops_tests.step);
+
+    // cli-module inline unit tests (argument parsing).
+    const cli_tests = b.addTest(.{
+        .name = "test-cli",
+        .root_module = cli_mod,
+        .filters = test_filters,
+    });
+    cli_tests.root_module.linkLibrary(lib);
+    const install_cli_tests = b.addInstallArtifact(cli_tests, .{
+        .dest_dir = .{ .override = .{ .custom = "par2z/bin" } },
+    });
+    const cli_test_bin = b.pathJoin(&.{ b.install_path, "par2z", "bin", "test-cli" });
+    const run_cli_tests = b.addSystemCommand(&.{cli_test_bin});
+    run_cli_tests.step.dependOn(&install_cli_tests.step);
+    const test_cli_step = b.step("test-cli", "Run cli-module inline unit tests");
+    test_cli_step.dependOn(&run_cli_tests.step);
+
+    test_step.dependOn(&run_ops_tests.step);
+    test_direct_step.dependOn(&run_ops_tests.step);
+    test_step.dependOn(&run_cli_tests.step);
+    test_direct_step.dependOn(&run_cli_tests.step);
+
     // Production release build (always ReleaseFast)
     const release_core_mod = b.addModule("core-release", .{
         .root_source_file = b.path("src/core/mod.zig"),
