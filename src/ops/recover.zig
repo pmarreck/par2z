@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const core = @import("core");
 const common = @import("common.zig");
 const path_util = @import("path.zig");
@@ -804,6 +805,7 @@ test "outputPath allows unsafe when flag set" {
 }
 
 test "outputPath accepts unicode names" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest; // POSIX path-separator assertion
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const out = try outputPath(arena.allocator(), "/tmp/out", "café.txt", false);
@@ -812,6 +814,7 @@ test "outputPath accepts unicode names" {
 }
 
 test "outputPath normalizes relative paths" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest; // POSIX path-separator assertion
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const out = try outputPath(arena.allocator(), "/tmp/out", "./a//b\\c.txt", false);
@@ -836,6 +839,7 @@ test "pickOutputPath prefers explicit data path when present" {
 }
 
 test "pickOutputPath uses out_dir even if file path present" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest; // POSIX path-separator assertion
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const out = try pickOutputPath(arena.allocator(), "/out", "file.txt", false, true, "/tmp/data/file.txt");
