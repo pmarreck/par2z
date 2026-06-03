@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Run the in-tree microbenchmarks (gf16 GF(2^16) multiply + CRC32 kernels).
+# For the end-to-end create/verify/recover throughput comparison vs
+# par2cmdline, use ./bench (or ./bench-all) instead.
+set -uo pipefail
+
+optimize="${PAR2Z_BENCH_OPTIMIZE:-ReleaseFast}"
+exec zig build bench-micro "-Doptimize=$optimize" "$@"

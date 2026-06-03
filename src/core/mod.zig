@@ -22,3 +22,14 @@ pub const thread_pool = @import("thread_pool.zig");
 pub const io_singleton = @import("io_singleton.zig");
 pub const xattr = @import("xattr.zig");
 pub const tar = @import("tar.zig");
+
+// Pull inline `test` blocks from these modules into the `test-core` binary.
+// Same-module `_ = decl` reference forces the compiler to include their tests
+// (a cross-module reference from tests/tests.zig does NOT — different module).
+// gf16/crc32 carry kernel correctness + parity tests; packet_types carries
+// validation-flag tests. All were dormant before this.
+test {
+    _ = gf16;
+    _ = crc32;
+    _ = packet_types;
+}

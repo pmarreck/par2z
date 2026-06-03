@@ -215,7 +215,16 @@ test "crc32 hw matches scalar" {
     }
 }
 
-test "crc32 benchmark" {
+/// Monotonic nanosecond clock for microbenchmarks (0.16 Io.Timestamp).
+fn benchNowNs(io: std.Io) i128 {
+    const ts = std.Io.Timestamp.now(io, .awake);
+    return @as(i128, ts.nanoseconds);
+}
+
+/// Run the CRC32 microbenchmark. Invoked by the `bench-micro` build step
+/// (src/tools/microbench.zig), not by the test suite. Correctness/parity of
+/// the implementations is covered by the `test` blocks above.
+pub fn runBenchmark(io: std.Io) void {
     const size = 16 * 1024;
     var buf: [size]u8 = undefined;
     for (0..size) |i| {
@@ -229,11 +238,11 @@ test "crc32 benchmark" {
     // Scalar
     {
         var checksum: u32 = 0;
-        const start = std.time.nanoTimestamp();
+        const start = benchNowNs(io);
         for (0..iters) |_| {
             checksum +%= crc32Scalar(&buf);
         }
-        const end = std.time.nanoTimestamp();
+        const end = benchNowNs(io);
         const elapsed_ns: u64 = @intCast(end - start);
         const bytes = @as(u64, size) * iters;
         const mib_per_sec = @as(f64, @floatFromInt(bytes)) / @as(f64, @floatFromInt(elapsed_ns)) * 1000.0;
@@ -243,11 +252,11 @@ test "crc32 benchmark" {
     // Slice-by-8
     {
         var checksum: u32 = 0;
-        const start = std.time.nanoTimestamp();
+        const start = benchNowNs(io);
         for (0..iters) |_| {
             checksum +%= crc32SliceBy8(&buf);
         }
-        const end = std.time.nanoTimestamp();
+        const end = benchNowNs(io);
         const elapsed_ns: u64 = @intCast(end - start);
         const bytes = @as(u64, size) * iters;
         const mib_per_sec = @as(f64, @floatFromInt(bytes)) / @as(f64, @floatFromInt(elapsed_ns)) * 1000.0;
@@ -257,11 +266,11 @@ test "crc32 benchmark" {
     // HW (if available)
     if (comptime hasCrc32Hw()) {
         var checksum: u32 = 0;
-        const start = std.time.nanoTimestamp();
+        const start = benchNowNs(io);
         for (0..iters) |_| {
             checksum +%= crc32Hw(&buf);
         }
-        const end = std.time.nanoTimestamp();
+        const end = benchNowNs(io);
         const elapsed_ns: u64 = @intCast(end - start);
         const bytes = @as(u64, size) * iters;
         const mib_per_sec = @as(f64, @floatFromInt(bytes)) / @as(f64, @floatFromInt(elapsed_ns)) * 1000.0;
@@ -271,11 +280,11 @@ test "crc32 benchmark" {
     // Dispatched
     {
         var checksum: u32 = 0;
-        const start = std.time.nanoTimestamp();
+        const start = benchNowNs(io);
         for (0..iters) |_| {
             checksum +%= crc32(&buf);
         }
-        const end = std.time.nanoTimestamp();
+        const end = benchNowNs(io);
         const elapsed_ns: u64 = @intCast(end - start);
         const bytes = @as(u64, size) * iters;
         const mib_per_sec = @as(f64, @floatFromInt(bytes)) / @as(f64, @floatFromInt(elapsed_ns)) * 1000.0;

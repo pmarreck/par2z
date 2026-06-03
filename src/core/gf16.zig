@@ -698,12 +698,18 @@ test "comprehensive mulSimd correctness" {
     }
 }
 
+/// Monotonic nanosecond clock for microbenchmarks (0.16 Io.Timestamp).
+fn benchNowNs(io: std.Io) i128 {
+    const ts = std.Io.Timestamp.now(io, .awake);
+    return @as(i128, ts.nanoseconds);
+}
+
 /// Benchmark utility: measure ops/sec for a multiplication function
-fn benchmarkMul(comptime name: []const u8, comptime mulFn: fn (u16, u16) u16) !void {
+fn benchmarkMul(io: std.Io, comptime name: []const u8, comptime mulFn: fn (u16, u16) u16) !void {
     const iterations: usize = 1_000_000;
     var checksum: u32 = 0;
 
-    const start = std.time.nanoTimestamp();
+    const start = benchNowNs(io);
 
     var i: usize = 0;
     while (i < iterations) : (i += 1) {
@@ -712,7 +718,7 @@ fn benchmarkMul(comptime name: []const u8, comptime mulFn: fn (u16, u16) u16) !v
         checksum +%= mulFn(a, b);
     }
 
-    const end = std.time.nanoTimestamp();
+    const end = benchNowNs(io);
     const elapsed_ns: u64 = @intCast(end - start);
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) * 1_000_000_000.0 / @as(f64, @floatFromInt(elapsed_ns));
 
@@ -720,7 +726,7 @@ fn benchmarkMul(comptime name: []const u8, comptime mulFn: fn (u16, u16) u16) !v
 }
 
 /// Benchmark: measure just the PMULL instruction throughput
-fn benchmarkPmullOnly() !void {
+fn benchmarkPmullOnly(io: std.Io) !void {
     if (comptime !hasArmCrypto()) {
         std.debug.print("PMULL only: N/A (not available)\n", .{});
         return;
@@ -729,7 +735,7 @@ fn benchmarkPmullOnly() !void {
     const iterations: usize = 1_000_000;
     var checksum: u32 = 0;
 
-    const start = std.time.nanoTimestamp();
+    const start = benchNowNs(io);
 
     var i: usize = 0;
     while (i < iterations) : (i += 1) {
@@ -739,7 +745,7 @@ fn benchmarkPmullOnly() !void {
         checksum +%= p;
     }
 
-    const end = std.time.nanoTimestamp();
+    const end = benchNowNs(io);
     const elapsed_ns: u64 = @intCast(end - start);
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) * 1_000_000_000.0 / @as(f64, @floatFromInt(elapsed_ns));
 
@@ -747,11 +753,11 @@ fn benchmarkPmullOnly() !void {
 }
 
 /// Benchmark: measure just polyReduce
-fn benchmarkPolyReduceOnly() !void {
+fn benchmarkPolyReduceOnly(io: std.Io) !void {
     const iterations: usize = 1_000_000;
     var checksum: u32 = 0;
 
-    const start = std.time.nanoTimestamp();
+    const start = benchNowNs(io);
 
     var i: usize = 0;
     while (i < iterations) : (i += 1) {
@@ -759,19 +765,19 @@ fn benchmarkPolyReduceOnly() !void {
         checksum +%= polyReduce(p);
     }
 
-    const end = std.time.nanoTimestamp();
+    const end = benchNowNs(io);
     const elapsed_ns: u64 = @intCast(end - start);
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) * 1_000_000_000.0 / @as(f64, @floatFromInt(elapsed_ns));
 
     std.debug.print("polyReduce: {d:.2} M ops/sec (checksum: {x})\n", .{ ops_per_sec / 1_000_000.0, checksum });
 }
 
-fn benchmarkVec8(comptime name: []const u8, comptime vec_fn: anytype) !void {
+fn benchmarkVec8(io: std.Io, comptime name: []const u8, comptime vec_fn: anytype) !void {
     const iterations = 1_000_000;
     var checksum: u16 = 0;
     const input = [8]u16{ 0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x1111, 0x2222, 0x3333, 0x4444 };
 
-    const start = std.time.nanoTimestamp();
+    const start = benchNowNs(io);
 
     var i: usize = 0;
     while (i < iterations) : (i += 1) {
@@ -779,19 +785,19 @@ fn benchmarkVec8(comptime name: []const u8, comptime vec_fn: anytype) !void {
         checksum +%= result[0];
     }
 
-    const end = std.time.nanoTimestamp();
+    const end = benchNowNs(io);
     const elapsed_ns: u64 = @intCast(end - start);
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) * 8.0 * 1_000_000_000.0 / @as(f64, @floatFromInt(elapsed_ns));
     std.debug.print("{s}: {d:.2} M muls/sec (checksum: {x})\n", .{ name, ops_per_sec / 1_000_000.0, checksum });
 }
 
-fn benchmarkVec8Shuffle() !void {
+fn benchmarkVec8Shuffle(io: std.Io) !void {
     const iterations = 1_000_000;
     var checksum: u16 = 0;
     var input = [8]u16{ 0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x1111, 0x2222, 0x3333, 0x4444 };
     const tbl = MulTables.init(0xABCD);
 
-    const start = std.time.nanoTimestamp();
+    const start = benchNowNs(io);
 
     var i: usize = 0;
     while (i < iterations) : (i += 1) {
@@ -799,23 +805,27 @@ fn benchmarkVec8Shuffle() !void {
         checksum +%= input[0];
     }
 
-    const end = std.time.nanoTimestamp();
+    const end = benchNowNs(io);
     const elapsed_ns: u64 = @intCast(end - start);
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) * 8.0 * 1_000_000_000.0 / @as(f64, @floatFromInt(elapsed_ns));
     std.debug.print("Shuffle mul: {d:.2} M muls/sec (checksum: {x})\n", .{ ops_per_sec / 1_000_000.0, checksum });
 }
 
-test "benchmark mul vs mulSimd" {
+/// Run the GF(2^16) multiplication microbenchmarks. Invoked by the
+/// `bench-micro` build step (src/tools/microbench.zig), not by the test
+/// suite — timing loops are not correctness tests. Parity/correctness of
+/// these kernels is covered by the `test` blocks above.
+pub fn runBenchmarks(io: std.Io) !void {
     std.debug.print("\n--- GF16 Multiplication Benchmark ---\n", .{});
     std.debug.print("PMULL available: {}\n", .{hasArmCrypto()});
     std.debug.print("PCLMUL available: {}\n", .{hasPclmul()});
     std.debug.print("SSSE3 available: {}\n", .{hasSsse3()});
     std.debug.print("NEON shuffle available: {}\n", .{hasNeonShuffle()});
 
-    try benchmarkMul("Table mul ", mul);
-    try benchmarkMul("SIMD mul  ", mulSimd);
-    try benchmarkVec8("Vec8 SIMD ", mulVec8Simd);
-    try benchmarkVec8Shuffle();
-    try benchmarkPmullOnly();
-    try benchmarkPolyReduceOnly();
+    try benchmarkMul(io, "Table mul ", mul);
+    try benchmarkMul(io, "SIMD mul  ", mulSimd);
+    try benchmarkVec8(io, "Vec8 SIMD ", mulVec8Simd);
+    try benchmarkVec8Shuffle(io);
+    try benchmarkPmullOnly(io);
+    try benchmarkPolyReduceOnly(io);
 }

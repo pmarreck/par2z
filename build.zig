@@ -94,6 +94,24 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install_prng.step);
 
+    // Microbenchmark runner for the gf16/crc32 kernels (timing only — not tests).
+    const microbench_mod = b.createModule(.{
+        .root_source_file = b.path("src/tools/microbench.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "core", .module = core_mod },
+        },
+    });
+    const microbench = b.addExecutable(.{
+        .name = "microbench",
+        .root_module = microbench_mod,
+    });
+    const run_microbench = b.addRunArtifact(microbench);
+    if (b.args) |args| run_microbench.addArgs(args);
+    const bench_micro_step = b.step("bench-micro", "Run gf16/crc32 microbenchmarks");
+    bench_micro_step.dependOn(&run_microbench.step);
+
     const tests_mod = b.createModule(.{
         .root_source_file = b.path("tests/tests.zig"),
         .target = target,
@@ -130,6 +148,28 @@ pub fn build(b: *std.Build) void {
 
     const test_direct_step = b.step("test-direct", "Run unit tests directly (no zig --listen)");
     test_direct_step.dependOn(&run_tests_direct.step);
+
+    // Core-module inline unit tests. These live in src/core/*.zig and are NOT
+    // reachable from the tests/tests.zig binary (separate module), so they need
+    // their own test artifact to actually run.
+    const core_tests = b.addTest(.{
+        .name = "test-core",
+        .root_module = core_mod,
+        .filters = test_filters,
+    });
+    const install_core_tests = b.addInstallArtifact(core_tests, .{
+        .dest_dir = .{ .override = .{ .custom = "par2z/bin" } },
+    });
+    const core_test_bin = b.pathJoin(&.{ b.install_path, "par2z", "bin", "test-core" });
+    const run_core_tests = b.addSystemCommand(&.{core_test_bin});
+    run_core_tests.step.dependOn(&install_core_tests.step);
+    const test_core_step = b.step("test-core", "Run core-module inline unit tests");
+    test_core_step.dependOn(&run_core_tests.step);
+
+    // Core inline tests are part of the canonical suite — gate `test` and
+    // `test-direct` (what ./test runs) on them too.
+    test_step.dependOn(&run_core_tests.step);
+    test_direct_step.dependOn(&run_core_tests.step);
 
     // Production release build (always ReleaseFast)
     const release_core_mod = b.addModule("core-release", .{
