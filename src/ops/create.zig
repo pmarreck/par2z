@@ -26,18 +26,17 @@ const FileInfoResult = struct {
     ifsc_entries: []core.packet_types.IfscEntry,
 };
 
-pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const arena_alloc = arena.allocator();
+/// Derived create plan: block size, optional memory cap, and block counts.
+const CreatePlan = struct {
+    block_size: u64,
+    cap_bytes: ?u64,
+    data_blocks: u64,
+    recovery_blocks: u64,
+};
 
-    const inputs = try collectCreateInputs(arena_alloc, opts.data_paths, opts.recurse, opts.basepath);
-    var total_size: u64 = 0;
-    var max_file_len: u64 = 0;
-    for (inputs) |input| {
-        total_size += input.length;
-        if (input.length > max_file_len) max_file_len = input.length;
-    }
+/// Resolve block size / recovery counts from options + total input size.
+/// Shared by the file-backed (create) and streaming (createStreams) paths.
+fn deriveCreatePlan(opts: common.CreateOptions, total_size: u64) !CreatePlan {
     const block_size = if (opts.block_size) |v|
         v
     else if (opts.block_count) |c|
@@ -54,27 +53,124 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
         v
     else
         core.create_plan.recoveryBlocksFromPercent(data_blocks, opts.redundancy_percent orelse 0) catch return error.InvalidInput;
+    return .{
+        .block_size = block_size,
+        .cap_bytes = cap_bytes,
+        .data_blocks = data_blocks,
+        .recovery_blocks = recovery_blocks,
+    };
+}
 
-    const mute_defaults = opts.mute_defaults or common.envMuteDefaults();
-    if (!mute_defaults) {
-        if (opts.block_size == null and opts.block_count == null) {
-            var buf: [128]u8 = undefined;
-            const msg = try std.fmt.bufPrint(&buf, "default block size: {d}\n", .{block_size});
-            try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg);
-        }
-        if (opts.recovery_blocks == null and opts.redundancy_percent != null) {
-            var buf2: [128]u8 = undefined;
-            const msg2 = try std.fmt.bufPrint(&buf2, "default redundancy percent: {d}\n", .{opts.redundancy_percent.?});
-            try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg2);
-        }
-        var plan_buf: [256]u8 = undefined;
-        const plan = try std.fmt.bufPrint(
-            &plan_buf,
-            "derived plan: total_size={d} block_size={d} data_blocks={d} recovery_blocks={d}\n",
-            .{ total_size, block_size, data_blocks, recovery_blocks },
-        );
-        try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), plan);
+/// Print the auto-derived defaults to stderr unless muted. Shared by both paths.
+fn printCreateDefaults(opts: common.CreateOptions, total_size: u64, plan: CreatePlan) !void {
+    if (opts.mute_defaults or common.envMuteDefaults()) return;
+    const io = core.io_singleton.getOrInit();
+    if (opts.block_size == null and opts.block_count == null) {
+        var buf: [128]u8 = undefined;
+        const msg = try std.fmt.bufPrint(&buf, "default block size: {d}\n", .{plan.block_size});
+        try std.Io.File.stderr().writeStreamingAll(io, msg);
     }
+    if (opts.recovery_blocks == null and opts.redundancy_percent != null) {
+        var buf2: [128]u8 = undefined;
+        const msg2 = try std.fmt.bufPrint(&buf2, "default redundancy percent: {d}\n", .{opts.redundancy_percent.?});
+        try std.Io.File.stderr().writeStreamingAll(io, msg2);
+    }
+    var plan_buf: [256]u8 = undefined;
+    const line = try std.fmt.bufPrint(
+        &plan_buf,
+        "derived plan: total_size={d} block_size={d} data_blocks={d} recovery_blocks={d}\n",
+        .{ total_size, plan.block_size, plan.data_blocks, plan.recovery_blocks },
+    );
+    try std.Io.File.stderr().writeStreamingAll(io, line);
+}
+
+/// Append the main + ancillary packets (mechcfg/metadata/validation/aapl/
+/// packed/comment/creator) to the given lists. Shared by both paths; the only
+/// per-path difference is the source-file metadata, passed as file_ids/count.
+fn appendMainPackets(
+    arena_alloc: std.mem.Allocator,
+    opts: common.CreateOptions,
+    recovery_set_id: [16]u8,
+    main_pkt: []const u8,
+    creator_pkt: []const u8,
+    file_ids: []const [16]u8,
+    file_count: usize,
+    block_size: u64,
+    main_packets: *std.ArrayList([]const u8),
+    volume_meta_packets: *std.ArrayList([]const u8),
+) !void {
+    try main_packets.append(arena_alloc, main_pkt);
+    if (opts.hash_algo != .md5) {
+        const mechcfg_pkt = try core.create_packets.buildMechCfg(arena_alloc, recovery_set_id, .{
+            .hash_algo = opts.hash_algo,
+            .version = 0,
+            .flags = 0,
+        });
+        try main_packets.append(arena_alloc, mechcfg_pkt);
+        if (opts.include_volume_meta) {
+            try volume_meta_packets.append(arena_alloc, mechcfg_pkt);
+        }
+    }
+    if (opts.metadata) |meta| {
+        if (file_count != 1) return error.InvalidInput;
+        const meta_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
+        try main_packets.append(arena_alloc, meta_pkt);
+    }
+    if (opts.validation_state) |state| {
+        if (file_count != 1) return error.InvalidInput;
+        var vs = state;
+        vs.file_id = file_ids[0];
+        const sfvs_pkt = try core.create_packets.buildValidationStatePacket(arena_alloc, recovery_set_id, vs);
+        try main_packets.append(arena_alloc, sfvs_pkt);
+    }
+    if (opts.aapl_packet) |aapl| {
+        if (file_count != 1) return error.InvalidInput;
+        var ap = aapl;
+        ap.file_id = file_ids[0];
+        const aapl_pkt = try core.create_packets.buildAaplPacket(arena_alloc, recovery_set_id, ap);
+        try main_packets.append(arena_alloc, aapl_pkt);
+    }
+    if (opts.include_volume_meta) {
+        try volume_meta_packets.append(arena_alloc, main_pkt);
+    }
+    if (opts.emit_packed) {
+        const pkd_body = try core.create_packets.buildPackedMainBody(arena_alloc, block_size, block_size, file_ids, &.{});
+        const pkd_pkt = try core.create_packets.buildPackedMainPacket(arena_alloc, recovery_set_id, pkd_body);
+        try main_packets.append(arena_alloc, pkd_pkt);
+    }
+    if (opts.comment) |text| {
+        if (common.isAscii(text)) {
+            const comm = try core.create_packets.buildCommentAsciiPacket(arena_alloc, recovery_set_id, text);
+            try main_packets.append(arena_alloc, comm);
+        } else {
+            const ascii = try common.transliterateAscii(arena_alloc, text);
+            if (ascii) |ascii_text| {
+                const comm = try core.create_packets.buildCommentAsciiPacket(arena_alloc, recovery_set_id, ascii_text);
+                try main_packets.append(arena_alloc, comm);
+                const commu = try core.create_packets.buildCommentUnicodePacketWithAscii(arena_alloc, recovery_set_id, text, ascii_text);
+                try main_packets.append(arena_alloc, commu);
+            } else {
+                const commu = try core.create_packets.buildCommentUnicodePacket(arena_alloc, recovery_set_id, text);
+                try main_packets.append(arena_alloc, commu);
+            }
+        }
+    }
+    try main_packets.append(arena_alloc, creator_pkt);
+}
+
+pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_alloc = arena.allocator();
+
+    const inputs = try collectCreateInputs(arena_alloc, opts.data_paths, opts.recurse, opts.basepath);
+    var total_size: u64 = 0;
+    for (inputs) |input| total_size += input.length;
+    const cplan = try deriveCreatePlan(opts, total_size);
+    try printCreateDefaults(opts, total_size, cplan);
+    const block_size = cplan.block_size;
+    const cap_bytes = cplan.cap_bytes;
+    const recovery_blocks = cplan.recovery_blocks;
 
     var files = try arena_alloc.alloc(FileMeta, inputs.len);
     var i: usize = 0;
@@ -110,63 +206,7 @@ pub fn create(allocator: std.mem.Allocator, opts: common.CreateOptions) !void {
     defer main_packets.deinit(arena_alloc);
     var volume_meta_packets = std.ArrayList([]const u8).empty;
     defer volume_meta_packets.deinit(arena_alloc);
-    try main_packets.append(arena_alloc, main_pkt);
-    if (opts.hash_algo != .md5) {
-        const mechcfg_pkt = try core.create_packets.buildMechCfg(arena_alloc, recovery_set_id, .{
-            .hash_algo = opts.hash_algo,
-            .version = 0,
-            .flags = 0,
-        });
-        try main_packets.append(arena_alloc, mechcfg_pkt);
-        if (opts.include_volume_meta) {
-            try volume_meta_packets.append(arena_alloc, mechcfg_pkt);
-        }
-    }
-    if (opts.metadata) |meta| {
-        if (files.len != 1) return error.InvalidInput;
-        const meta_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
-        try main_packets.append(arena_alloc, meta_pkt);
-    }
-    if (opts.validation_state) |state| {
-        if (files.len != 1) return error.InvalidInput;
-        var vs = state;
-        vs.file_id = file_ids[0];
-        const sfvs_pkt = try core.create_packets.buildValidationStatePacket(arena_alloc, recovery_set_id, vs);
-        try main_packets.append(arena_alloc, sfvs_pkt);
-    }
-    if (opts.aapl_packet) |aapl| {
-        if (files.len != 1) return error.InvalidInput;
-        var ap = aapl;
-        ap.file_id = file_ids[0];
-        const aapl_pkt = try core.create_packets.buildAaplPacket(arena_alloc, recovery_set_id, ap);
-        try main_packets.append(arena_alloc, aapl_pkt);
-    }
-    if (opts.include_volume_meta) {
-        try volume_meta_packets.append(arena_alloc, main_pkt);
-    }
-    if (opts.emit_packed) {
-        const pkd_body = try core.create_packets.buildPackedMainBody(arena_alloc, block_size, block_size, file_ids, &.{});
-        const pkd_pkt = try core.create_packets.buildPackedMainPacket(arena_alloc, recovery_set_id, pkd_body);
-        try main_packets.append(arena_alloc, pkd_pkt);
-    }
-    if (opts.comment) |text| {
-        if (common.isAscii(text)) {
-            const comm = try core.create_packets.buildCommentAsciiPacket(arena_alloc, recovery_set_id, text);
-            try main_packets.append(arena_alloc, comm);
-        } else {
-            const ascii = try common.transliterateAscii(arena_alloc, text);
-            if (ascii) |ascii_text| {
-                const comm = try core.create_packets.buildCommentAsciiPacket(arena_alloc, recovery_set_id, ascii_text);
-                try main_packets.append(arena_alloc, comm);
-                const commu = try core.create_packets.buildCommentUnicodePacketWithAscii(arena_alloc, recovery_set_id, text, ascii_text);
-                try main_packets.append(arena_alloc, commu);
-            } else {
-                const commu = try core.create_packets.buildCommentUnicodePacket(arena_alloc, recovery_set_id, text);
-                try main_packets.append(arena_alloc, commu);
-            }
-        }
-    }
-    try main_packets.append(arena_alloc, creator_pkt);
+    try appendMainPackets(arena_alloc, opts, recovery_set_id, main_pkt, creator_pkt, file_ids, files.len, block_size, &main_packets, &volume_meta_packets);
 
     const slice_size = std.math.cast(usize, block_size) orelse return error.InvalidInput;
     var file_infos = try arena_alloc.alloc(core.layout.FileInfo, files.len);
@@ -327,48 +367,12 @@ pub fn createStreams(
     const arena_alloc = arena.allocator();
 
     var total_size: u64 = 0;
-    var max_file_len: u64 = 0;
-    for (inputs) |input| {
-        total_size += input.length;
-        if (input.length > max_file_len) max_file_len = input.length;
-    }
-    const block_size = if (opts.block_size) |v|
-        v
-    else if (opts.block_count) |c|
-        core.create_plan.blockSizeFromCount(total_size, c)
-    else
-        core.heuristics.blockSizeHeuristic(total_size);
-    const cap_bytes = try common.memoryCapBytes(opts.memory_mb);
-    if (cap_bytes) |cap| {
-        if (cap == 0) return error.InvalidInput;
-        if (block_size > cap) return error.InvalidInput;
-    }
-    const data_blocks = if (block_size == 0) 0 else (total_size + block_size - 1) / block_size;
-    const recovery_blocks = if (opts.recovery_blocks) |v|
-        v
-    else
-        core.create_plan.recoveryBlocksFromPercent(data_blocks, opts.redundancy_percent orelse 0) catch return error.InvalidInput;
-
-    const mute_defaults = opts.mute_defaults or common.envMuteDefaults();
-    if (!mute_defaults) {
-        if (opts.block_size == null and opts.block_count == null) {
-            var buf: [128]u8 = undefined;
-            const msg = try std.fmt.bufPrint(&buf, "default block size: {d}\n", .{block_size});
-            try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg);
-        }
-        if (opts.recovery_blocks == null and opts.redundancy_percent != null) {
-            var buf2: [128]u8 = undefined;
-            const msg2 = try std.fmt.bufPrint(&buf2, "default redundancy percent: {d}\n", .{opts.redundancy_percent.?});
-            try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), msg2);
-        }
-        var plan_buf: [256]u8 = undefined;
-        const plan = try std.fmt.bufPrint(
-            &plan_buf,
-            "derived plan: total_size={d} block_size={d} data_blocks={d} recovery_blocks={d}\n",
-            .{ total_size, block_size, data_blocks, recovery_blocks },
-        );
-        try std.Io.File.stderr().writeStreamingAll(core.io_singleton.getOrInit(), plan);
-    }
+    for (inputs) |input| total_size += input.length;
+    const cplan = try deriveCreatePlan(opts, total_size);
+    try printCreateDefaults(opts, total_size, cplan);
+    const block_size = cplan.block_size;
+    const cap_bytes = cplan.cap_bytes;
+    const recovery_blocks = cplan.recovery_blocks;
 
     const StreamFileMeta = struct {
         name: []const u8,
@@ -419,63 +423,7 @@ pub fn createStreams(
     defer main_packets.deinit(arena_alloc);
     var volume_meta_packets = std.ArrayList([]const u8).empty;
     defer volume_meta_packets.deinit(arena_alloc);
-    try main_packets.append(arena_alloc, main_pkt);
-    if (opts.hash_algo != .md5) {
-        const mechcfg_pkt = try core.create_packets.buildMechCfg(arena_alloc, recovery_set_id, .{
-            .hash_algo = opts.hash_algo,
-            .version = 0,
-            .flags = 0,
-        });
-        try main_packets.append(arena_alloc, mechcfg_pkt);
-        if (opts.include_volume_meta) {
-            try volume_meta_packets.append(arena_alloc, mechcfg_pkt);
-        }
-    }
-    if (opts.metadata) |meta| {
-        if (files.len != 1) return error.InvalidInput;
-        const meta_pkt = try core.create_packets.buildSourceMetadataPacket(arena_alloc, recovery_set_id, meta);
-        try main_packets.append(arena_alloc, meta_pkt);
-    }
-    if (opts.validation_state) |state| {
-        if (files.len != 1) return error.InvalidInput;
-        var vs = state;
-        vs.file_id = file_ids[0];
-        const sfvs_pkt = try core.create_packets.buildValidationStatePacket(arena_alloc, recovery_set_id, vs);
-        try main_packets.append(arena_alloc, sfvs_pkt);
-    }
-    if (opts.aapl_packet) |aapl| {
-        if (files.len != 1) return error.InvalidInput;
-        var ap = aapl;
-        ap.file_id = file_ids[0];
-        const aapl_pkt = try core.create_packets.buildAaplPacket(arena_alloc, recovery_set_id, ap);
-        try main_packets.append(arena_alloc, aapl_pkt);
-    }
-    if (opts.include_volume_meta) {
-        try volume_meta_packets.append(arena_alloc, main_pkt);
-    }
-    if (opts.emit_packed) {
-        const pkd_body = try core.create_packets.buildPackedMainBody(arena_alloc, block_size, block_size, file_ids, &.{});
-        const pkd_pkt = try core.create_packets.buildPackedMainPacket(arena_alloc, recovery_set_id, pkd_body);
-        try main_packets.append(arena_alloc, pkd_pkt);
-    }
-    if (opts.comment) |text| {
-        if (common.isAscii(text)) {
-            const comm = try core.create_packets.buildCommentAsciiPacket(arena_alloc, recovery_set_id, text);
-            try main_packets.append(arena_alloc, comm);
-        } else {
-            const ascii = try common.transliterateAscii(arena_alloc, text);
-            if (ascii) |ascii_text| {
-                const comm = try core.create_packets.buildCommentAsciiPacket(arena_alloc, recovery_set_id, ascii_text);
-                try main_packets.append(arena_alloc, comm);
-                const commu = try core.create_packets.buildCommentUnicodePacketWithAscii(arena_alloc, recovery_set_id, text, ascii_text);
-                try main_packets.append(arena_alloc, commu);
-            } else {
-                const commu = try core.create_packets.buildCommentUnicodePacket(arena_alloc, recovery_set_id, text);
-                try main_packets.append(arena_alloc, commu);
-            }
-        }
-    }
-    try main_packets.append(arena_alloc, creator_pkt);
+    try appendMainPackets(arena_alloc, opts, recovery_set_id, main_pkt, creator_pkt, file_ids, files.len, block_size, &main_packets, &volume_meta_packets);
 
     const slice_size = std.math.cast(usize, block_size) orelse return error.InvalidInput;
     var file_infos = try arena_alloc.alloc(core.layout.FileInfo, files.len);
