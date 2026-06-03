@@ -975,7 +975,7 @@ fn streamVolumeWorker(shared: *StreamVolumeShared) void {
         const idx = shared.next_index.fetchAdd(1, .monotonic);
         if (idx >= shared.plan.len) return;
         const vol = shared.plan[idx];
-        buildVolumeStream(
+        buildVolume(
             arena.allocator(),
             shared.volume_meta_packets,
             shared.store,
@@ -1010,139 +1010,37 @@ fn setVolumeError(shared: *VolumeShared, err: anyerror) void {
     shared.stop.store(1, .monotonic);
 }
 
-fn buildVolume(
+/// Compute the recovery slices for one volume, dispatching to the FileStore or
+/// StreamStore batch encoder by the comptime store type. This is the only point
+/// where buildVolume's file-backed and stream-backed paths diverge.
+fn computeVolumeRecoverySlices(
     allocator: std.mem.Allocator,
-    volume_meta_packets: []const []const u8,
-    store: core.storage.FileStore,
+    store: anytype,
     file_infos: []const core.layout.FileInfo,
     slice_size: usize,
-    vol: core.create_plan.VolumePlan,
-    width: usize,
-    offset: u64,
-    par2_path: []const u8,
-    output_open: ?OutputOpener,
-    recovery_set_id: [16]u8,
-    emit_rfsc: bool,
-    emit_packed: bool,
-    include_volume_meta: bool,
-    cap_bytes: ?u64,
+    exponents: []const u32,
     parallel_slices: bool,
-    hash_algo: core.hash_algo.HashAlgo,
-) !void {
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    var limited: common.LimitedAllocator = undefined;
-    var tmp_alloc = gpa.allocator();
-    if (cap_bytes) |cap| {
-        limited = common.LimitedAllocator.init(tmp_alloc, @intCast(cap));
-        tmp_alloc = limited.allocator();
-    }
-
-    const add = @addWithOverflow(vol.start, offset);
-    if (add[1] != 0) return error.InvalidInput;
-    const vol_start = add[0];
-    const vol_path = try volumePath(allocator, par2_path, vol_start, vol.count, width);
-    var buffer = std.ArrayList(u8).empty;
-    defer buffer.deinit(allocator);
-    var vol_out: ?OutputTarget = null;
-    if (output_open == null) {
-        vol_out = try common.openFileOutput(allocator, vol_path);
-    }
-    var byte_offset: usize = 0;
-    const count_usize = std.math.cast(usize, vol.count) orelse return error.InvalidInput;
-    var exponents = try tmp_alloc.alloc(u32, count_usize);
-    defer tmp_alloc.free(exponents);
-    var r: usize = 0;
-    while (r < count_usize) : (r += 1) {
-        const exp_idx = vol_start + r;
-        exponents[r] = core.gf16.exponentForIndex(@as(u32, @intCast(exp_idx)));
-    }
-    const rec_slices = if (parallel_slices)
-        try core.block_api.computeRecoverySlicesFileStoreBatchParallel(tmp_alloc, store, file_infos, slice_size, exponents)
-    else
-        try core.block_api.computeRecoverySlicesFileStoreBatch(tmp_alloc, store, file_infos, slice_size, exponents);
-    defer {
-        var i: usize = 0;
-        while (i < rec_slices.len) : (i += 1) {
-            tmp_alloc.free(rec_slices[i]);
-        }
-        tmp_alloc.free(rec_slices);
-    }
-    var rfsc_entries = std.ArrayList(core.packet_types.RfscEntry).empty;
-    defer rfsc_entries.deinit(allocator);
-    r = 0;
-    while (r < count_usize) : (r += 1) {
-        const exp = exponents[r];
-        const rec_slice = rec_slices[r];
-        const pkt = try core.create_packets.buildRecvSlicPacket(allocator, recovery_set_id, exp, rec_slice);
-        if (output_open != null) {
-            try buffer.appendSlice(allocator, pkt);
-        } else {
-            try vol_out.?.writeAll(pkt);
-        }
-        byte_offset += pkt.len;
-        if (emit_rfsc) {
-            var entry: core.packet_types.RfscEntry = undefined;
-            core.hash_algo.hashDigest(hash_algo, rec_slice, &entry.md5);
-            entry.crc32 = core.crc32.crc32(rec_slice);
-            entry.exponent = exp;
-            try rfsc_entries.append(allocator, entry);
-        }
-        if (emit_packed) {
-            const pkd_pkt = try core.create_packets.buildPackedRecvSlicPacket(allocator, recovery_set_id, exp, rec_slice);
-            if (output_open != null) {
-                try buffer.appendSlice(allocator, pkd_pkt);
-            } else {
-                try vol_out.?.writeAll(pkd_pkt);
-            }
-            byte_offset += pkd_pkt.len;
-        }
-    }
-    var rfsc_offset: ?usize = null;
-    if (emit_rfsc) {
-        if (byte_offset >= 16384) {
-            const file_id: [16]u8 = .{0} ** 16;
-            const rfsc_pkt = try core.create_packets.buildRfscPacket(allocator, recovery_set_id, file_id, rfsc_entries.items);
-            rfsc_offset = byte_offset;
-            if (output_open != null) {
-                try buffer.appendSlice(allocator, rfsc_pkt);
-            } else {
-                try vol_out.?.writeAll(rfsc_pkt);
-            }
-            byte_offset += rfsc_pkt.len;
-        }
-    }
-    if (include_volume_meta) {
-        for (volume_meta_packets) |pkt| {
-            if (output_open != null) {
-                try buffer.appendSlice(allocator, pkt);
-            } else {
-                try vol_out.?.writeAll(pkt);
-            }
-            byte_offset += pkt.len;
-        }
-    }
-    if (emit_rfsc and rfsc_offset != null) {
-        if (output_open != null) {
-            try patchRfscFileIdBytes(allocator, buffer.items, rfsc_offset.?, path_util.baseName(vol_path));
-        } else {
-            try patchRfscFileId(vol_path, rfsc_offset.?);
-        }
-    }
-    if (output_open != null) {
-        const out = try common.openOutput(allocator, vol_path, output_open);
-        var out_copy = out;
-        defer out_copy.close();
-        try out_copy.writeAll(buffer.items);
-    } else if (vol_out) |*out| {
-        out.close();
+) ![][]u8 {
+    const Store = @TypeOf(store);
+    if (Store == core.storage.FileStore) {
+        return if (parallel_slices)
+            core.block_api.computeRecoverySlicesFileStoreBatchParallel(allocator, store, file_infos, slice_size, exponents)
+        else
+            core.block_api.computeRecoverySlicesFileStoreBatch(allocator, store, file_infos, slice_size, exponents);
+    } else if (Store == core.storage.StreamStore) {
+        return if (parallel_slices)
+            core.block_api.computeRecoverySlicesStreamStoreBatchParallel(allocator, store, file_infos, slice_size, exponents)
+        else
+            core.block_api.computeRecoverySlicesStreamStoreBatch(allocator, store, file_infos, slice_size, exponents);
+    } else {
+        @compileError("computeVolumeRecoverySlices: unsupported store type " ++ @typeName(Store));
     }
 }
 
-fn buildVolumeStream(
+fn buildVolume(
     allocator: std.mem.Allocator,
     volume_meta_packets: []const []const u8,
-    store: core.storage.StreamStore,
+    store: anytype,
     file_infos: []const core.layout.FileInfo,
     slice_size: usize,
     vol: core.create_plan.VolumePlan,
@@ -1186,10 +1084,7 @@ fn buildVolumeStream(
         const exp_idx = vol_start + r;
         exponents[r] = core.gf16.exponentForIndex(@as(u32, @intCast(exp_idx)));
     }
-    const rec_slices = if (parallel_slices)
-        try core.block_api.computeRecoverySlicesStreamStoreBatchParallel(tmp_alloc, store, file_infos, slice_size, exponents)
-    else
-        try core.block_api.computeRecoverySlicesStreamStoreBatch(tmp_alloc, store, file_infos, slice_size, exponents);
+    const rec_slices = try computeVolumeRecoverySlices(tmp_alloc, store, file_infos, slice_size, exponents, parallel_slices);
     defer {
         var i: usize = 0;
         while (i < rec_slices.len) : (i += 1) {
