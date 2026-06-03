@@ -63,34 +63,7 @@ fn tarOpen(ctx: *anyopaque, path: []const u8) anyerror!ops.OutputTarget {
 }
 
 fn writeTarHeader(writer: std.Io.File, name: []const u8, size: usize) !void {
-    var header: [512]u8 = undefined;
-    @memset(&header, 0);
-    const name_len = @min(name.len, 100);
-    @memcpy(header[0..name_len], name[0..name_len]);
-    @memcpy(header[100..107], "0000644");
-    header[107] = 0;
-    @memcpy(header[108..115], "0000000");
-    header[115] = 0;
-    @memcpy(header[116..123], "0000000");
-    header[123] = 0;
-    var size_buf: [12]u8 = undefined;
-    _ = std.fmt.bufPrint(&size_buf, "{o:0>11}", .{size}) catch {};
-    @memcpy(header[124..135], size_buf[0..11]);
-    header[135] = 0;
-    @memcpy(header[136..147], "00000000000");
-    header[147] = 0;
-    @memset(header[148..156], ' ');
-    header[156] = '0';
-    @memcpy(header[257..262], "ustar");
-    header[262] = 0;
-    @memcpy(header[263..265], "00");
-    var checksum: u32 = 0;
-    for (header) |b| checksum += b;
-    var chk_buf: [8]u8 = undefined;
-    _ = std.fmt.bufPrint(&chk_buf, "{o:0>6}", .{checksum}) catch {};
-    @memcpy(header[148..154], chk_buf[0..6]);
-    header[154] = 0;
-    header[155] = ' ';
+    const header = try core.tar.buildHeader(name, @as(u64, size));
     try writer.writeStreamingAll(core.io_singleton.getOrInit(), &header);
 }
 

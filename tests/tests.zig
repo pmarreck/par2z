@@ -5422,3 +5422,28 @@ test "mechcfg scan finds packet in mixed stream and reports md5 default when abs
 test {
     _ = core.packet_types;
 }
+
+test "tar octal field writes zero-padded octal with NUL terminator" {
+    var field: [12]u8 = undefined;
+    try core.tar.writeOctalField(&field, 0o644);
+    try std.testing.expectEqualStrings("00000000644", field[0..11]);
+    try std.testing.expectEqual(@as(u8, 0), field[11]);
+}
+
+test "tar octal field rejects values that overflow the field" {
+    // ustar size field: 12 bytes = 11 octal digits + NUL. 1<<34 (16 GiB)
+    // needs 12 octal digits and must be rejected, not silently truncated.
+    var field: [12]u8 = undefined;
+    try std.testing.expectError(error.FileTooLargeForTar, core.tar.writeOctalField(&field, 1 << 34));
+}
+
+test "tar header has correct size field for a normal file" {
+    const hdr = try core.tar.buildHeader("foo.txt", 1234);
+    try std.testing.expectEqualStrings("00000002322", hdr[124..135]); // 0o2322 == 1234
+    try std.testing.expectEqual(@as(u8, 0), hdr[135]);
+    try std.testing.expectEqualStrings("ustar", hdr[257..262]);
+}
+
+test "tar buildHeader rejects a file too large for the ustar size field" {
+    try std.testing.expectError(error.FileTooLargeForTar, core.tar.buildHeader("huge.bin", 1 << 34));
+}
