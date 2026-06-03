@@ -549,7 +549,7 @@ fn ensureTempDir(allocator: std.mem.Allocator, temp_dir: *?[]const u8) ![]const 
     return error.IoError;
 }
 
-fn hasTraversalSegment(path: []const u8) bool {
+pub fn hasTraversalSegment(path: []const u8) bool {
     if (path.len == 0) return false;
     var start: usize = 0;
     var i: usize = 0;

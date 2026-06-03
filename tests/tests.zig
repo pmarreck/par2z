@@ -5447,3 +5447,25 @@ test "tar header has correct size field for a normal file" {
 test "tar buildHeader rejects a file too large for the ustar size field" {
     try std.testing.expectError(error.FileTooLargeForTar, core.tar.buildHeader("huge.bin", 1 << 34));
 }
+
+test "hasTraversalSegment flags parent-directory escapes but not legitimate names" {
+    const H = lib.hasTraversalSegment;
+    // Escapes: a path segment that is exactly ".."
+    try std.testing.expect(H(".."));
+    try std.testing.expect(H("../etc/passwd"));
+    try std.testing.expect(H("a/../b"));
+    try std.testing.expect(H("./../x"));
+    try std.testing.expect(H("foo/../"));
+    try std.testing.expect(H("a/b/.."));
+    try std.testing.expect(H("..\\windows")); // backslash separator
+    try std.testing.expect(H("a\\..\\b"));
+    // Legitimate: ".." appearing inside a filename is not a traversal segment
+    try std.testing.expect(!H("foo..bar"));
+    try std.testing.expect(!H("..foo"));
+    try std.testing.expect(!H("foo.."));
+    try std.testing.expect(!H("...."));
+    try std.testing.expect(!H("a/b/c.txt"));
+    try std.testing.expect(!H(""));
+    try std.testing.expect(!H("."));
+    try std.testing.expect(!H("./a"));
+}
