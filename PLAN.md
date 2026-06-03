@@ -154,3 +154,33 @@ Expose a stable C API with separate handles for create/verify/recover, supportin
 - [x] Optional memory cap and optional custom allocator callbacks.
 - [x] Threading configurable (0 = all cores).
 - [x] TDD: add unit tests for C API behaviors (memory input + verify + recover happy path).
+
+## Fleet Code Review Follow-ups (2026-06-01 review, triaged 2026-06-02)
+
+Six findings dropped in `inbox/`. All verified against source. Fixed:
+- [x] **Error handling** — `writeTarHeader` silent tar corruption for >8 GiB files
+  (`bufPrint ... catch {}` → undefined memory). Extracted testable `core.tar`
+  (`writeOctalField`/`buildHeader`) returning `error.FileTooLargeForTar`. (commit)
+- [x] **Duplicated code** — two hand-rolled `writeU64Le` → `std.mem.writeInt`. (commit)
+- [x] **Algorithmic complexity** — `recovery_set` attach was O(files²) on the
+  verify/recover path → `AutoHashMap(file_id → *FileEntry)`, O(1) attach. (commit)
+- [x] **Inadequate tests** — added path-traversal security test for
+  `hasTraversalSegment` (made it `pub`). (commit)
+
+Deferred (need a decision / larger scope):
+- [ ] **Futile test coverage** — the `gf16`/`crc32` `test "... benchmark"` blocks
+  assert nothing. Deeper reality: these inline `src/core/*.zig` tests are **dormant**
+  (only `core.packet_types` is referenced from the `test {}` block in `tests/tests.zig`,
+  so the rest never run under `./test`), AND the benchmark blocks **don't compile under
+  Zig 0.16** (`std.time.nanoTimestamp` was removed — see ZIG_0.15_TO_0.16_MIGRATION.md
+  §"nanoTimestamp removed"). Recommended cleanup as part of the 0.16 migration:
+  (a) move the benchmark loops out of `test` blocks into a `./bm` / `zig build bench`
+  harness, applying the documented `nanoTimestamp` → `std.Io.Timestamp.now(io, .awake)`
+  fix; (b) optionally activate the *correctness* inline tests by referencing the core
+  modules from the `test {}` aggregator so they actually run in CI. Parity correctness
+  for gf16/crc32 is already covered by separate (currently dormant) tests.
+- [ ] **Suboptimal/disorganized** — `create.zig` has 288- and 307-line functions
+  (`create` / `createStreams`) and near-twin `buildVolume`/`buildVolumeStream`
+  (only 8 of 127 lines differ: `FileStore` vs `StreamStore` + which batch fn).
+  Real, but a refactor of the hot create path — wants explicit buy-in before churning
+  it. Candidate: a store-generic `buildVolume` parameterized over the store type.
