@@ -16,7 +16,7 @@ pub fn buildPacket(allocator: std.mem.Allocator, recovery_set_id: [16]u8, packet
     const total_len = 64 + body.len + pad_len;
     var out = try allocator.alloc(u8, total_len);
     @memcpy(out[0..8], &magic);
-    writeU64Le(out, 8, @as(u64, @intCast(total_len)));
+    std.mem.writeInt(u64, out[8..][0..8], @as(u64, @intCast(total_len)), .little);
     @memcpy(out[32..48], &recovery_set_id);
     @memcpy(out[48..64], &packet_type);
     @memcpy(out[64 .. 64 + body.len], body);
@@ -29,13 +29,3 @@ pub fn buildPacket(allocator: std.mem.Allocator, recovery_set_id: [16]u8, packet
     return out;
 }
 
-fn writeU64Le(buf: []u8, offset: usize, value: u64) void {
-    buf[offset + 0] = @as(u8, @intCast(value & 0xFF));
-    buf[offset + 1] = @as(u8, @intCast((value >> 8) & 0xFF));
-    buf[offset + 2] = @as(u8, @intCast((value >> 16) & 0xFF));
-    buf[offset + 3] = @as(u8, @intCast((value >> 24) & 0xFF));
-    buf[offset + 4] = @as(u8, @intCast((value >> 32) & 0xFF));
-    buf[offset + 5] = @as(u8, @intCast((value >> 40) & 0xFF));
-    buf[offset + 6] = @as(u8, @intCast((value >> 48) & 0xFF));
-    buf[offset + 7] = @as(u8, @intCast((value >> 56) & 0xFF));
-}

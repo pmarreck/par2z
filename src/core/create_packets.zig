@@ -40,7 +40,7 @@ pub fn buildMechCfg(allocator: std.mem.Allocator, recovery_set_id: [16]u8, cfg: 
 pub fn buildMainBody(allocator: std.mem.Allocator, slice_size: u64, file_ids: []const [16]u8) ![]u8 {
     const body_len = 12 + file_ids.len * 16;
     var body = try allocator.alloc(u8, body_len);
-    writeU64Le(body, 0, slice_size);
+    std.mem.writeInt(u64, body[0..][0..8], slice_size, .little);
     writeU32Le(body, 8, @as(u32, @intCast(file_ids.len)));
     var i: usize = 0;
     while (i < file_ids.len) : (i += 1) {
@@ -66,7 +66,7 @@ pub fn buildSourceMetadataPacket(
     writeU16Le(body, 2, meta.flags);
     writeI64Le(body, 4, meta.source_mtime_ns);
     writeI64Le(body, 12, meta.source_ctime_ns);
-    writeU64Le(body, 20, meta.source_size);
+    std.mem.writeInt(u64, body[20..][0..8], meta.source_size, .little);
     writeU32Le(body, 28, meta.uid);
     writeU32Le(body, 32, meta.gid);
     writeU16Le(body, 36, meta.mode);
@@ -143,8 +143,8 @@ pub fn buildPackedMainBody(
 ) ![]u8 {
     const body_len = 20 + (recovery_ids.len + non_recovery_ids.len) * 16;
     var body = try allocator.alloc(u8, body_len);
-    writeU64Le(body, 0, subslice_size);
-    writeU64Le(body, 8, slice_size);
+    std.mem.writeInt(u64, body[0..][0..8], subslice_size, .little);
+    std.mem.writeInt(u64, body[8..][0..8], slice_size, .little);
     writeU32Le(body, 16, @as(u32, @intCast(recovery_ids.len)));
     var i: usize = 0;
     while (i < recovery_ids.len) : (i += 1) {
@@ -181,7 +181,7 @@ pub fn buildFileDescPacket(
     @memcpy(body[0..16], &file_id);
     @memcpy(body[16..32], &file_hash);
     @memcpy(body[32..48], &file_hash_16k);
-    writeU64Le(body, 48, file_length);
+    std.mem.writeInt(u64, body[48..][0..8], file_length, .little);
     @memcpy(body[56 .. 56 + file_name.len], file_name);
     body[56 + file_name.len] = 0;
     if (name_len > file_name.len + 1) {
@@ -244,7 +244,7 @@ pub fn buildFileSlicPacket(
     const body_len = 24 + data.len;
     var body = try allocator.alloc(u8, body_len);
     @memcpy(body[0..16], &file_id);
-    writeU64Le(body, 16, slice_index);
+    std.mem.writeInt(u64, body[16..][0..8], slice_index, .little);
     @memcpy(body[24..], data);
     return packet_write.buildPacket(allocator, recovery_set_id, fileslic_type, body);
 }
@@ -317,19 +317,9 @@ pub fn buildCommentUnicodePacketWithAscii(
     return packet_write.buildPacket(allocator, recovery_set_id, comm_uni_type, body);
 }
 
-fn writeU64Le(buf: []u8, offset: usize, value: u64) void {
-    buf[offset + 0] = @as(u8, @intCast(value & 0xFF));
-    buf[offset + 1] = @as(u8, @intCast((value >> 8) & 0xFF));
-    buf[offset + 2] = @as(u8, @intCast((value >> 16) & 0xFF));
-    buf[offset + 3] = @as(u8, @intCast((value >> 24) & 0xFF));
-    buf[offset + 4] = @as(u8, @intCast((value >> 32) & 0xFF));
-    buf[offset + 5] = @as(u8, @intCast((value >> 40) & 0xFF));
-    buf[offset + 6] = @as(u8, @intCast((value >> 48) & 0xFF));
-    buf[offset + 7] = @as(u8, @intCast((value >> 56) & 0xFF));
-}
 
 fn writeI64Le(buf: []u8, offset: usize, value: i64) void {
-    writeU64Le(buf, offset, @bitCast(value));
+    std.mem.writeInt(u64, buf[offset..][0..8], @as(u64, @bitCast(value)), .little);
 }
 
 fn writeU32Le(buf: []u8, offset: usize, value: u32) void {
