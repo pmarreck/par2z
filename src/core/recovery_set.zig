@@ -16,6 +16,11 @@ pub const RecoverySet = struct {
     slice_size: u64,
     recovery_files: []FileEntry,
     non_recovery_files: []FileEntry,
+    /// file_id -> entry lookup so attaching FileDesc/IFSC packets during
+    /// archive parse is O(1) instead of O(files) per packet (O(files^2) total).
+    /// Entries point into the stable `recovery_files`/`non_recovery_files`
+    /// allocations, which are never resized after construction.
+    id_to_entry: std.AutoHashMap([16]u8, *FileEntry),
 };
 
 pub fn buildRecoverySet(allocator: std.mem.Allocator, main: types.MainPacket) RecoverySetError!RecoverySet {
@@ -29,41 +34,26 @@ pub fn buildRecoverySet(allocator: std.mem.Allocator, main: types.MainPacket) Re
     while (j < main.non_recovery_file_ids.len) : (j += 1) {
         non_recovery[j] = .{ .id = main.non_recovery_file_ids[j], .desc = null, .ifsc = null };
     }
+
+    var id_to_entry = std.AutoHashMap([16]u8, *FileEntry).init(allocator);
+    try id_to_entry.ensureTotalCapacity(@as(u32, @intCast(recovery.len + non_recovery.len)));
+    for (recovery) |*entry| id_to_entry.putAssumeCapacity(entry.id, entry);
+    for (non_recovery) |*entry| id_to_entry.putAssumeCapacity(entry.id, entry);
+
     return .{
         .slice_size = main.slice_size,
         .recovery_files = recovery,
         .non_recovery_files = non_recovery,
+        .id_to_entry = id_to_entry,
     };
 }
 
 pub fn attachFileDesc(set: *RecoverySet, desc: types.FileDescPacket) RecoverySetError!void {
-    if (try attachFileDescList(set.recovery_files, desc)) return;
-    if (try attachFileDescList(set.non_recovery_files, desc)) return;
-    return error.NotFound;
-}
-
-fn attachFileDescList(list: []FileEntry, desc: types.FileDescPacket) RecoverySetError!bool {
-    for (list) |*entry| {
-        if (std.mem.eql(u8, &entry.id, &desc.file_id)) {
-            entry.desc = desc;
-            return true;
-        }
-    }
-    return false;
+    const entry = set.id_to_entry.get(desc.file_id) orelse return error.NotFound;
+    entry.desc = desc;
 }
 
 pub fn attachIfsc(set: *RecoverySet, ifsc: types.IfscPacket) RecoverySetError!void {
-    if (try attachIfscList(set.recovery_files, ifsc)) return;
-    if (try attachIfscList(set.non_recovery_files, ifsc)) return;
-    return error.NotFound;
-}
-
-fn attachIfscList(list: []FileEntry, ifsc: types.IfscPacket) RecoverySetError!bool {
-    for (list) |*entry| {
-        if (std.mem.eql(u8, &entry.id, &ifsc.file_id)) {
-            entry.ifsc = ifsc;
-            return true;
-        }
-    }
-    return false;
+    const entry = set.id_to_entry.get(ifsc.file_id) orelse return error.NotFound;
+    entry.ifsc = ifsc;
 }

@@ -5469,3 +5469,45 @@ test "hasTraversalSegment flags parent-directory escapes but not legitimate name
     try std.testing.expect(!H("."));
     try std.testing.expect(!H("./a"));
 }
+
+test "buildRecoverySet attaches across many files in O(1) and reports NotFound" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const n = 3000;
+    const ids = try arena.allocator().alloc([16]u8, n);
+    for (ids, 0..) |*id, k| {
+        id.* = [_]u8{0} ** 16;
+        std.mem.writeInt(u32, id[0..4], @as(u32, @intCast(k)), .little);
+    }
+    const main = core.packet_types.MainPacket{
+        .slice_size = 4096,
+        .subslice_size = null,
+        .recovery_file_ids = ids,
+        .non_recovery_file_ids = &.{},
+        .is_packed = false,
+    };
+    var set = try core.recovery_set.buildRecoverySet(arena.allocator(), main);
+    // Attach in reverse order to defeat any positional assumption.
+    var k: usize = n;
+    while (k > 0) {
+        k -= 1;
+        const desc = core.packet_types.FileDescPacket{
+            .file_id = ids[k],
+            .file_hash = [_]u8{0} ** 16,
+            .file_hash_16k = [_]u8{0} ** 16,
+            .file_length = 0,
+            .file_name = "f",
+        };
+        try core.recovery_set.attachFileDesc(&set, desc);
+    }
+    for (set.recovery_files) |entry| try std.testing.expect(entry.desc != null);
+    // An id not present must report NotFound.
+    const unknown = core.packet_types.FileDescPacket{
+        .file_id = [_]u8{0xFF} ** 16,
+        .file_hash = [_]u8{0} ** 16,
+        .file_hash_16k = [_]u8{0} ** 16,
+        .file_length = 0,
+        .file_name = "z",
+    };
+    try std.testing.expectError(error.NotFound, core.recovery_set.attachFileDesc(&set, unknown));
+}
